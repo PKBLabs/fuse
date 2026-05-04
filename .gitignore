@@ -1,0 +1,19 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# PyCharm
+.idea/
+
+# SQLite generated data
+app_data/app.db
+app_data/*.db
+app_data/*.db-journal
+app_data/*.sqlite
+app_data/*.sqlite3
+
+# OS/editor junk
+.DS_Store
