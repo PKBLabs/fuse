@@ -250,25 +250,26 @@ class ConnectionItem(QGraphicsPathItem):
         """
         Point outside the component box in a lane unique to this link.
 
-        Important: for side ports, the lane moves farther outward in X and also
-        shifts up/down. For top/bottom ports, it moves farther outward in Y and
-        also shifts left/right.
+        Keep the lane shift purely outward from the component side. Do not also
+        shift parallel to the side here; that parallel shift is what produced
+        the little stair-step artifacts near ports. The port's own position
+        already gives each connection a distinct horizontal/vertical stub, while
+        the outward offset gives each link its own lane.
         """
         base = self.port_escape_point(port)
         side = self.port_side(port)
-        parallel_offset = self.parallel_lane_offset()
         outward_offset = self.outward_lane_offset()
 
         if side == "left":
-            return QPointF(base.x() - outward_offset, base.y() + parallel_offset)
+            return QPointF(base.x() - outward_offset, base.y())
 
         if side == "right":
-            return QPointF(base.x() + outward_offset, base.y() + parallel_offset)
+            return QPointF(base.x() + outward_offset, base.y())
 
         if side == "top":
-            return QPointF(base.x() + parallel_offset, base.y() - outward_offset)
+            return QPointF(base.x(), base.y() - outward_offset)
 
-        return QPointF(base.x() + parallel_offset, base.y() + outward_offset)
+        return QPointF(base.x(), base.y() + outward_offset)
 
     def lane_transition_points(
         self,
