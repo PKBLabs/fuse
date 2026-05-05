@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
+APP_NAME="fuse-mod"
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
@@ -11,27 +12,29 @@ if [ ! -d ".venv" ]; then
 fi
 
 .venv/bin/python -m pip install --upgrade pip
-.venv/bin/python -m pip install -e .
+.venv/bin/python -m pip install -r requirements.txt
 
 echo "Initializing database..."
 .venv/bin/python initialize_db.py
+
+mkdir -p "$HOME/.local/bin"
+
+cat > "$HOME/.local/bin/$APP_NAME" <<EOF
+#!/usr/bin/env bash
+set -e
+
+if [ -f "\$HOME/.bashrc" ]; then
+    source "\$HOME/.bashrc"
+fi
+
+cd "$PROJECT_ROOT"
+exec "$PROJECT_ROOT/.venv/bin/python" "$PROJECT_ROOT/main.py" "\$@"
+EOF
+
+chmod +x "$HOME/.local/bin/$APP_NAME"
 
 echo
 echo "Setup complete."
 echo
 echo "Run with:"
-echo "  source .venv/bin/activate"
-echo "  fuse-mod"
-
-mkdir -p "$HOME/.local/bin"
-
-cat > "$HOME/.local/bin/fuse-mod" <<EOF
-#!/usr/bin/env bash
-set -e
-
-source ~/.bashrc
-cd "$PROJECT_ROOT"
-exec "$PROJECT_ROOT/.venv/bin/python" "$PROJECT_ROOT/main.py" "\$@"
-EOF
-
-chmod +x "$HOME/.local/bin/fuse-mod"
+echo "  $APP_NAME"
