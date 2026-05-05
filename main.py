@@ -195,9 +195,9 @@ class ConnectionItem(QGraphicsPathItem):
         self.setAcceptedMouseButtons(Qt.NoButton)
 
         tooltip = (
-            f"{link.name}\\n"
+            f"{link.name}\n"
             f"{link.source_component_name}.{link.source_port} -> "
-            f"{link.target_component_name}.{link.target_port}\\n"
+            f"{link.target_component_name}.{link.target_port}\n"
             f"latency: {link.latency}"
         )
         self.setToolTip(tooltip)
@@ -247,14 +247,50 @@ class ConnectionItem(QGraphicsPathItem):
         return QPointF(center.x(), center.y() + margin)
 
     def lane_escape_point(self, port: PortItem) -> QPointF:
+        """
+        Point outside the component box in a lane unique to this link.
+
+        Important: for side ports, the lane moves farther outward in X and also
+        shifts up/down. For top/bottom ports, it moves farther outward in Y and
+        also shifts left/right.
+        """
         base = self.port_escape_point(port)
         side = self.port_side(port)
-        offset = self.parallel_lane_offset()
+        parallel_offset = self.parallel_lane_offset()
+        outward_offset = self.outward_lane_offset()
+
+        if side == "left":
+            return QPointF(base.x() - outward_offset, base.y() + parallel_offset)
+
+        if side == "right":
+            return QPointF(base.x() + outward_offset, base.y() + parallel_offset)
+
+        if side == "top":
+            return QPointF(base.x() + parallel_offset, base.y() - outward_offset)
+
+        return QPointF(base.x() + parallel_offset, base.y() + outward_offset)
+
+    def lane_transition_points(
+        self,
+        port: PortItem,
+        base_escape: QPointF,
+        lane_escape: QPointF,
+    ) -> list[QPointF]:
+        """
+        Move from the normal escape point into the per-link lane using only
+        horizontal/vertical segments.
+
+        This avoids the triangular/diagonal-looking cuts that happen if the path
+        goes directly from base_escape to lane_escape.
+        """
+        side = self.port_side(port)
 
         if side in {"left", "right"}:
-            return QPointF(base.x(), base.y() + offset)
+            corner = QPointF(lane_escape.x(), base_escape.y())
+        else:
+            corner = QPointF(base_escape.x(), lane_escape.y())
 
-        return QPointF(base.x() + offset, base.y())
+        return self.simplify_points([base_escape, corner, lane_escape])
 
     def obstacle_rects(self):
         scene = self.scene()
@@ -364,6 +400,42 @@ class ConnectionItem(QGraphicsPathItem):
 
         return [self.simplify_points(route) for route in routes]
 
+    def escape_segment_is_clear(self, port: PortItem, point: QPointF, rects) -> bool:
+        """
+        Check whether the tiny segment from a port to a nearby route point is safe.
+
+        We ignore the owning component rectangle because the segment starts on
+        that box's edge. We still prevent it from crossing other component boxes.
+        """
+        center = port.scene_center()
+        owner_rect = self.node_body_rect(port.node).adjusted(-8, -8, 8, 8)
+
+        for rect in rects:
+            if rect == owner_rect:
+                continue
+
+            if self.segment_intersects_rect(center, point, rect):
+                return False
+
+        return True
+
+    def full_route_is_clear(self, points: list[QPointF], rects) -> bool:
+        """
+        Validate the entire route, including the short segments from the port dots.
+        """
+        if len(points) < 2:
+            return True
+
+        for a, b in zip(points, points[1:]):
+            if not self.is_orthogonal_segment(a, b):
+                return False
+
+            for rect in rects:
+                if self.segment_intersects_rect(a, b, rect):
+                    return False
+
+        return True
+
     def local_candidate_routes(self, start: QPointF, end: QPointF) -> list[list[QPointF]]:
         routes = self.one_bend_routes(start, end)
 
@@ -400,19 +472,34 @@ class ConnectionItem(QGraphicsPathItem):
 
         return routes
 
-    def best_route(self, start: QPointF, end: QPointF, rects) -> list[QPointF]:
-        candidates = self.local_candidate_routes(start, end)
-        candidates.extend(self.global_candidate_routes(start, end, rects))
+    def best_route(
+        self,
+        source_center: QPointF,
+        source_escape: QPointF,
+        source_lane_escape: QPointF,
+        target_center: QPointF,
+        target_escape: QPointF,
+        target_lane_escape: QPointF,
+        rects,
+    ) -> list[QPointF]:
+        candidates = self.local_candidate_routes(source_lane_escape, target_lane_escape)
+        candidates.extend(self.global_candidate_routes(source_lane_escape, target_lane_escape, rects))
 
         best = None
         best_score = None
 
         for route in candidates:
             route = self.simplify_points(route)
-            if not self.route_is_clear(route, rects):
+
+            full_route = self.simplify_points(
+                [source_center, source_escape, *route, target_escape, target_center]
+            )
+
+            if not self.full_route_is_clear(full_route, rects):
                 continue
 
-            score = self.route_length(route) + len(route) * 15
+            score = self.route_length(full_route) + len(full_route) * 20
+
             if best_score is None or score < best_score:
                 best_score = score
                 best = route
@@ -421,7 +508,9 @@ class ConnectionItem(QGraphicsPathItem):
             return best
 
         # Absolute fallback. It may be ugly, but it will not hang the UI.
-        return self.simplify_points([start, QPointF(start.x(), end.y()), end])
+        return self.simplify_points(
+            [source_lane_escape, QPointF(source_lane_escape.x(), target_lane_escape.y()), target_lane_escape]
+        )
 
     def global_candidate_routes(self, start: QPointF, end: QPointF, rects) -> list[list[QPointF]]:
         margin = self.ROUTE_MARGIN + self.outward_lane_offset()
@@ -483,10 +572,40 @@ class ConnectionItem(QGraphicsPathItem):
         target_lane_escape = self.lane_escape_point(self.target_port)
 
         rects = self.obstacle_rects()
-        route = self.best_route(source_lane_escape, target_lane_escape, rects)
+        route = self.best_route(
+            source_center=source_center,
+            source_escape=source_escape,
+            source_lane_escape=source_lane_escape,
+            target_center=target_center,
+            target_escape=target_escape,
+            target_lane_escape=target_lane_escape,
+            rects=rects,
+        )
+
+        source_transition = self.lane_transition_points(
+            self.source_port,
+            source_escape,
+            source_lane_escape,
+        )
+        target_transition = self.lane_transition_points(
+            self.target_port,
+            target_escape,
+            target_lane_escape,
+        )
+
+        # target_transition goes target_escape -> ... -> target_lane_escape.
+        # Reverse it because the final visual path travels from the lane back to
+        # the actual target port.
+        target_transition = list(reversed(target_transition))
 
         return self.simplify_points(
-            [source_center, source_escape, *route, target_escape, target_center]
+            [
+                source_center,
+                *source_transition,
+                *route[1:-1],
+                *target_transition,
+                target_center,
+            ]
         )
 
     def build_path_from_points(self, points: list[QPointF]) -> QPainterPath:
