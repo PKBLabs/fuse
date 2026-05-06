@@ -1,0 +1,286 @@
+{
+  "schemaVersion": "0.1.0",
+  "project": {
+    "name": "my_model",
+    "updatedAt": "2026-05-06T20:42:23.627393+00:00"
+  },
+  "components": [
+    {
+      "id": 1,
+      "element": "coreTestElement",
+      "name": "SubComponentLoader",
+      "componentId": 20,
+      "isSubcomponent": 0,
+      "category": "UNCATEGORIZED COMPONENT",
+      "interface": "",
+      "instanceName": "SubComponentLoader_1",
+      "parameters": {},
+      "position": {
+        "x": 609.0,
+        "y": 811.0
+      }
+    },
+    {
+      "id": 2,
+      "element": "coreTestElement",
+      "name": "coreTestLinks",
+      "componentId": 26,
+      "isSubcomponent": 0,
+      "category": "UNCATEGORIZED COMPONENT",
+      "interface": "",
+      "instanceName": "coreTestLinks_2",
+      "parameters": {},
+      "position": {
+        "x": 938.0,
+        "y": 808.0
+      }
+    },
+    {
+      "id": 3,
+      "element": "memHierarchy",
+      "name": "Bus",
+      "componentId": 214,
+      "isSubcomponent": 0,
+      "category": "MEMORY COMPONENT",
+      "interface": "",
+      "instanceName": "Bus_3",
+      "parameters": {},
+      "position": {
+        "x": 1255.0,
+        "y": 572.0
+      }
+    },
+    {
+      "id": 4,
+      "element": "miranda",
+      "name": "BaseCPU",
+      "componentId": 306,
+      "isSubcomponent": 0,
+      "category": "PROCESSOR COMPONENT",
+      "interface": "",
+      "instanceName": "BaseCPU_4",
+      "parameters": {},
+      "position": {
+        "x": 922.0,
+        "y": 553.0
+      }
+    },
+    {
+      "id": 5,
+      "element": "miranda",
+      "name": "GUPSGenerator",
+      "componentId": 309,
+      "isSubcomponent": 1,
+      "category": "SUBCOMPONENT",
+      "interface": "SST::Miranda::RequestGenerator",
+      "instanceName": "GUPSGenerator_5",
+      "parameters": {},
+      "position": {
+        "x": 637.0,
+        "y": 614.0
+      }
+    },
+    {
+      "id": 6,
+      "element": "memHierarchy",
+      "name": "Cache",
+      "componentId": 215,
+      "isSubcomponent": 0,
+      "category": "MEMORY COMPONENT",
+      "interface": "",
+      "instanceName": "Cache_6",
+      "parameters": {},
+      "position": {
+        "x": 1597.0,
+        "y": 445.0
+      }
+    },
+    {
+      "id": 7,
+      "element": "memHierarchy",
+      "name": "DirectoryController",
+      "componentId": 217,
+      "isSubcomponent": 0,
+      "category": "MEMORY COMPONENT",
+      "interface": "",
+      "instanceName": "DirectoryController_7",
+      "parameters": {},
+      "position": {
+        "x": 1641.0,
+        "y": 702.0
+      }
+    },
+    {
+      "id": 8,
+      "element": "memHierarchy",
+      "name": "MemController",
+      "componentId": 219,
+      "isSubcomponent": 0,
+      "category": "MEMORY COMPONENT",
+      "interface": "",
+      "instanceName": "MemController_8",
+      "parameters": {},
+      "position": {
+        "x": 1618.0,
+        "y": 887.0
+      }
+    },
+    {
+      "id": 9,
+      "element": "memHierarchy",
+      "name": "simpleDRAM",
+      "componentId": 262,
+      "isSubcomponent": 1,
+      "category": "SUBCOMPONENT",
+      "interface": "SST::MemHierarchy::SimpleMemBackend",
+      "instanceName": "simpleDRAM_9",
+      "parameters": {},
+      "position": {
+        "x": 1624.0,
+        "y": 1043.0
+      }
+    }
+  ],
+  "links": [
+    {
+      "id": 1,
+      "name": "link_1",
+      "latency": "1ns",
+      "type": "point_to_point",
+      "source": {
+        "nodeId": 1,
+        "componentName": "SubComponentLoader_1",
+        "port": "port%d"
+      },
+      "target": {
+        "nodeId": 2,
+        "componentName": "coreTestLinks_2",
+        "port": "Elink"
+      }
+    },
+    {
+      "id": 2,
+      "name": "link_2",
+      "latency": "1ns",
+      "type": "point_to_point",
+      "source": {
+        "nodeId": 2,
+        "componentName": "coreTestLinks_2",
+        "port": "Wlink"
+      },
+      "target": {
+        "nodeId": 3,
+        "componentName": "Bus_3",
+        "port": "low_network_%(low_network_ports)d"
+      }
+    },
+    {
+      "id": 3,
+      "name": "link_3",
+      "latency": "1ns",
+      "type": "point_to_point",
+      "source": {
+        "nodeId": 5,
+        "componentName": "GUPSGenerator_5",
+        "port": "out"
+      },
+      "target": {
+        "nodeId": 4,
+        "componentName": "BaseCPU_4",
+        "port": "cache_link"
+      }
+    },
+    {
+      "id": 4,
+      "name": "link_4",
+      "latency": "1ns",
+      "type": "point_to_point",
+      "source": {
+        "nodeId": 4,
+        "componentName": "BaseCPU_4",
+        "port": "src"
+      },
+      "target": {
+        "nodeId": 3,
+        "componentName": "Bus_3",
+        "port": "high_network_%(high_network_ports)d"
+      }
+    },
+    {
+      "id": 5,
+      "name": "link_5",
+      "latency": "1ns",
+      "type": "point_to_point",
+      "source": {
+        "nodeId": 3,
+        "componentName": "Bus_3",
+        "port": "highlink%(highlink_ports)d"
+      },
+      "target": {
+        "nodeId": 6,
+        "componentName": "Cache_6",
+        "port": "low_network_0"
+      }
+    },
+    {
+      "id": 6,
+      "name": "link_6",
+      "latency": "1ns",
+      "type": "point_to_point",
+      "source": {
+        "nodeId": 6,
+        "componentName": "Cache_6",
+        "port": "lowlink"
+      },
+      "target": {
+        "nodeId": 7,
+        "componentName": "DirectoryController_7",
+        "port": "highlink"
+      }
+    },
+    {
+      "id": 7,
+      "name": "link_7",
+      "latency": "1ns",
+      "type": "point_to_point",
+      "source": {
+        "nodeId": 7,
+        "componentName": "DirectoryController_7",
+        "port": "network"
+      },
+      "target": {
+        "nodeId": 8,
+        "componentName": "MemController_8",
+        "port": "cube_link"
+      }
+    },
+    {
+      "id": 8,
+      "name": "link_8",
+      "latency": "1ns",
+      "type": "point_to_point",
+      "source": {
+        "nodeId": 9,
+        "componentName": "simpleDRAM_9",
+        "port": "in"
+      },
+      "target": {
+        "nodeId": 8,
+        "componentName": "MemController_8",
+        "port": "network"
+      }
+    }
+  ],
+  "editor": {
+    "sceneRect": {
+      "x": 0.0,
+      "y": 0.0,
+      "width": 2000.0,
+      "height": 1500.0
+    },
+    "viewCenter": {
+      "x": 1231.0,
+      "y": 849.0
+    }
+  }
+}
