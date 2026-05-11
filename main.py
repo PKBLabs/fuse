@@ -9,6 +9,7 @@ from PySide6.QtCore import Qt, QMimeData, QPointF, QTimer
 from PySide6.QtGui import QAction, QDrag, QPainter, QPen, QBrush, QColor, QPainterPath
 from PySide6.QtWidgets import (
     QApplication,
+    QDockWidget,
     QGraphicsEllipseItem,
     QGraphicsItem,
     QGraphicsLineItem,
@@ -28,6 +29,8 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QSplitter,
     QStatusBar,
+    QTreeWidget,
+    QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
 )
@@ -37,11 +40,13 @@ try:
         get_all_components_for_element,
         get_all_elements,
         get_ports_for_component,
+        get_component_details,
     )
 except ImportError:
     get_all_components_for_element = None
     get_all_elements = None
     get_ports_for_component = None
+    get_component_details = None
 
 try:
     from initialize_db import initialize_database
@@ -232,15 +237,9 @@ class ConnectionItem(QGraphicsPathItem):
         self.highlight_color = QColor("#f59e0b")
         self.setPen(QPen(self.base_color, 2))
         self.setZValue(5)
-        self.setAcceptedMouseButtons(Qt.NoButton)
-
-        tooltip = (
-            f"{link.name}"
-            f"{link.source_component_name}.{link.source_port} -> "
-            f"{link.target_component_name}.{link.target_port}"
-            f"latency: {link.latency}"
-        )
-        self.setToolTip(tooltip)
+        self.setFlag(QGraphicsItem.ItemIsSelectable, True)
+        self.setAcceptedMouseButtons(Qt.LeftButton)
+        self.update_tooltip()
 
         source_port.connections.append(self)
         target_port.connections.append(self)
@@ -248,6 +247,23 @@ class ConnectionItem(QGraphicsPathItem):
         target_port.update_connection_state()
 
         self.update_position()
+
+    def update_tooltip(self):
+        tooltip = (
+            f"{self.link.name}\n"
+            f"{self.link.source_component_name}.{self.link.source_port} -> "
+            f"{self.link.target_component_name}.{self.link.target_port}\n"
+            f"latency: {self.link.latency}"
+        )
+        self.setToolTip(tooltip)
+
+    def mousePressEvent(self, event):
+        scene = self.scene()
+
+        if isinstance(scene, ModelScene):
+            scene.select_link(self)
+
+        super().mousePressEvent(event)
 
     def node_body_rect(self, node: "ComponentNodeItem"):
         # Only the actual drawn component rectangle. Do not use sceneBoundingRect()
@@ -728,6 +744,7 @@ class ComponentNodeItem(QGraphicsRectItem):
         component: ComponentDefinition,
         node_id: Optional[int] = None,
         parameters: Optional[dict] = None,
+        instance_name: Optional[str] = None,
     ):
         super().__init__(0, 0, self.WIDTH, self.HEIGHT)
 
@@ -742,8 +759,7 @@ class ComponentNodeItem(QGraphicsRectItem):
             )
 
         self.component = component
-        # This will be populated by the future Properties Inspector. For now it
-        # is saved/restored so the format is ready for component parameters.
+        self.instance_name_value = instance_name or f"{component.name}_{self.node_id}"
         self.parameters = parameters or {}
         self.ports: list[PortItem] = []
 
@@ -755,9 +771,9 @@ class ComponentNodeItem(QGraphicsRectItem):
             | QGraphicsItem.ItemSendsGeometryChanges
         )
 
-        title = QGraphicsTextItem(f"{component.name}_{self.node_id}", self)
-        title.setDefaultTextColor(QColor("#111111"))
-        title.setPos(10, 8)
+        self.title_item = QGraphicsTextItem(self.instance_name, self)
+        self.title_item.setDefaultTextColor(QColor("#111111"))
+        self.title_item.setPos(10, 8)
 
         subtitle_text = "SubComponent" if component.is_subcomp else "Component"
         subtitle = QGraphicsTextItem(f"{component.element} · {subtitle_text}", self)
@@ -776,7 +792,19 @@ class ComponentNodeItem(QGraphicsRectItem):
 
     @property
     def instance_name(self) -> str:
-        return f"{self.component.name}_{self.node_id}"
+        return self.instance_name_value
+
+    def set_instance_name(self, new_name: str):
+        self.instance_name_value = new_name
+        self.title_item.setPlainText(new_name)
+
+        for port in self.ports:
+            for connection in port.connections:
+                if connection.source_port.node is self:
+                    connection.link.source_component_name = new_name
+                if connection.target_port.node is self:
+                    connection.link.target_component_name = new_name
+                connection.update_tooltip()
 
     def add_ports_from_database_or_defaults(self):
         port_names = load_port_names_for_component(self.component.component_id)
@@ -803,7 +831,7 @@ class ComponentNodeItem(QGraphicsRectItem):
     def mousePressEvent(self, event):
         scene = self.scene()
         if isinstance(scene, ModelScene):
-            scene.highlight_links_for_node(self)
+            scene.select_component(self)
             scene.begin_node_drag()
         super().mousePressEvent(event)
 
@@ -833,6 +861,7 @@ class ModelScene(QGraphicsScene):
         self.setSceneRect(0, 0, 2000, 1500)
         self.pending_source_port: Optional[PortItem] = None
         self.pending_line: Optional[QGraphicsLineItem] = None
+        self.properties_panel: Optional[PropertiesPanel] = None
         self.links: list[ModelLink] = []
         self._next_link_id = 1
 
@@ -878,6 +907,19 @@ class ModelScene(QGraphicsScene):
     def highlight_links_for_node(self, node: "ComponentNodeItem"):
         for connection in self.connection_items():
             connection.set_highlighted(connection.is_connected_to_node(node))
+
+    def select_component(self, node: "ComponentNodeItem"):
+        self.highlight_links_for_node(node)
+
+        if self.properties_panel is not None:
+            self.properties_panel.show_component(node)
+
+    def select_link(self, connection: ConnectionItem):
+        self.clear_link_highlights()
+        connection.set_highlighted(True)
+
+        if self.properties_panel is not None:
+            self.properties_panel.show_link(connection)
 
     def begin_node_drag(self):
         self._dragging_node = True
@@ -1141,6 +1183,9 @@ class ModelScene(QGraphicsScene):
         if not clicked_a_port and not clicked_a_component and not clicked_a_link:
             self.clear_link_highlights()
 
+            if self.properties_panel is not None:
+                self.properties_panel.show_empty()
+
         super().mousePressEvent(event)
 
 
@@ -1178,6 +1223,287 @@ class ModelView(QGraphicsView):
         self.scene().addItem(node)
 
         event.acceptProposedAction()
+
+
+class PropertiesPanel(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.current_node: Optional[ComponentNodeItem] = None
+        self.current_link: Optional[ConnectionItem] = None
+        self._loading = False
+
+        layout = QVBoxLayout(self)
+
+        self.title = QLabel("Nothing selected")
+        self.title.setStyleSheet("font-weight: bold; font-size: 14px;")
+        layout.addWidget(self.title)
+
+        self.tree = QTreeWidget()
+        self.tree.setColumnCount(2)
+        self.tree.setHeaderLabels(["Property", "Value"])
+        self.tree.itemChanged.connect(self.on_item_changed)
+        layout.addWidget(self.tree)
+
+    def show_empty(self):
+        self._loading = True
+        self.current_node = None
+        self.current_link = None
+        self.title.setText("Nothing selected")
+        self.tree.clear()
+        self._loading = False
+
+    def add_category(self, name: str) -> QTreeWidgetItem:
+        item = QTreeWidgetItem([name, ""])
+        item.setFirstColumnSpanned(True)
+        item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+        self.tree.addTopLevelItem(item)
+        item.setExpanded(True)
+        return item
+
+    def add_property(
+        self,
+        parent: QTreeWidgetItem,
+        name: str,
+        value: str,
+        key: str,
+        editable: bool = True,
+        metadata: Optional[dict] = None,
+    ):
+        item = QTreeWidgetItem([name, value])
+        item.setData(0, Qt.UserRole, key)
+        item.setData(1, Qt.UserRole, metadata or {})
+        item.setData(1, Qt.UserRole + 1, value)
+
+        flags = item.flags()
+        if editable:
+            flags |= Qt.ItemIsEditable
+        else:
+            flags &= ~Qt.ItemIsEditable
+        item.setFlags(flags)
+
+        parent.addChild(item)
+        return item
+
+    def show_component(self, node: ComponentNodeItem):
+        self._loading = True
+        self.current_node = node
+        self.current_link = None
+        self.title.setText("Component Instance")
+        self.tree.clear()
+
+        component = node.component
+
+        object_group = self.add_category("Object")
+        self.add_property(object_group, "Name", node.instance_name, "component.name", editable=True)
+        self.add_property(
+            object_group,
+            "Kind",
+            "SubComponent" if component.is_subcomp else "Component",
+            "component.kind",
+            editable=False,
+        )
+        self.add_property(object_group, "Element", component.element, "component.element", editable=False)
+        self.add_property(object_group, "Component Type", component.name, "component.type", editable=False)
+        self.add_property(object_group, "Interface", component.iface or "", "component.iface", editable=False)
+
+        parameters_group = self.add_category("Parameters")
+
+        for parameter in self.load_component_parameters(component.component_id):
+            name = parameter.get("name", "")
+            default_value = parameter.get("default_val", "")
+            required = bool(parameter.get("required"))
+
+            if default_value == "<required>":
+                default_value = ""
+
+            value = node.parameters.get(name, default_value)
+
+            self.add_property(
+                parameters_group,
+                name,
+                str(value),
+                f"component.parameter.{name}",
+                editable=True,
+                metadata={
+                    "name": name,
+                    "required": required,
+                    "default_val": default_value,
+                    "description": parameter.get("description", ""),
+                },
+            )
+
+        self.tree.expandAll()
+        self.tree.resizeColumnToContents(0)
+        self._loading = False
+
+    def show_link(self, connection: ConnectionItem):
+        self._loading = True
+        self.current_node = None
+        self.current_link = connection
+        self.title.setText("Point-to-Point Link")
+        self.tree.clear()
+
+        link = connection.link
+
+        object_group = self.add_category("Object")
+        self.add_property(object_group, "Name", link.name, "link.name", editable=True)
+        self.add_property(object_group, "Type", link.link_type, "link.type", editable=False)
+        self.add_property(
+            object_group,
+            "Source",
+            f"{link.source_component_name}.{link.source_port}",
+            "link.source",
+            editable=False,
+        )
+        self.add_property(
+            object_group,
+            "Target",
+            f"{link.target_component_name}.{link.target_port}",
+            "link.target",
+            editable=False,
+        )
+
+        parameters_group = self.add_category("Parameters")
+        self.add_property(
+            parameters_group,
+            "latency",
+            link.latency,
+            "link.parameter.latency",
+            editable=True,
+            metadata={
+                "name": "latency",
+                "required": True,
+                "type": "latency",
+            },
+        )
+
+        self.tree.expandAll()
+        self.tree.resizeColumnToContents(0)
+        self._loading = False
+
+    def load_component_parameters(self, component_id: Optional[int]) -> list[dict]:
+        if component_id is None or get_component_details is None:
+            return []
+
+        try:
+            details = get_component_details(component_id)
+        except Exception as exc:
+            print(f"Failed to load component details for {component_id}: {exc}")
+            return []
+
+        if not details:
+            return []
+
+        return details.get("parameters", [])
+
+    def on_item_changed(self, item: QTreeWidgetItem, column: int):
+        if self._loading or column != 1:
+            return
+
+        key = item.data(0, Qt.UserRole)
+        metadata = item.data(1, Qt.UserRole) or {}
+        old_value = item.data(1, Qt.UserRole + 1)
+        new_value = item.text(1).strip()
+
+        valid, message = self.validate_value(key, new_value, metadata)
+
+        if not valid:
+            QMessageBox.warning(self, "Invalid Value", message)
+            self._loading = True
+            item.setText(1, old_value)
+            self._loading = False
+            return
+
+        if key == "component.name" and self.current_node is not None:
+            self.current_node.set_instance_name(new_value)
+
+        elif key == "link.name" and self.current_link is not None:
+            self.current_link.link.name = new_value
+            self.current_link.update_tooltip()
+
+        elif key == "link.parameter.latency" and self.current_link is not None:
+            self.current_link.link.latency = new_value
+            self.current_link.update_tooltip()
+
+        elif isinstance(key, str) and key.startswith("component.parameter.") and self.current_node is not None:
+            parameter_name = metadata.get("name")
+            if parameter_name:
+                self.current_node.parameters[parameter_name] = new_value
+
+        item.setData(1, Qt.UserRole + 1, new_value)
+
+    def validate_value(self, key: str, value: str, metadata: dict) -> tuple[bool, str]:
+        if key in {"component.name", "link.name"}:
+            if not value:
+                return False, "Name cannot be empty."
+
+            if not self.name_is_unique(value):
+                return False, f"The name '{value}' is already used. Enter a unique name."
+
+            return True, ""
+
+        if metadata.get("required", False) and not value:
+            return False, "This parameter is required."
+
+        if metadata.get("type") == "latency":
+            valid_suffixes = ("fs", "ps", "ns", "us", "ms", "s")
+            if not value.endswith(valid_suffixes):
+                return False, "Latency should end with a time unit such as ps, ns, us, ms, or s."
+            return True, ""
+
+        default_value = metadata.get("default_val", "")
+
+        if default_value and value:
+            if self.looks_like_int(default_value) and not self.looks_like_int(value):
+                return False, "This value should be an integer."
+
+            if self.looks_like_float(default_value) and not self.looks_like_float(value):
+                return False, "This value should be numeric."
+
+        return True, ""
+
+    def name_is_unique(self, name: str) -> bool:
+        scene = None
+
+        if self.current_node is not None:
+            scene = self.current_node.scene()
+
+        if self.current_link is not None:
+            scene = self.current_link.scene()
+
+        if not isinstance(scene, ModelScene):
+            return True
+
+        for item in scene.items():
+            if isinstance(item, ComponentNodeItem):
+                if item is self.current_node:
+                    continue
+                if item.instance_name == name:
+                    return False
+
+            if isinstance(item, ConnectionItem):
+                if item is self.current_link:
+                    continue
+                if item.link.name == name:
+                    return False
+
+        return True
+
+    @staticmethod
+    def looks_like_int(value: str) -> bool:
+        try:
+            int(value)
+            return True
+        except ValueError:
+            return False
+
+    @staticmethod
+    def looks_like_float(value: str) -> bool:
+        try:
+            float(value)
+            return True
+        except ValueError:
+            return False
 
 
 def component_node_to_save_dict(node: ComponentNodeItem) -> dict:
@@ -1300,6 +1626,7 @@ def load_project_into_scene(project: dict, scene: ModelScene) -> None:
             component,
             node_id=node_id,
             parameters=component_data.get("parameters", {}),
+            instance_name=component_data.get("instanceName"),
         )
 
         position = component_data.get("position", {})
@@ -1377,9 +1704,12 @@ class MainWindow(QMainWindow):
         self.palette = ComponentPalette()
         self.scene = ModelScene()
         self.model_view = ModelView(self.scene)
+        self.properties_panel = PropertiesPanel()
+        self.scene.properties_panel = self.properties_panel
 
         self.setup_menu_bar()
         self.setup_layout()
+        self.setup_properties_panel()
         self.setup_status_bar()
 
         ensure_database_ready()
@@ -1449,6 +1779,22 @@ class MainWindow(QMainWindow):
 
         self.setCentralWidget(splitter)
 
+    def setup_properties_panel(self):
+        dock = QDockWidget("Properties", self)
+        dock.setWidget(self.properties_panel)
+        dock.setAllowedAreas(
+            Qt.LeftDockWidgetArea
+            | Qt.RightDockWidgetArea
+            | Qt.TopDockWidgetArea
+            | Qt.BottomDockWidgetArea
+        )
+        dock.setFeatures(
+            QDockWidget.DockWidgetMovable
+            | QDockWidget.DockWidgetFloatable
+            | QDockWidget.DockWidgetClosable
+        )
+        self.addDockWidget(Qt.RightDockWidgetArea, dock)
+
     def setup_status_bar(self):
         status = QStatusBar(self)
         status.showMessage("Ready")
@@ -1456,6 +1802,70 @@ class MainWindow(QMainWindow):
 
     def project_dict(self) -> dict:
         return build_project_dict(self.scene, self.model_view, self.project_name)
+
+    def validate_model_before_save(self) -> bool:
+        used_names = set()
+
+        for node in self.scene.component_items():
+            if not node.instance_name:
+                QMessageBox.warning(self, "Invalid Model", "A component has an empty name.")
+                return False
+
+            if node.instance_name in used_names:
+                QMessageBox.warning(
+                    self,
+                    "Invalid Model",
+                    f"The name '{node.instance_name}' is used more than once.",
+                )
+                return False
+
+            used_names.add(node.instance_name)
+
+        for link in self.scene.links:
+            if not link.name:
+                QMessageBox.warning(self, "Invalid Model", "A link has an empty name.")
+                return False
+
+            if link.name in used_names:
+                QMessageBox.warning(
+                    self,
+                    "Invalid Model",
+                    f"The name '{link.name}' is used more than once.",
+                )
+                return False
+
+            used_names.add(link.name)
+
+            if not link.latency:
+                QMessageBox.warning(
+                    self,
+                    "Invalid Model",
+                    f"Link '{link.name}' is missing required latency.",
+                )
+                return False
+
+        for node in self.scene.component_items():
+            parameters = self.properties_panel.load_component_parameters(node.component.component_id)
+
+            for parameter in parameters:
+                name = parameter.get("name", "")
+                required = bool(parameter.get("required"))
+                default_value = parameter.get("default_val", "")
+
+                if default_value == "<required>":
+                    default_value = ""
+
+                value = node.parameters.get(name, default_value)
+
+                if required and not str(value).strip():
+                    QMessageBox.warning(
+                        self,
+                        "Invalid Model",
+                        f"Component '{node.instance_name}' is missing required parameter '{name}'.",
+                    )
+                    return False
+
+        return True
 
     def set_current_project_path(self, path: Optional[str | Path]) -> None:
         self.current_project_path = Path(path) if path else None
@@ -1469,10 +1879,14 @@ class MainWindow(QMainWindow):
 
     def new_model(self):
         self.scene.clear_model()
+        self.properties_panel.show_empty()
         self.set_current_project_path(None)
         self.statusBar().showMessage("New model created", 3000)
 
     def save_model(self):
+        if not self.validate_model_before_save():
+            return
+
         if self.current_project_path is None:
             self.save_model_as()
             return
@@ -1512,6 +1926,7 @@ class MainWindow(QMainWindow):
         try:
             project = load_project_file(file_path)
             load_project_into_scene(project, self.scene)
+            self.properties_panel.show_empty()
         except Exception as exc:
             QMessageBox.critical(self, "Open Failed", str(exc))
             return
