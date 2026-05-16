@@ -1,6 +1,7 @@
 from typing import Optional
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor, QBrush
 from PySide6.QtWidgets import (
     QLabel,
     QMessageBox,
@@ -17,6 +18,7 @@ from graphics_items import ComponentNodeItem, ConnectionItem
 class PropertiesPanel(QWidget):
     def __init__(self):
         super().__init__()
+        self.validation_issues_by_node: dict[int, dict[str, list[str]]] = {}
         self.current_node: Optional[ComponentNodeItem] = None
         self.current_link: Optional[ConnectionItem] = None
         self._loading = False
@@ -83,7 +85,19 @@ class PropertiesPanel(QWidget):
         component = node.component
 
         object_group = self.add_category("Object")
-        self.add_property(object_group, "Name", node.instance_name, "component.name", editable=True)
+
+        name_item = self.add_property(
+            object_group,
+            "Name",
+            node.instance_name,
+            "component.name",
+            editable=True,
+        )
+
+        name_issues = self.validation_issues_by_node.get(node.node_id, {}).get("name", [])
+        if name_issues:
+            self.mark_item_invalid(name_item, "\n".join(name_issues))
+
         self.add_property(
             object_group,
             "Kind",
@@ -107,9 +121,11 @@ class PropertiesPanel(QWidget):
 
             value = node.parameters.get(name, default_value)
 
-            self.add_property(
+            display_name = f"{name} *" if required else name
+
+            item = self.add_property(
                 parameters_group,
-                name,
+                display_name,
                 str(value),
                 f"component.parameter.{name}",
                 editable=True,
@@ -120,6 +136,14 @@ class PropertiesPanel(QWidget):
                     "description": parameter.get("description", ""),
                 },
             )
+
+            if required:
+                item.setToolTip(0, "Required parameter")
+                item.setToolTip(1, "Required parameter")
+
+            issues = self.validation_issues_by_node.get(node.node_id, {}).get(name, [])
+            if issues:
+                self.mark_item_invalid(item, "\n".join(issues))
 
         self.tree.expandAll()
         self.tree.resizeColumnToContents(0)
@@ -277,6 +301,31 @@ class PropertiesPanel(QWidget):
                     return False
 
         return True
+
+    def set_validation_issues(self, issues):
+        self.validation_issues_by_node = {}
+
+        for issue in issues:
+            if issue.node_id is None:
+                continue
+
+            parameter_name = issue.parameter_name or "_object"
+            self.validation_issues_by_node.setdefault(issue.node_id, {})
+            self.validation_issues_by_node[issue.node_id].setdefault(parameter_name, [])
+            self.validation_issues_by_node[issue.node_id][parameter_name].append(issue.message)
+
+        if self.current_node is not None:
+            self.show_component(self.current_node)
+
+    def mark_item_invalid(self, item: QTreeWidgetItem, message: str):
+        background = QBrush(QColor("#fee2e2"))
+
+        item.setBackground(0, background)
+        item.setBackground(1, background)
+        item.setToolTip(0, message)
+        item.setToolTip(1, message)
+
+
 
     @staticmethod
     def looks_like_int(value: str) -> bool:

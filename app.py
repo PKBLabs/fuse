@@ -29,6 +29,7 @@ from project_io import (
     save_project_file,
 )
 from properties_panel import PropertiesPanel
+from validation import validate_model
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -217,6 +218,7 @@ class MainWindow(QMainWindow):
 
     def new_model(self):
         self.scene.clear_model()
+        self.properties_panel.set_validation_issues([])
         self.properties_panel.show_empty()
         self.set_current_project_path(None)
         self.statusBar().showMessage("New model created", 3000)
@@ -264,6 +266,7 @@ class MainWindow(QMainWindow):
         try:
             project = load_project_file(file_path)
             load_project_into_scene(project, self.scene)
+            self.properties_panel.set_validation_issues([])
             self.properties_panel.show_empty()
         except Exception as exc:
             QMessageBox.critical(self, "Open Failed", str(exc))
@@ -296,6 +299,59 @@ class MainWindow(QMainWindow):
 
         QMessageBox.information(self, "Links", text)
 
+    def apply_validation_issues(self, issues):
+        issues_by_node: dict[int, list[str]] = {}
+
+        for issue in issues:
+            if issue.node_id is not None:
+                issues_by_node.setdefault(issue.node_id, []).append(issue.message)
+
+        for node in self.scene.component_items():
+            node.set_validation_warnings(issues_by_node.get(node.node_id, []))
+
+        self.properties_panel.set_validation_issues(issues)
+
+    def format_validation_message(self, issues) -> str:
+        lines = ["The model has issues that must be fixed before saving:", ""]
+
+        for issue in issues[:25]:
+            lines.append(f"• {issue.object_name}: {issue.message}")
+
+        if len(issues) > 25:
+            lines.append("")
+            lines.append(f"...and {len(issues) - 25} more issue(s).")
+
+        lines.append("")
+        lines.append("Components with missing required values are marked with a warning icon.")
+
+        return "\n".join(lines)
+
+    def validate_model_before_save(self) -> bool:
+        issues = validate_model(self.scene)
+        self.apply_validation_issues(issues)
+
+        if not issues:
+            return True
+
+        first_component_issue = next(
+            (issue for issue in issues if issue.node_id is not None),
+            None,
+        )
+
+        if first_component_issue is not None:
+            for node in self.scene.component_items():
+                if node.node_id == first_component_issue.node_id:
+                    self.scene.select_component(node)
+                    self.model_view.centerOn(node)
+                    break
+
+        QMessageBox.warning(
+            self,
+            "Model Needs Attention",
+            self.format_validation_message(issues),
+        )
+
+        return False
 
 def main():
     app = QApplication(sys.argv)

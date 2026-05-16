@@ -352,7 +352,10 @@ class ComponentNodeItem(QGraphicsRectItem):
         self.ports: list[PortItem] = []
 
         self.setBrush(QBrush(QColor("#ffffff")))
-        self.setPen(QPen(QColor("#333333"), 1.5))
+        self.normal_pen = QPen(QColor("#333333"), 1.5)
+        self.validation_pen = QPen(QColor("#dc2626"), 2.5)
+        self.setPen(self.normal_pen)
+        self.validation_messages: list[str] = []
         self.setFlags(
             QGraphicsItem.ItemIsMovable
             | QGraphicsItem.ItemIsSelectable
@@ -368,6 +371,13 @@ class ComponentNodeItem(QGraphicsRectItem):
         subtitle.setDefaultTextColor(QColor("#555555"))
         subtitle.setScale(0.85)
         subtitle.setPos(10, 32)
+
+        self.validation_warning_item = QGraphicsTextItem("⚠", self)
+        self.validation_warning_item.setDefaultTextColor(QColor("#f59e0b"))
+        self.validation_warning_item.setScale(1.25)
+        self.validation_warning_item.setPos(self.WIDTH - 28, 4)
+        self.validation_warning_item.setVisible(False)
+        self.validation_warning_item.setZValue(20)
 
         if component.iface:
             iface = QGraphicsTextItem(component.iface, self)
@@ -448,3 +458,17 @@ class ComponentNodeItem(QGraphicsRectItem):
                         connection.update_position()
 
         return super().itemChange(change, value)
+
+    def set_validation_warnings(self, messages: list[str]):
+        self.validation_messages = messages
+
+        if messages:
+            self.setPen(self.validation_pen)
+            self.validation_warning_item.setVisible(True)
+            self.validation_warning_item.setToolTip("\n".join(messages))
+            self.setToolTip("\n".join(messages))
+        else:
+            self.setPen(self.normal_pen)
+            self.validation_warning_item.setVisible(False)
+            self.validation_warning_item.setToolTip("")
+            self.setToolTip("")
