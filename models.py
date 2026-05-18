@@ -12,6 +12,7 @@ class ComponentDefinition:
     is_subcomp: int = 0
     category: str = ""
     iface: str = ""
+    icon_path: str = ""
 
     @property
     def display_name(self) -> str:
@@ -27,16 +28,17 @@ class ComponentDefinition:
                 str(self.is_subcomp),
                 self.category or "",
                 self.iface or "",
+                self.icon_path or "",
             ]
         )
 
     @staticmethod
     def from_drag_text(text: str) -> "ComponentDefinition":
-        parts = text.split("|", 5)
-        while len(parts) < 6:
+        parts = text.split("|", 6)
+        while len(parts) < 7:
             parts.append("")
 
-        component_id_text, element, name, is_subcomp, category, iface = parts
+        component_id_text, element, name, is_subcomp, category, iface, icon_path = parts
 
         return ComponentDefinition(
             component_id=int(component_id_text) if component_id_text else None,
@@ -45,6 +47,7 @@ class ComponentDefinition:
             is_subcomp=int(is_subcomp or 0),
             category=category,
             iface=iface,
+            icon_path=icon_path,
         )
 
 @dataclass

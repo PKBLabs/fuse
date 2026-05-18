@@ -31,6 +31,7 @@ def initialize_database():
                 parent_id INTEGER NOT NULL,
                 category TEXT NOT NULL DEFAULT '',
                 functionality TEXT NOT NULL DEFAULT '',
+                icon_path TEXT DEFAULT '',
                 checkpointable INTEGER NOT NULL DEFAULT 0 CHECK (checkpointable IN (0, 1)),
                 
                 UNIQUE(parent_id, name, is_subcomp),
@@ -112,6 +113,8 @@ def initialize_database():
             )
         """)
 
+        ensure_component_icon_column(conn)
+
 def save_sst_info_run(command, return_code, stdout, stderr):
     with get_connection() as conn:
         cursor = conn.execute(
@@ -133,6 +136,22 @@ def save_sst_info_run(command, return_code, stdout, stderr):
         )
 
         return cursor.lastrowid
+
+
+def ensure_component_icon_column(conn) -> None:
+    columns = {
+        row["name"]
+        for row in conn.execute("PRAGMA table_info(components)").fetchall()
+    }
+
+    if "icon_path" not in columns:
+        conn.execute(
+            """
+            ALTER TABLE components
+            ADD COLUMN icon_path TEXT
+            """
+        )
+
 
 if __name__ == "__main__":
     initialize_database()

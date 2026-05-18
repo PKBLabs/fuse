@@ -59,6 +59,7 @@ def load_component_definitions() -> list[ComponentDefinition]:
                         is_subcomp=int(component.get("is_subcomp", 0)),
                         category=component.get("category", ""),
                         iface=component.get("iface", ""),
+                        icon_path=component.get("icon_path", ""),
                     )
                 )
 

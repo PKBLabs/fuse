@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from pathlib import Path
-from sst_icon_resolver import guess_component_icon_path
+from scripts.sst.sst_icon_resolver import guess_component_icon_path
 import re
 import subprocess
 import sys
@@ -849,7 +849,7 @@ def sync_parsed_sstinfo_to_database(
                 component=component,
             )
 
-            backfill_component_icons(conn)
+        backfill_component_icons(conn)
 
 
 def sync_sstinfo_to_database(args=None) -> int:

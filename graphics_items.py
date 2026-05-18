@@ -5,17 +5,17 @@ from routing import (
     simplify_points,
     segment_intersects_rect,
 )
-
+from scripts.sst.sst_icon_resolver import resolve_icon_path
 from typing import Optional
-
 from PySide6.QtCore import Qt, QPointF
-from PySide6.QtGui import QPen, QBrush, QColor, QPainterPath
+from PySide6.QtGui import QPen, QBrush, QColor, QPainterPath, QPixmap
 from PySide6.QtWidgets import (
     QGraphicsEllipseItem,
     QGraphicsItem,
     QGraphicsPathItem,
     QGraphicsRectItem,
     QGraphicsTextItem,
+    QGraphicsPixmapItem,
 )
 
 from db_access import load_port_names_for_component
@@ -350,7 +350,7 @@ class ComponentNodeItem(QGraphicsRectItem):
         self.instance_name_value = instance_name or f"{component.name}_{self.node_id}"
         self.parameters = parameters or {}
         self.ports: list[PortItem] = []
-
+        self.icon_path = component.icon_path or ""
         self.setBrush(QBrush(QColor("#ffffff")))
         self.normal_pen = QPen(QColor("#333333"), 1.5)
         self.validation_pen = QPen(QColor("#dc2626"), 2.5)
@@ -387,6 +387,9 @@ class ComponentNodeItem(QGraphicsRectItem):
             iface.setPos(10, 54)
 
         self.add_ports_from_database_or_defaults()
+
+        self.icon_item = None
+        self.add_icon()
 
     @property
     def instance_name(self) -> str:
@@ -472,3 +475,37 @@ class ComponentNodeItem(QGraphicsRectItem):
             self.validation_warning_item.setVisible(False)
             self.validation_warning_item.setToolTip("")
             self.setToolTip("")
+
+    def add_icon(self):
+        if not self.icon_path:
+            return
+
+        path = resolve_icon_path(self.icon_path)
+        if not path.exists():
+            return
+
+        pixmap = QPixmap(str(path))
+        if pixmap.isNull():
+            return
+
+        pixmap = pixmap.scaled(
+            52,
+            52,
+            Qt.KeepAspectRatio,
+            Qt.SmoothTransformation,
+        )
+
+        self.icon_item = QGraphicsPixmapItem(pixmap, self)
+        self.icon_item.setPos(10, 50)
+        self.icon_item.setZValue(2)
+
+    def set_icon_path(self, icon_path: str):
+        self.icon_path = icon_path
+
+        if hasattr(self, "icon_item") and self.icon_item is not None:
+            self.icon_item.setParentItem(None)
+            if self.scene() is not None:
+                self.scene().removeItem(self.icon_item)
+            self.icon_item = None
+
+        self.add_icon()

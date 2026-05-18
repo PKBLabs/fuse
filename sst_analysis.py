@@ -3,7 +3,7 @@ import json
 import pandas as pd
 
 from initialize_db import get_connection
-from get_sstinfo import parse_sstinfo_output
+from scripts.sst.get_sstinfo import parse_sstinfo_output
 
 
 def read_sql_df(query: str, params=()):

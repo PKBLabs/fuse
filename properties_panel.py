@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
+    QFileDialog,
 )
 
 from db_access import get_component_details
@@ -108,6 +109,15 @@ class PropertiesPanel(QWidget):
         self.add_property(object_group, "Element", component.element, "component.element", editable=False)
         self.add_property(object_group, "Component Type", component.name, "component.type", editable=False)
         self.add_property(object_group, "Interface", component.iface or "", "component.iface", editable=False)
+
+        icon_item = self.add_property(
+            object_group,
+            "Icon Path",
+            getattr(node, "icon_path", ""),
+            "component.icon_path",
+            editable=True,
+        )
+        icon_item.setToolTip(1, "Path to the icon used for this component instance.")
 
         parameters_group = self.add_category("Parameters")
 
@@ -229,6 +239,9 @@ class PropertiesPanel(QWidget):
 
         if key == "component.name" and self.current_node is not None:
             self.current_node.set_instance_name(new_value)
+
+        elif key == "component.icon_path" and self.current_node is not None:
+            self.current_node.set_icon_path(new_value)
 
         elif key == "link.name" and self.current_link is not None:
             self.current_link.link.name = new_value

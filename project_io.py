@@ -22,6 +22,7 @@ def component_node_to_save_dict(node: ComponentNodeItem) -> dict:
         "componentId": node.component.component_id,
         "isSubcomponent": node.component.is_subcomp,
         "category": node.component.category,
+        "iconPath": node.icon_path,
         "interface": node.component.iface,
         "instanceName": node.instance_name,
         "parameters": node.parameters,
@@ -118,6 +119,8 @@ def load_project_into_scene(project: dict, scene: ModelScene) -> None:
     nodes_by_id: dict[int, ComponentNodeItem] = {}
 
     for component_data in project["components"]:
+        icon_path = component_data.get("iconPath", "") or component_data.get("icon_path", "")
+
         component = ComponentDefinition(
             component_id=component_data.get("componentId"),
             element=component_data.get("element", ""),
@@ -125,6 +128,7 @@ def load_project_into_scene(project: dict, scene: ModelScene) -> None:
             is_subcomp=int(component_data.get("isSubcomponent", 0)),
             category=component_data.get("category", ""),
             iface=component_data.get("interface", ""),
+            icon_path=icon_path,
         )
 
         node_id = int(component_data["id"])
