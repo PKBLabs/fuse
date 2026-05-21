@@ -1,0 +1,23 @@
+[plugin]
+id = "com.pkbresearchlabs.fuse.sst"
+name = "FUSE SST Plugin"
+version = "0.1.0"
+vendor = "PKB Research Labs, LLC"
+license = "GPL-3.0-or-later"
+type = "community"
+description = "SST components, validation, and model generation support for FUSE."
+
+[compatibility]
+fuse_plugin_api = ">=1.0,<2.0"
+fuse_app = ">=0.1,<1.0"
+
+[entry_points]
+register = "fuse.plugins.community.sst.plugin:register_plugin"
+
+[capabilities]
+component_providers = true
+exporters = true
+validators = true
+importers = false
+simulation_runners = false
+property_editors = true

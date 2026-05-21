@@ -1,0 +1,23 @@
+[plugin]
+id = "com.pkbresearchlabs.fuse.gem5"
+name = "FUSE gem5 Plugin"
+version = "0.1.0"
+vendor = "PKB Research Labs, LLC"
+license = "GPL-3.0-or-later"
+type = "community"
+description = "gem5 model-building and configuration-generation support for FUSE."
+
+[compatibility]
+fuse_plugin_api = ">=1.0,<2.0"
+fuse_app = ">=0.1,<1.0"
+
+[entry_points]
+register = "fuse_gem5.plugin:register_plugin"
+
+[capabilities]
+component_providers = true
+exporters = true
+validators = true
+importers = false
+simulation_runners = true
+property_editors = true

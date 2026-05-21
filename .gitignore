@@ -1,19 +1,48 @@
-# Python
+# Python virtual environments
 .venv/
+**/.venv/
+venv/
+**/venv/
+env/
+**/env/
+
+# Python cache / bytecode
 __pycache__/
-*.pyc
+**/__pycache__/
+*.py[cod]
 *.pyo
 *.pyd
+*$py.class
 
-# PyCharm
+# Python build artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# IDE
 .idea/
+.vscode/
 
-# SQLite generated data
-app_data/app.db
+# Runtime database
 app_data/*.db
 app_data/*.db-journal
+app_data/*.db-wal
+app_data/*.db-shm
 app_data/*.sqlite
 app_data/*.sqlite3
+fuse/app_data/*.db
+fuse/app_data/*.db-journal
+fuse/app_data/*.db-wal
+fuse/app_data/*.db-shm
+fuse/app_data/*.sqlite
+fuse/app_data/*.sqlite3
 
-# OS/editor junk
+# Logs / temp
+*.log
+*.tmp
+
+# OS junk
 .DS_Store
+Thumbs.db
