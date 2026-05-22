@@ -1,0 +1,7 @@
+element_library,object_kind,name,icon_key,icon_path,notes
+coreTestElement,Component,coreTestMessageGeneratorComponent,generator,,
+cramSim,Component,c_TxnGen,generator,,
+cramSim,Component,c_TraceFileReader,trace_reader,,
+cramSim,Component,c_MemhBridge,noc_bridge,,
+cassini,SubComponent,AddrHistogrammer,cache_memory_tracer,,
+ember,SubComponent,AllPingPongMotif,generator,,

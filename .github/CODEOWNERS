@@ -1,0 +1,7 @@
+# FUSE code ownership
+* @bripage
+
+# Plugin API requires explicit owner review
+/fuse/plugin_api/ @bripage
+/PLUGIN-API-STABILITY.md @bripage
+/PLUGIN-POLICY.md @bripage
