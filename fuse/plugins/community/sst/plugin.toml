@@ -1,5 +1,5 @@
 [plugin]
-id = "com.pkbresearchlabs.fuse.sst"
+id = "sst"
 name = "FUSE SST Plugin"
 version = "0.1.0"
 vendor = "PKB Research Labs, LLC"

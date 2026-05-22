@@ -421,12 +421,14 @@ class ComponentNodeItem(QGraphicsRectItem):
                 connection.update_tooltip()
 
     def add_ports_from_database_or_defaults(self):
-        port_names = load_port_names_for_component(self.component.component_id)
+        port_names = load_port_names_for_component(
+            self.component.plugin_id,
+            self.component.component_id,
+        )
 
         if not port_names:
             port_names = ["in", "out"]
 
-        # Split ports across left and right sides so they are easy to connect visually.
         left_ports = port_names[::2]
         right_ports = port_names[1::2]
 

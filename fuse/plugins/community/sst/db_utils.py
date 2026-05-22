@@ -14,11 +14,15 @@
 from fuse.core.persistence.database import get_connection, rows_to_dicts
 
 
+SST_COMPONENT_PARENT_TYPE = "sst_components"
+SST_STATISTIC_PARENT_TYPE = "sst_statistics"
+
+
 def get_all_elements():
     with get_connection() as conn:
         rows = conn.execute("""
             SELECT id, name, description
-            FROM elements
+            FROM sst_elements
             ORDER BY name
         """).fetchall()
 
@@ -29,7 +33,7 @@ def get_element_by_name(element_name):
     with get_connection() as conn:
         row = conn.execute("""
             SELECT id, name, description
-            FROM elements
+            FROM sst_elements
             WHERE name = ?
         """, (element_name,)).fetchone()
 
@@ -39,8 +43,8 @@ def get_element_by_name(element_name):
 def get_component_id(component_name, element_name=None, is_subcomp=None):
     query = """
         SELECT c.id
-        FROM components c
-        JOIN elements e ON c.parent_id = e.id
+        FROM sst_components c
+        JOIN sst_elements e ON c.parent_id = e.id
         WHERE c.name = ?
     """
     params = [component_name]
@@ -65,8 +69,8 @@ def get_all_components_for_element(element_name):
     with get_connection() as conn:
         rows = conn.execute("""
             SELECT c.*
-            FROM components c
-            JOIN elements e ON c.parent_id = e.id
+            FROM sst_components c
+            JOIN sst_elements e ON c.parent_id = e.id
             WHERE e.name = ?
             ORDER BY c.is_subcomp, c.name
         """, (element_name,)).fetchall()
@@ -78,8 +82,8 @@ def get_components_for_element(element_name):
     with get_connection() as conn:
         rows = conn.execute("""
             SELECT c.*
-            FROM components c
-            JOIN elements e ON c.parent_id = e.id
+            FROM sst_components c
+            JOIN sst_elements e ON c.parent_id = e.id
             WHERE e.name = ?
               AND c.is_subcomp = 0
             ORDER BY c.name
@@ -92,8 +96,8 @@ def get_subcomponents_for_element(element_name):
     with get_connection() as conn:
         rows = conn.execute("""
             SELECT c.*
-            FROM components c
-            JOIN elements e ON c.parent_id = e.id
+            FROM sst_components c
+            JOIN sst_elements e ON c.parent_id = e.id
             WHERE e.name = ?
               AND c.is_subcomp = 1
             ORDER BY c.name
@@ -106,11 +110,11 @@ def get_parameters_for_component(component_id):
     with get_connection() as conn:
         rows = conn.execute("""
             SELECT *
-            FROM parameters
+            FROM sst_parameters
             WHERE parent_id = ?
-              AND parent_type = 'components'
+              AND parent_type = ?
             ORDER BY name
-        """, (component_id,)).fetchall()
+        """, (component_id, SST_COMPONENT_PARENT_TYPE)).fetchall()
 
     return rows_to_dicts(rows)
 
@@ -119,7 +123,7 @@ def get_ports_for_component(component_id):
     with get_connection() as conn:
         rows = conn.execute("""
             SELECT *
-            FROM ports
+            FROM sst_ports
             WHERE parent_id = ?
             ORDER BY name
         """, (component_id,)).fetchall()
@@ -131,7 +135,7 @@ def get_statistics_for_component(component_id):
     with get_connection() as conn:
         rows = conn.execute("""
             SELECT *
-            FROM statistics
+            FROM sst_statistics
             WHERE parent_id = ?
             ORDER BY name
         """, (component_id,)).fetchall()
@@ -149,12 +153,12 @@ def get_parameters_for_statistics(statistic_ids):
         rows = conn.execute(
             f"""
             SELECT *
-            FROM parameters
-            WHERE parent_type = 'statistics'
+            FROM sst_parameters
+            WHERE parent_type = ?
               AND parent_id IN ({placeholders})
             ORDER BY parent_id, name
             """,
-            statistic_ids,
+            [SST_STATISTIC_PARENT_TYPE, *statistic_ids],
         ).fetchall()
 
     grouped = {}
@@ -166,12 +170,11 @@ def get_parameters_for_statistics(statistic_ids):
     return grouped
 
 
-
 def get_subcomponent_slots_for_component(component_id):
     with get_connection() as conn:
         rows = conn.execute("""
             SELECT *
-            FROM subcomp_slots
+            FROM sst_subcomp_slots
             WHERE parent_id = ?
             ORDER BY name
         """, (component_id,)).fetchall()
@@ -183,8 +186,8 @@ def get_component_details(component_id):
     with get_connection() as conn:
         component = conn.execute("""
             SELECT c.*, e.name AS element_name
-            FROM components c
-            JOIN elements e ON c.parent_id = e.id
+            FROM sst_components c
+            JOIN sst_elements e ON c.parent_id = e.id
             WHERE c.id = ?
         """, (component_id,)).fetchone()
 

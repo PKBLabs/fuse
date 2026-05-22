@@ -11,18 +11,16 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-from typing import Optional
-
-from fuse.core.model.models import ComponentDefinition
-from fuse.core.persistence.database import (
-    get_connection,
-    initialize_core_database,
-    rows_to_dicts,
+from fuse.core.persistence.database import initialize_core_database, get_connection
+from fuse.core.plugin_runtime.manager import (
+    load_enabled_plugins,
+    load_all_palette_items,
+    load_item_details,
 )
-from fuse.core.plugin_runtime.manager import load_enabled_plugins
+from fuse.core.model.models import ComponentDefinition
 
 
-def ensure_database_ready() -> None:
+def ensure_database_ready(run_plugin_bootstrap: bool = False) -> None:
     initialize_core_database()
 
     plugins = load_enabled_plugins()
@@ -30,175 +28,87 @@ def ensure_database_ready() -> None:
     with get_connection() as conn:
         for plugin in plugins:
             instance = plugin.instance
+            version = plugin.manifest.get("plugin", {}).get("version", "")
+
+            conn.execute("""
+                INSERT INTO core_plugins (
+                    id,
+                    name,
+                    version,
+                    enabled
+                )
+                VALUES (?, ?, ?, 1)
+                ON CONFLICT(id) DO UPDATE SET
+                    name = excluded.name,
+                    version = excluded.version,
+                    enabled = excluded.enabled
+            """, (plugin.plugin_id, plugin.name, version))
 
             if hasattr(instance, "initialize_database"):
                 instance.initialize_database(conn)
 
+        conn.commit()
 
-def get_all_elements():
-    with get_connection() as conn:
-        rows = conn.execute("""
-            SELECT id, name, description
-            FROM elements
-            ORDER BY name
-        """).fetchall()
+    if run_plugin_bootstrap:
+        for plugin in plugins:
+            instance = plugin.instance
 
-    return rows_to_dicts(rows)
-
-
-def get_all_components_for_element(element_name):
-    with get_connection() as conn:
-        rows = conn.execute("""
-            SELECT c.*
-            FROM components c
-            JOIN elements e ON c.parent_id = e.id
-            WHERE e.name = ?
-            ORDER BY c.is_subcomp, c.name
-        """, (element_name,)).fetchall()
-
-    return rows_to_dicts(rows)
-
-
-def get_parameters_for_component(component_id):
-    with get_connection() as conn:
-        rows = conn.execute("""
-            SELECT *
-            FROM parameters
-            WHERE parent_id = ?
-              AND parent_type = 'components'
-            ORDER BY name
-        """, (component_id,)).fetchall()
-
-    return rows_to_dicts(rows)
-
-
-def get_ports_for_component(component_id):
-    with get_connection() as conn:
-        rows = conn.execute("""
-            SELECT *
-            FROM ports
-            WHERE parent_id = ?
-            ORDER BY name
-        """, (component_id,)).fetchall()
-
-    return rows_to_dicts(rows)
-
-
-def get_statistics_for_component(component_id):
-    with get_connection() as conn:
-        rows = conn.execute("""
-            SELECT *
-            FROM statistics
-            WHERE parent_id = ?
-            ORDER BY name
-        """, (component_id,)).fetchall()
-
-    return rows_to_dicts(rows)
-
-
-def get_parameters_for_statistics(statistic_ids):
-    if not statistic_ids:
-        return {}
-
-    placeholders = ", ".join("?" for _ in statistic_ids)
-
-    with get_connection() as conn:
-        rows = conn.execute(
-            f"""
-            SELECT *
-            FROM parameters
-            WHERE parent_type = 'statistics'
-              AND parent_id IN ({placeholders})
-            ORDER BY parent_id, name
-            """,
-            statistic_ids,
-        ).fetchall()
-
-    grouped = {}
-
-    for row in rows:
-        parameter = dict(row)
-        grouped.setdefault(parameter["parent_id"], []).append(parameter)
-
-    return grouped
-
-
-def get_subcomponent_slots_for_component(component_id):
-    with get_connection() as conn:
-        rows = conn.execute("""
-            SELECT *
-            FROM subcomp_slots
-            WHERE parent_id = ?
-            ORDER BY name
-        """, (component_id,)).fetchall()
-
-    return rows_to_dicts(rows)
-
-
-def get_component_details(component_id):
-    with get_connection() as conn:
-        component = conn.execute("""
-            SELECT c.*, e.name AS element_name
-            FROM components c
-            JOIN elements e ON c.parent_id = e.id
-            WHERE c.id = ?
-        """, (component_id,)).fetchone()
-
-    if component is None:
-        return None
-
-    statistics = get_statistics_for_component(component_id)
-    statistic_ids = [stat["id"] for stat in statistics]
-    params_by_stat_id = get_parameters_for_statistics(statistic_ids)
-
-    for statistic in statistics:
-        statistic["parameters"] = params_by_stat_id.get(statistic["id"], [])
-
-    return {
-        "component": dict(component),
-        "parameters": get_parameters_for_component(component_id),
-        "ports": get_ports_for_component(component_id),
-        "statistics": statistics,
-        "subcomponent_slots": get_subcomponent_slots_for_component(component_id),
-    }
+            if hasattr(instance, "bootstrap_database"):
+                instance.bootstrap_database()
 
 
 def load_component_definitions() -> list[ComponentDefinition]:
-    try:
-        definitions: list[ComponentDefinition] = []
-        elements = get_all_elements()
+    definitions = []
 
-        for element in elements:
-            element_name = element["name"]
-            components = get_all_components_for_element(element_name)
+    for item in load_all_palette_items():
+        definitions.append(
+            ComponentDefinition(
+                plugin_id=item.plugin_id,
+                component_id=item.item_id,
+                element=item.category,
+                name=item.type_name,
+                category=item.category,
+                iface="",
+                icon_path=item.icon_path,
+                display_name_override=item.display_name,
+            )
+        )
 
-            for component in components:
-                definitions.append(
-                    ComponentDefinition(
-                        component_id=component.get("id"),
-                        element=element_name,
-                        name=component.get("name", ""),
-                        is_subcomp=int(component.get("is_subcomp", 0)),
-                        category=component.get("category", ""),
-                        iface=component.get("iface", ""),
-                        icon_path=component.get("icon_path", ""),
-                    )
-                )
-
-        return definitions
-
-    except Exception as exc:
-        print(f"Failed to load components from database: {exc}")
-        return []
+    return definitions
 
 
-def load_port_names_for_component(component_id: Optional[int]) -> list[str]:
-    if component_id is None:
-        return []
+def load_port_names_for_component(plugin_id: str, component_id: str) -> list[str]:
+    details = load_item_details(plugin_id, component_id)
+    return [connector.name for connector in details.connectors]
 
-    try:
-        ports = get_ports_for_component(component_id)
-        return [port["name"] for port in ports]
-    except Exception as exc:
-        print(f"Failed to load ports for component {component_id}: {exc}")
-        return []
+
+def get_component_details(plugin_id: str, component_id: str):
+    details = load_item_details(plugin_id, component_id)
+
+    return {
+        "component": {
+            "name": details.palette_item.type_name,
+            "description": details.palette_item.description,
+            "category": details.palette_item.category,
+            "icon_path": details.palette_item.icon_path,
+        },
+        "parameters": [
+            {
+                "name": prop.name,
+                "description": prop.description,
+                "default_val": prop.default_value,
+                "required": prop.required,
+            }
+            for prop in details.properties
+        ],
+        "ports": [
+            {
+                "name": conn.name,
+                "description": conn.description,
+                "iface": conn.interface,
+            }
+            for conn in details.connectors
+        ],
+        "statistics": details.statistics,
+        "subcomponent_slots": [],
+    }

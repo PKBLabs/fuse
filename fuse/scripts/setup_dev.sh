@@ -12,9 +12,11 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
 set -e
 
 APP_NAME="fuse-mod"
+
 FUSE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO_PARENT="$(dirname "$FUSE_ROOT")"
 VENV_DIR="$FUSE_ROOT/.venv"
@@ -30,8 +32,11 @@ fi
 "$VENV_DIR/bin/python" -m pip install -r "$REQUIREMENTS_FILE"
 
 echo "Initializing database..."
-PYTHONPATH="$REPO_PARENT" "$VENV_DIR/bin/python" -c \
-    "from fuse.core.persistence.db_access import ensure_database_ready; ensure_database_ready()"
+PYTHONPATH="$REPO_PARENT" "$VENV_DIR/bin/python" - <<'PY'
+from fuse.core.persistence.db_access import ensure_database_ready
+
+ensure_database_ready(run_plugin_bootstrap=True)
+PY
 
 mkdir -p "$HOME/.local/bin"
 
@@ -39,6 +44,7 @@ cat > "$HOME/.local/bin/$APP_NAME" <<EOF
 #!/usr/bin/env bash
 set -e
 cd "$REPO_PARENT"
+export PYTHONPATH="$REPO_PARENT:\${PYTHONPATH:-}"
 exec "$VENV_DIR/bin/python" -m fuse.app.main "\$@"
 EOF
 

@@ -42,6 +42,9 @@ def _load_register_callable(register_path: str):
 def discover_plugin_manifests() -> list[Path]:
     manifests: list[Path] = []
 
+    if not PLUGIN_ROOT.exists():
+        return manifests
+
     for plugin_toml in PLUGIN_ROOT.glob("community/*/plugin.toml"):
         manifests.append(plugin_toml)
 
@@ -63,10 +66,18 @@ def load_enabled_plugins() -> list[LoadedPlugin]:
         register_path = entry_points.get("register")
 
         if not register_path:
+            print(f"Skipping plugin '{plugin_id}': no entry_points.register in {manifest_path}")
             continue
 
-        register_plugin = _load_register_callable(register_path)
-        instance = register_plugin()
+        try:
+            register_plugin = _load_register_callable(register_path)
+            instance = register_plugin()
+        except Exception as exc:
+            print(
+                f"Skipping plugin '{plugin_id}' from {manifest_path}: "
+                f"failed to load {register_path}: {exc}"
+            )
+            continue
 
         loaded.append(
             LoadedPlugin(
@@ -79,3 +90,42 @@ def load_enabled_plugins() -> list[LoadedPlugin]:
         )
 
     return loaded
+
+
+def get_plugin_by_id(plugin_id: str):
+    for plugin in load_enabled_plugins():
+        instance_plugin_id = getattr(plugin.instance, "plugin_id", None)
+
+        if plugin.plugin_id == plugin_id or instance_plugin_id == plugin_id:
+            return plugin.instance
+
+    loaded_ids = [
+        f"{plugin.plugin_id} / {getattr(plugin.instance, 'plugin_id', '<no instance id>')}"
+        for plugin in load_enabled_plugins()
+    ]
+
+    raise KeyError(
+        f"No enabled plugin with id '{plugin_id}'. "
+        f"Loaded plugin ids: {loaded_ids}"
+    )
+
+
+def load_all_palette_items():
+    items = []
+
+    for plugin in load_enabled_plugins():
+        instance = plugin.instance
+
+        if hasattr(instance, "load_palette_items"):
+            items.extend(instance.load_palette_items())
+
+    return items
+
+
+def load_item_details(plugin_id: str, item_id: str):
+    plugin = get_plugin_by_id(plugin_id)
+
+    if not hasattr(plugin, "load_item_details"):
+        raise KeyError(f"Plugin '{plugin_id}' does not provide item details.")
+
+    return plugin.load_item_details(item_id)

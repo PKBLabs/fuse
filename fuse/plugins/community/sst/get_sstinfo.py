@@ -13,16 +13,20 @@
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 from dataclasses import dataclass, field
 from pathlib import Path
-from fuse.plugins.community.sst.sst_icon_resolver import guess_component_icon_path
 import re
 import subprocess
 import sys
 
+from fuse.core.persistence.database import get_connection
 from fuse.plugins.community.sst.initialize_db import (
     initialize_database,
     save_sst_info_run,
-    get_connection,
 )
+from fuse.plugins.community.sst.sst_icon_resolver import guess_component_icon_path
+
+
+SST_COMPONENT_PARENT_TYPE = "sst_components"
+SST_STATISTIC_PARENT_TYPE = "sst_statistics"
 
 
 @dataclass
@@ -286,7 +290,7 @@ def parse_sstinfo_output(stdout: str) -> tuple[list[ParsedElement], list[ParsedC
             continue
 
         # These are real sst-info sections, but they do not fit the current schema.
-        # Add separate tables later if you want to track them.
+        # Add separate SST-prefixed tables later if you want to track them.
         if stripped.startswith(
             (
                 "Modules (",
@@ -436,7 +440,7 @@ def get_or_create_element(conn, name: str, description: str = "") -> int:
     row = conn.execute(
         """
         SELECT id
-        FROM elements
+        FROM sst_elements
         WHERE name = ?
         """,
         (name,),
@@ -446,7 +450,7 @@ def get_or_create_element(conn, name: str, description: str = "") -> int:
         if description:
             conn.execute(
                 """
-                UPDATE elements
+                UPDATE sst_elements
                 SET description = ?
                 WHERE id = ?
                 """,
@@ -457,7 +461,10 @@ def get_or_create_element(conn, name: str, description: str = "") -> int:
 
     cursor = conn.execute(
         """
-        INSERT INTO elements (name, description)
+        INSERT INTO sst_elements (
+            name,
+            description
+        )
         VALUES (?, ?)
         """,
         (name, description),
@@ -470,7 +477,7 @@ def get_component_id(conn, parent_id: int, name: str, is_subcomp: int) -> int | 
     row = conn.execute(
         """
         SELECT id
-        FROM components
+        FROM sst_components
         WHERE parent_id = ?
           AND name = ?
           AND is_subcomp = ?
@@ -505,7 +512,7 @@ def insert_or_update_component(
     if existing_id is not None:
         conn.execute(
             """
-            UPDATE components
+            UPDATE sst_components
             SET description = ?,
                 iface = ?,
                 category = ?,
@@ -527,7 +534,7 @@ def insert_or_update_component(
 
     cursor = conn.execute(
         """
-        INSERT INTO components (
+        INSERT INTO sst_components (
             name,
             description,
             is_subcomp,
@@ -556,8 +563,8 @@ def insert_or_update_component(
 
 def backfill_component_icons(conn) -> None:
     """
-    Fill components.icon_path for components/subcomponents that do not already
-    have an icon.
+    Fill sst_components.icon_path for components/subcomponents that do not
+    already have an icon.
 
     This intentionally only updates rows where icon_path is NULL or empty, so
     manual user choices are not overwritten during future sst-info refreshes.
@@ -572,8 +579,8 @@ def backfill_component_icons(conn) -> None:
             COALESCE(c.iface, '') AS iface,
             COALESCE(e.name, '') AS element,
             c.is_subcomp
-        FROM components c
-        JOIN elements e ON c.parent_id = e.id
+        FROM sst_components c
+        JOIN sst_elements e ON c.parent_id = e.id
         WHERE c.icon_path IS NULL OR c.icon_path = ''
         """
     ).fetchall()
@@ -593,7 +600,7 @@ def backfill_component_icons(conn) -> None:
         if icon_path:
             conn.execute(
                 """
-                UPDATE components
+                UPDATE sst_components
                 SET icon_path = ?
                 WHERE id = ?
                 """,
@@ -605,7 +612,7 @@ def get_statistic_id(conn, parent_id: int, name: str) -> int | None:
     row = conn.execute(
         """
         SELECT id
-        FROM statistics
+        FROM sst_statistics
         WHERE parent_id = ?
           AND name = ?
         """,
@@ -635,7 +642,7 @@ def insert_or_update_statistic(
     if existing_id is not None:
         conn.execute(
             """
-            UPDATE statistics
+            UPDATE sst_statistics
             SET description = ?,
                 units = ?,
                 iface = ?
@@ -653,7 +660,7 @@ def insert_or_update_statistic(
 
     cursor = conn.execute(
         """
-        INSERT INTO statistics (
+        INSERT INTO sst_statistics (
             name,
             description,
             units,
@@ -677,7 +684,7 @@ def insert_or_update_statistic(
 def delete_parameters_for(conn, parent_type: str, parent_id: int) -> None:
     conn.execute(
         """
-        DELETE FROM parameters
+        DELETE FROM sst_parameters
         WHERE parent_type = ?
           AND parent_id = ?
         """,
@@ -691,12 +698,12 @@ def insert_parameter(
     parent_id: int,
     parameter: ParsedParameter,
 ) -> int:
-    if parent_type not in {"components", "statistics"}:
+    if parent_type not in {SST_COMPONENT_PARENT_TYPE, SST_STATISTIC_PARENT_TYPE}:
         raise ValueError(f"Unsupported parameter parent_type: {parent_type}")
 
     cursor = conn.execute(
         """
-        INSERT INTO parameters (
+        INSERT INTO sst_parameters (
             name,
             description,
             default_val,
@@ -726,17 +733,17 @@ def replace_component_children(
 ) -> None:
     delete_parameters_for(
         conn=conn,
-        parent_type="components",
+        parent_type=SST_COMPONENT_PARENT_TYPE,
         parent_id=component_id,
     )
 
-    conn.execute("DELETE FROM ports WHERE parent_id = ?", (component_id,))
-    conn.execute("DELETE FROM subcomp_slots WHERE parent_id = ?", (component_id,))
+    conn.execute("DELETE FROM sst_ports WHERE parent_id = ?", (component_id,))
+    conn.execute("DELETE FROM sst_subcomp_slots WHERE parent_id = ?", (component_id,))
 
     old_statistics = conn.execute(
         """
         SELECT id
-        FROM statistics
+        FROM sst_statistics
         WHERE parent_id = ?
         """,
         (component_id,),
@@ -745,16 +752,16 @@ def replace_component_children(
     for old_statistic in old_statistics:
         delete_parameters_for(
             conn=conn,
-            parent_type="statistics",
+            parent_type=SST_STATISTIC_PARENT_TYPE,
             parent_id=int(old_statistic["id"]),
         )
 
-    conn.execute("DELETE FROM statistics WHERE parent_id = ?", (component_id,))
+    conn.execute("DELETE FROM sst_statistics WHERE parent_id = ?", (component_id,))
 
     for parameter in component.parameters:
         insert_parameter(
             conn=conn,
-            parent_type="components",
+            parent_type=SST_COMPONENT_PARENT_TYPE,
             parent_id=component_id,
             parameter=parameter,
         )
@@ -762,7 +769,7 @@ def replace_component_children(
     for port in component.ports:
         conn.execute(
             """
-            INSERT INTO ports (
+            INSERT INTO sst_ports (
                 name,
                 description,
                 iface,
@@ -781,7 +788,7 @@ def replace_component_children(
     for slot in component.subcomp_slots:
         conn.execute(
             """
-            INSERT INTO subcomp_slots (
+            INSERT INTO sst_subcomp_slots (
                 name,
                 description,
                 iface,
@@ -810,7 +817,7 @@ def replace_component_children(
         for parameter in statistic.parameters:
             insert_parameter(
                 conn=conn,
-                parent_type="statistics",
+                parent_type=SST_STATISTIC_PARENT_TYPE,
                 parent_id=statistic_id,
                 parameter=parameter,
             )
@@ -896,7 +903,7 @@ def sync_sstinfo_to_database(args=None) -> int:
 def sync_sstinfo_file_to_database(path: str) -> None:
     initialize_database()
 
-    stdout = Path(path).read_text()
+    stdout = Path(path).read_text(encoding="utf-8")
 
     elements, components = parse_sstinfo_output(stdout)
 

@@ -21,46 +21,88 @@ SCHEMA_VERSION = "0.1.0"
 class ComponentDefinition:
     element: str
     name: str
-    component_id: Optional[int] = None
+    component_id: str | int | None = None
+    plugin_id: str = "core"
     is_subcomp: int = 0
     category: str = ""
     iface: str = ""
     icon_path: str = ""
+    display_name_override: str = ""
 
     @property
     def display_name(self) -> str:
+        if self.display_name_override:
+            return self.display_name_override
+
         kind = "SubComponent" if self.is_subcomp else "Component"
-        return f"{self.element}.{self.name} ({kind})"
+
+        if self.element:
+            return f"{self.element}.{self.name} ({kind})"
+
+        return f"{self.name} ({kind})"
 
     def to_drag_text(self) -> str:
         return "|".join(
             [
                 str(self.component_id or ""),
-                self.element,
-                self.name,
+                self.plugin_id or "core",
+                self.element or "",
+                self.name or "",
                 str(self.is_subcomp),
                 self.category or "",
                 self.iface or "",
                 self.icon_path or "",
+                self.display_name_override or "",
             ]
         )
 
     @staticmethod
     def from_drag_text(text: str) -> "ComponentDefinition":
-        parts = text.split("|", 6)
-        while len(parts) < 7:
-            parts.append("")
+        parts = text.split("|")
 
-        component_id_text, element, name, is_subcomp, category, iface, icon_path = parts
+        # New plugin-aware format:
+        # component_id | plugin_id | element | name | is_subcomp | category | iface | icon_path | display_name_override
+        if len(parts) >= 9:
+            (
+                component_id_text,
+                plugin_id,
+                element,
+                name,
+                is_subcomp,
+                category,
+                iface,
+                icon_path,
+                display_name_override,
+            ) = parts[:9]
+
+            return ComponentDefinition(
+                component_id=component_id_text or None,
+                plugin_id=plugin_id or "core",
+                element=element,
+                name=name,
+                is_subcomp=int(is_subcomp or 0),
+                category=category,
+                iface=iface,
+                icon_path=icon_path,
+                display_name_override=display_name_override,
+            )
+
+        # Backward-compatible old format:
+        # component_id | element | name | is_subcomp | category | iface
+        old_parts = text.split("|", 5)
+        while len(old_parts) < 6:
+            old_parts.append("")
+
+        component_id_text, element, name, is_subcomp, category, iface = old_parts
 
         return ComponentDefinition(
-            component_id=int(component_id_text) if component_id_text else None,
+            component_id=component_id_text or None,
+            plugin_id="sst",
             element=element,
             name=name,
             is_subcomp=int(is_subcomp or 0),
             category=category,
             iface=iface,
-            icon_path=icon_path,
         )
 
 @dataclass

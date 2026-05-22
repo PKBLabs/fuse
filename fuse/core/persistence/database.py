@@ -34,7 +34,7 @@ def rows_to_dicts(rows):
 def initialize_core_database() -> None:
     with get_connection() as conn:
         conn.execute("""
-            CREATE TABLE IF NOT EXISTS plugins (
+            CREATE TABLE IF NOT EXISTS core_plugins (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL DEFAULT '',
                 version TEXT NOT NULL DEFAULT '',
@@ -44,7 +44,7 @@ def initialize_core_database() -> None:
         """)
 
         conn.execute("""
-            CREATE TABLE IF NOT EXISTS schema_migrations (
+            CREATE TABLE IF NOT EXISTS core_schema_migrations (
                 namespace TEXT NOT NULL,
                 version TEXT NOT NULL,
                 applied_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -52,106 +52,4 @@ def initialize_core_database() -> None:
             )
         """)
 
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS elements (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL UNIQUE,
-                description TEXT DEFAULT ''
-            )
-        """)
-
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS components (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                description TEXT DEFAULT '',
-                is_subcomp INTEGER NOT NULL DEFAULT 0 CHECK (is_subcomp IN (0, 1)),
-                iface TEXT NOT NULL DEFAULT '',
-                parent_id INTEGER NOT NULL,
-                category TEXT NOT NULL DEFAULT '',
-                functionality TEXT NOT NULL DEFAULT '',
-                icon_path TEXT DEFAULT '',
-                checkpointable INTEGER NOT NULL DEFAULT 0 CHECK (checkpointable IN (0, 1)),
-
-                UNIQUE(parent_id, name, is_subcomp),
-
-                FOREIGN KEY (parent_id) REFERENCES elements(id)
-                    ON DELETE CASCADE
-                    ON UPDATE RESTRICT
-            )
-        """)
-
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS subcomp_slots (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                description TEXT DEFAULT '',
-                iface TEXT NOT NULL,
-                parent_id INTEGER NOT NULL,
-
-                FOREIGN KEY (parent_id) REFERENCES components(id)
-                    ON DELETE CASCADE
-                    ON UPDATE RESTRICT
-            )
-        """)
-
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS parameters (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                description TEXT DEFAULT '',
-                default_val TEXT NOT NULL DEFAULT '',
-                parent_id INTEGER NOT NULL,
-                parent_type TEXT NOT NULL CHECK (
-                    parent_type IN (
-                        'components',
-                        'statistics'
-                    )
-                ),
-                required INTEGER NOT NULL DEFAULT 0 CHECK (required IN (0, 1))
-            )
-        """)
-
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS statistics (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                description TEXT DEFAULT '',
-                units TEXT NOT NULL,
-                iface TEXT NOT NULL,
-                parent_id INTEGER NOT NULL,
-
-                FOREIGN KEY (parent_id) REFERENCES components(id)
-                    ON DELETE CASCADE
-                    ON UPDATE RESTRICT
-            )
-        """)
-
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS ports (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                description TEXT DEFAULT '',
-                iface TEXT NOT NULL,
-                parent_id INTEGER NOT NULL,
-
-                FOREIGN KEY (parent_id) REFERENCES components(id)
-                    ON DELETE CASCADE
-                    ON UPDATE RESTRICT
-            )
-        """)
-
-        ensure_component_icon_column(conn)
-
-
-def ensure_component_icon_column(conn) -> None:
-    columns = {
-        row["name"]
-        for row in conn.execute("PRAGMA table_info(components)").fetchall()
-    }
-
-    if "icon_path" not in columns:
-        conn.execute("""
-            ALTER TABLE components
-            ADD COLUMN icon_path TEXT DEFAULT ''
-        """)
+        conn.commit()

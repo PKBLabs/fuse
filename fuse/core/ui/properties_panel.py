@@ -132,7 +132,7 @@ class PropertiesPanel(QWidget):
 
         parameters_group = self.add_category("Parameters")
 
-        for parameter in self.load_component_parameters(component.component_id):
+        for parameter in self.load_component_parameters(node):
             name = parameter.get("name", "")
             default_value = parameter.get("default_val", "")
             required = bool(parameter.get("required"))
@@ -215,12 +215,17 @@ class PropertiesPanel(QWidget):
         self.tree.resizeColumnToContents(0)
         self._loading = False
 
-    def load_component_parameters(self, component_id: Optional[int]) -> list[dict]:
-        if component_id is None or get_component_details is None:
+    def load_component_parameters(self, node: ComponentNodeItem) -> list[dict]:
+        component_id = node.component.component_id
+
+        if component_id is None:
             return []
 
         try:
-            details = get_component_details(component_id)
+            details = get_component_details(
+                node.component.plugin_id,
+                component_id,
+            )
         except Exception as exc:
             print(f"Failed to load component details for {component_id}: {exc}")
             return []
