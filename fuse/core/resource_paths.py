@@ -11,6 +11,7 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
 from pathlib import Path
 
 
@@ -21,6 +22,9 @@ ARCH_COMPONENT_ICON_RELATIVE_DIR = Path(
 )
 
 ARCH_COMPONENT_ICON_DIR = FUSE_PACKAGE_ROOT / ARCH_COMPONENT_ICON_RELATIVE_DIR
+
+FUSE_LOGO_RELATIVE_PATH = Path("core") / "resources" / "media" / "fuse_logo.png"
+FUSE_LOGO_PATH = FUSE_PACKAGE_ROOT / FUSE_LOGO_RELATIVE_PATH
 
 
 def resolve_icon_path(icon_path: str) -> Path:
