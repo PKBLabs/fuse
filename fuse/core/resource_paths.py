@@ -25,6 +25,8 @@ ARCH_COMPONENT_ICON_DIR = FUSE_PACKAGE_ROOT / ARCH_COMPONENT_ICON_RELATIVE_DIR
 
 FUSE_LOGO_RELATIVE_PATH = Path("core") / "resources" / "media" / "fuse_logo.png"
 FUSE_LOGO_PATH = FUSE_PACKAGE_ROOT / FUSE_LOGO_RELATIVE_PATH
+FUSE_ICON_RELATIVE_PATH = Path("core") / "resources" / "media" / "fuse_icon.png"
+FUSE_ICON_PATH = FUSE_PACKAGE_ROOT / FUSE_ICON_RELATIVE_PATH
 
 
 def resolve_icon_path(icon_path: str) -> Path:
