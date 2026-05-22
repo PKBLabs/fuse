@@ -11,11 +11,16 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-from pathlib import Path
+import os
 import sqlite3
+from pathlib import Path
 
 
-DB_PATH = Path(__file__).resolve().parents[2] / "app_data" / "app.db"
+_DEFAULT_DB_PATH = Path(__file__).resolve().parents[2] / "app_data" / "app.db"
+
+DB_PATH = Path(
+    os.environ.get("FUSE_DB_PATH", str(_DEFAULT_DB_PATH))
+).expanduser()
 
 
 def get_connection():

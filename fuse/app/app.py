@@ -11,12 +11,13 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+import os
 import sys
 from pathlib import Path
 from typing import Optional
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QAction
+from PySide6.QtCore import Qt, QElapsedTimer, QTimer
+from PySide6.QtGui import QAction, QColor
 from PySide6.QtWidgets import (
     QApplication,
     QDockWidget,
@@ -43,6 +44,10 @@ from fuse.core.persistence.project_io import (
 )
 from fuse.core.ui.properties_panel import PropertiesPanel
 from fuse.core.model.validation import validate_model
+from fuse.app.splash import create_splash_screen
+from fuse.core.app_info import APP_NAME, ORG_NAME
+from fuse.app.about import AboutDialog
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -51,7 +56,7 @@ class MainWindow(QMainWindow):
         self.resize(1300, 800)
 
         self.current_project_path: Optional[Path] = None
-        self.project_name = "Untitled SST Model"
+        self.project_name = "Untitled FUSE Model"
 
         self.palette = ComponentPalette()
         self.scene = ModelScene()
@@ -108,7 +113,7 @@ class MainWindow(QMainWindow):
         reroute_all_action.triggered.connect(self.scene.reroute_all_links)
         tools_menu.addAction(reroute_all_action)
 
-        about_action = QAction("About", self)
+        about_action = QAction("About FUSE", self)
         about_action.triggered.connect(self.show_about)
         help_menu.addAction(about_action)
 
@@ -160,10 +165,10 @@ class MainWindow(QMainWindow):
 
         if self.current_project_path is not None:
             self.project_name = self.current_project_path.stem
-            self.setWindowTitle(f"FUSE SST Model Builder - {self.current_project_path.name}")
+            self.setWindowTitle(f"FUSE - {self.current_project_path.name}")
         else:
-            self.project_name = "Untitled SST Model"
-            self.setWindowTitle("FUSE SST Model Builder")
+            self.project_name = "Untitled FUSE Model"
+            self.setWindowTitle("FUSE")
 
     def new_model(self):
         self.scene.clear_model()
@@ -225,13 +230,8 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"Opened {file_path}", 3000)
 
     def show_about(self):
-        QMessageBox.information(
-            self,
-            "About FUSE",
-            "FUSE SST Model Builder\n\n"
-            "Drag components from the left panel into the canvas.\n"
-            "Click one port, then another port, to create an SST-style link.",
-        )
+        dialog = AboutDialog(self)
+        dialog.exec()
 
     def show_links(self):
         if not self.scene.links:
@@ -302,8 +302,36 @@ class MainWindow(QMainWindow):
 
         return False
 
+
 def main():
     app = QApplication(sys.argv)
+    app.setApplicationName(APP_NAME)
+    app.setOrganizationName(ORG_NAME)
+
+    splash_timer = QElapsedTimer()
+    splash_timer.start()
+
+    splash = create_splash_screen()
+    splash.set_message("Initializing FUSE...")
+    splash.show_centered()
+    app.processEvents()
+
     window = MainWindow()
-    window.show()
+
+    splash.set_message("Loading plugins and editor...")
+    app.processEvents()
+
+    minimum_splash_ms = int(os.environ.get("FUSE_SPLASH_MS", "8000"))
+    remaining_ms = max(0, minimum_splash_ms - splash_timer.elapsed())
+
+    def show_main_window():
+        window.showMaximized()
+        splash.finish(window)
+
+        auto_close_ms = os.environ.get("FUSE_TEST_AUTOCLOSE_MS")
+        if auto_close_ms:
+            QTimer.singleShot(int(auto_close_ms), app.quit)
+
+    QTimer.singleShot(remaining_ms, show_main_window)
+
     sys.exit(app.exec())
