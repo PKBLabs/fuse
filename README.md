@@ -1,3 +1,7 @@
+<p align="center">
+  <img width="800" height="400" alt="Flexible User-extensible Simulation Editor (FUSE)" src="fuse/core/resources/media/fuse_logo.png" />
+</p>
+
 # FUSE Community Edition
 
 **FUSE** — the **Flexible User-extensible Simulation Editor** — is a graphical model-building environment for composing, configuring, visualizing, and eventually exporting simulation models for computer architecture and systems research workflows.
