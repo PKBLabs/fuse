@@ -1,0 +1,4 @@
+name: build-sst-ci-image.yml
+on:
+
+jobs:

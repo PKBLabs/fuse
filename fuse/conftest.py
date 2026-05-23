@@ -18,25 +18,25 @@ from pathlib import Path
 import pytest
 
 
-def find_package_root(start: Path) -> Path:
+def find_repo_root(start: Path) -> Path:
     current = start.resolve()
 
     for candidate in [current, *current.parents]:
         if (
-            (candidate / "app" / "main.py").exists()
-            and (candidate / "core").is_dir()
-            and (candidate / "plugins").is_dir()
+            (candidate / "fuse" / "app" / "main.py").exists()
+            and (candidate / "fuse" / "core").is_dir()
+            and (candidate / "fuse" / "plugins").is_dir()
         ):
             return candidate
 
-    raise RuntimeError(f"Could not find FUSE package root from {start}")
+    raise RuntimeError(f"Could not find FUSE repository root from {start}")
 
 
-PACKAGE_ROOT = find_package_root(Path(__file__))
-REPO_PARENT = PACKAGE_ROOT.parent
+REPO_ROOT = find_repo_root(Path(__file__))
+PACKAGE_ROOT = REPO_ROOT / "fuse"
 
-if str(REPO_PARENT) not in sys.path:
-    sys.path.insert(0, str(REPO_PARENT))
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 
 @pytest.fixture(autouse=True)
@@ -53,10 +53,10 @@ def test_environment(monkeypatch, tmp_path):
 
 
 @pytest.fixture
-def package_root() -> Path:
-    return PACKAGE_ROOT
+def repo_root() -> Path:
+    return REPO_ROOT
 
 
 @pytest.fixture
-def repo_parent() -> Path:
-    return REPO_PARENT
+def package_root() -> Path:
+    return PACKAGE_ROOT
