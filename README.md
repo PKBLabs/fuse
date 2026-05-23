@@ -1,5 +1,5 @@
 <p align="center">
-  <img width="800" height="400" alt="Flexible User-extensible Simulation Editor (FUSE)" src="fuse/core/resources/media/fuse_logo.png" />
+  <img width="800" height="500" alt="Flexible User-extensible Simulation Editor (FUSE)" src="fuse/core/resources/media/fuse_logo.png" />
 </p>
 
 # FUSE Community Edition
