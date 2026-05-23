@@ -32,6 +32,7 @@ def component_node_to_save_dict(node: ComponentNodeItem) -> dict:
         "id": node.node_id,
         "element": node.component.element,
         "name": node.component.name,
+        "pluginId": node.component.plugin_id,
         "componentId": node.component.component_id,
         "isSubcomponent": node.component.is_subcomp,
         "category": node.component.category,
@@ -135,6 +136,7 @@ def load_project_into_scene(project: dict, scene: ModelScene) -> None:
         icon_path = component_data.get("iconPath", "") or component_data.get("icon_path", "")
 
         component = ComponentDefinition(
+            plugin_id=component_data.get("pluginId", component_data.get("plugin_id", "core")),
             component_id=component_data.get("componentId"),
             element=component_data.get("element", ""),
             name=component_data.get("name", ""),

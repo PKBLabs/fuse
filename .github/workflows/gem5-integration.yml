@@ -1,0 +1,4 @@
+name: gem5-integration.yml
+on:
+
+jobs:

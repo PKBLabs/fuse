@@ -118,7 +118,16 @@ def validate_required_component_parameters(scene) -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
 
     for node in scene.component_items():
-        details = get_component_details(node.component.component_id)
+        component_id = node.component.component_id
+        plugin_id = getattr(node.component, "plugin_id", "core")
+
+        if component_id is None:
+            continue
+
+        try:
+            details = get_component_details(plugin_id, component_id)
+        except Exception:
+            continue
 
         for parameter in details.get("parameters", []):
             name = parameter.get("name", "")
