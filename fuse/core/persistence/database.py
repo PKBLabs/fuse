@@ -11,22 +11,28 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+from pathlib import Path
 import os
 import sqlite3
-from pathlib import Path
 
 
 _DEFAULT_DB_PATH = Path(__file__).resolve().parents[2] / "app_data" / "app.db"
 
-DB_PATH = Path(
-    os.environ.get("FUSE_DB_PATH", str(_DEFAULT_DB_PATH))
-).expanduser()
+# Keep DB_PATH for compatibility, but do not rely on it inside get_connection().
+DB_PATH = _DEFAULT_DB_PATH
+
+
+def get_database_path() -> Path:
+    return Path(
+        os.environ.get("FUSE_DB_PATH", str(_DEFAULT_DB_PATH))
+    ).expanduser()
 
 
 def get_connection():
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    db_path = get_database_path()
+    db_path.parent.mkdir(parents=True, exist_ok=True)
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     return conn

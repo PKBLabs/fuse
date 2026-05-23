@@ -11,6 +11,9 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+import pytest
+
+
 SAMPLE_SSTINFO = """
 ELEMENT LIBRARY 0 = testElement (Some test element)
 Components (2 total)
@@ -67,3 +70,30 @@ cache_link: Updated link to cache
 Statistics (1 total)
 cycles: Number of cycles, (units="cycles") Enable level = 1
 """
+
+
+@pytest.fixture
+def sample_sstinfo():
+    return SAMPLE_SSTINFO
+
+
+@pytest.fixture
+def updated_sample_sstinfo():
+    return UPDATED_SAMPLE_SSTINFO
+
+
+@pytest.fixture
+def populate_sst_sample(sample_sstinfo):
+    def _populate():
+        from fuse.core.persistence.db_access import ensure_database_ready
+        from fuse.plugins.community.sst.get_sstinfo import (
+            parse_sstinfo_output,
+            sync_parsed_sstinfo_to_database,
+        )
+
+        ensure_database_ready(run_plugin_bootstrap=False)
+
+        elements, components = parse_sstinfo_output(sample_sstinfo)
+        sync_parsed_sstinfo_to_database(elements, components)
+
+    return _populate

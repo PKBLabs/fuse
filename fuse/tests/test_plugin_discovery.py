@@ -30,3 +30,31 @@ def test_loaded_plugins_have_instances():
         assert plugin.instance is not None
         assert hasattr(plugin.instance, "plugin_id")
         assert hasattr(plugin.instance, "name")
+
+
+def test_plugin_manager_skips_broken_plugin(tmp_path, monkeypatch, capsys):
+    from fuse.core.plugin_runtime import manager
+
+    plugin_dir = tmp_path / "community" / "broken"
+    plugin_dir.mkdir(parents=True)
+
+    (plugin_dir / "plugin.toml").write_text(
+        """
+[plugin]
+id = "broken"
+name = "Broken Plugin"
+version = "0.0.1"
+
+[entry_points]
+register = "does.not.exist:register_plugin"
+""",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(manager, "PLUGIN_ROOT", tmp_path)
+
+    plugins = manager.load_enabled_plugins()
+    captured = capsys.readouterr()
+
+    assert plugins == []
+    assert "Skipping plugin" in captured.out

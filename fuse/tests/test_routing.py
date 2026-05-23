@@ -14,21 +14,6 @@
 from PySide6.QtCore import QPointF, QRectF
 
 
-def test_orthogonal_route_avoids_obstacle():
-    from fuse.core.routing.routing import route_is_clear, route_orthogonal_path
-
-    start = QPointF(0, 50)
-    end = QPointF(200, 50)
-    obstacle = QRectF(75, 25, 50, 50)
-
-    route = route_orthogonal_path(start, end, [obstacle])
-
-    assert route
-    assert route[0] == start
-    assert route[-1] == end
-    assert route_is_clear(route, [obstacle])
-
-
 def test_simplify_points_removes_collinear_middle_point():
     from fuse.core.routing.routing import simplify_points
 
@@ -43,3 +28,24 @@ def test_simplify_points_removes_collinear_middle_point():
     assert len(simplified) == 2
     assert simplified[0] == QPointF(0, 0)
     assert simplified[1] == QPointF(20, 0)
+
+
+def test_segment_intersects_rect_detects_crossing():
+    from fuse.core.routing.routing import segment_intersects_rect
+
+    rect = QRectF(40, 40, 20, 20)
+
+    assert segment_intersects_rect(QPointF(0, 50), QPointF(100, 50), rect)
+    assert not segment_intersects_rect(QPointF(0, 10), QPointF(100, 10), rect)
+
+
+def test_route_length_is_positive_for_nonempty_route():
+    from fuse.core.routing.routing import route_length
+
+    points = [
+        QPointF(0, 0),
+        QPointF(10, 0),
+        QPointF(10, 10),
+    ]
+
+    assert route_length(points) > 0

@@ -11,16 +11,18 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-def test_sync_sstinfo_file_to_database(tmp_path):
+import pytest
+
+
+def test_sync_sstinfo_file_to_database(tmp_path, sample_sstinfo):
     from fuse.plugins.community.sst.db_utils import (
         get_all_components_for_element,
         get_all_elements,
     )
     from fuse.plugins.community.sst.get_sstinfo import sync_sstinfo_file_to_database
-    from fuse.plugins.community.sst.tests.conftest import SAMPLE_SSTINFO
 
     path = tmp_path / "sample_sstinfo.txt"
-    path.write_text(SAMPLE_SSTINFO, encoding="utf-8")
+    path.write_text(sample_sstinfo, encoding="utf-8")
 
     sync_sstinfo_file_to_database(str(path))
 
@@ -34,3 +36,27 @@ def test_sync_sstinfo_file_to_database(tmp_path):
         "TestCache",
         "TestMMU",
     }
+
+
+def test_sync_sstinfo_file_missing_file_raises(tmp_path):
+    from fuse.plugins.community.sst.get_sstinfo import sync_sstinfo_file_to_database
+
+    missing_path = tmp_path / "does_not_exist.txt"
+
+    with pytest.raises(FileNotFoundError):
+        sync_sstinfo_file_to_database(str(missing_path))
+
+
+def test_sync_empty_sstinfo_file_imports_nothing(tmp_path):
+    from fuse.core.persistence.db_access import ensure_database_ready
+    from fuse.plugins.community.sst.db_utils import get_all_elements
+    from fuse.plugins.community.sst.get_sstinfo import sync_sstinfo_file_to_database
+
+    ensure_database_ready(run_plugin_bootstrap=False)
+
+    path = tmp_path / "empty_sstinfo.txt"
+    path.write_text("", encoding="utf-8")
+
+    sync_sstinfo_file_to_database(str(path))
+
+    assert get_all_elements() == []

@@ -11,7 +11,7 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-def test_sync_parsed_sstinfo_populates_database():
+def test_sync_parsed_sstinfo_populates_database(sample_sstinfo):
     from fuse.core.persistence.db_access import ensure_database_ready
     from fuse.plugins.community.sst.db_utils import (
         get_all_components_for_element,
@@ -22,11 +22,10 @@ def test_sync_parsed_sstinfo_populates_database():
         parse_sstinfo_output,
         sync_parsed_sstinfo_to_database,
     )
-    from fuse.plugins.community.sst.tests.conftest import SAMPLE_SSTINFO
 
     ensure_database_ready(run_plugin_bootstrap=False)
 
-    elements, components = parse_sstinfo_output(SAMPLE_SSTINFO)
+    elements, components = parse_sstinfo_output(sample_sstinfo)
     sync_parsed_sstinfo_to_database(elements, components)
 
     db_elements = get_all_elements()
@@ -49,31 +48,34 @@ def test_sync_parsed_sstinfo_populates_database():
     assert {stat["name"] for stat in details["statistics"]} == {"cycles"}
 
 
-def test_sync_parsed_sstinfo_is_idempotent():
+def test_sync_parsed_sstinfo_is_idempotent(sample_sstinfo):
     from fuse.core.persistence.database import get_connection
     from fuse.core.persistence.db_access import ensure_database_ready
     from fuse.plugins.community.sst.get_sstinfo import (
         parse_sstinfo_output,
         sync_parsed_sstinfo_to_database,
     )
-    from fuse.plugins.community.sst.tests.conftest import SAMPLE_SSTINFO
 
     ensure_database_ready(run_plugin_bootstrap=False)
 
-    elements, components = parse_sstinfo_output(SAMPLE_SSTINFO)
+    elements, components = parse_sstinfo_output(sample_sstinfo)
 
     sync_parsed_sstinfo_to_database(elements, components)
     sync_parsed_sstinfo_to_database(elements, components)
 
     with get_connection() as conn:
-        element_count = conn.execute("SELECT COUNT(*) AS count FROM sst_elements").fetchone()["count"]
-        component_count = conn.execute("SELECT COUNT(*) AS count FROM sst_components").fetchone()["count"]
+        element_count = conn.execute(
+            "SELECT COUNT(*) AS count FROM sst_elements"
+        ).fetchone()["count"]
+        component_count = conn.execute(
+            "SELECT COUNT(*) AS count FROM sst_components"
+        ).fetchone()["count"]
 
     assert element_count == 1
     assert component_count == 3
 
 
-def test_sync_updates_existing_component_metadata():
+def test_sync_updates_existing_component_metadata(sample_sstinfo, updated_sample_sstinfo):
     from fuse.core.persistence.db_access import ensure_database_ready
     from fuse.plugins.community.sst.db_utils import (
         get_all_components_for_element,
@@ -83,17 +85,13 @@ def test_sync_updates_existing_component_metadata():
         parse_sstinfo_output,
         sync_parsed_sstinfo_to_database,
     )
-    from fuse.plugins.community.sst.tests.conftest import (
-        SAMPLE_SSTINFO,
-        UPDATED_SAMPLE_SSTINFO,
-    )
 
     ensure_database_ready(run_plugin_bootstrap=False)
 
-    elements, components = parse_sstinfo_output(SAMPLE_SSTINFO)
+    elements, components = parse_sstinfo_output(sample_sstinfo)
     sync_parsed_sstinfo_to_database(elements, components)
 
-    updated_elements, updated_components = parse_sstinfo_output(UPDATED_SAMPLE_SSTINFO)
+    updated_elements, updated_components = parse_sstinfo_output(updated_sample_sstinfo)
     sync_parsed_sstinfo_to_database(updated_elements, updated_components)
 
     db_components = get_all_components_for_element("testElement")
@@ -105,3 +103,45 @@ def test_sync_updates_existing_component_metadata():
     details = get_component_details(cpu["id"])
     assert {param["name"] for param in details["parameters"]} == {"clock"}
     assert {port["name"] for port in details["ports"]} == {"cache_link"}
+
+
+def test_sync_does_not_overwrite_manual_icon_path(sample_sstinfo):
+    from fuse.core.persistence.database import get_connection
+    from fuse.core.persistence.db_access import ensure_database_ready
+    from fuse.plugins.community.sst.db_utils import get_component_id
+    from fuse.plugins.community.sst.get_sstinfo import (
+        parse_sstinfo_output,
+        sync_parsed_sstinfo_to_database,
+    )
+
+    ensure_database_ready(run_plugin_bootstrap=False)
+
+    elements, components = parse_sstinfo_output(sample_sstinfo)
+    sync_parsed_sstinfo_to_database(elements, components)
+
+    component_id = get_component_id("TestCPU", "testElement", False)
+
+    with get_connection() as conn:
+        conn.execute(
+            """
+            UPDATE sst_components
+            SET icon_path = ?
+            WHERE id = ?
+            """,
+            ("custom/manual/icon.png", component_id),
+        )
+        conn.commit()
+
+    sync_parsed_sstinfo_to_database(elements, components)
+
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT icon_path
+            FROM sst_components
+            WHERE id = ?
+            """,
+            (component_id,),
+        ).fetchone()
+
+    assert row["icon_path"] == "custom/manual/icon.png"

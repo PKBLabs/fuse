@@ -27,3 +27,14 @@ def test_splash_can_be_constructed(qtbot):
     qtbot.wait(50)
 
     assert not splash.isVisible()
+
+
+def test_splash_message_can_be_updated(qtbot):
+    from fuse.app.splash import create_splash_screen
+
+    splash = create_splash_screen()
+    qtbot.addWidget(splash)
+
+    splash.set_message("Loading test plugins...")
+
+    assert splash.message_label.text() == "Loading test plugins..."

@@ -11,13 +11,28 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-def test_guess_component_icon_path_returns_string():
+def test_guess_component_icon_path_returns_string_for_cache():
     from fuse.plugins.community.sst.sst_icon_resolver import guess_component_icon_path
 
     icon_path = guess_component_icon_path(
         name="TestCache",
         description="Cache memory component",
         category="MEMORY COMPONENT",
+        iface="",
+        element="testElement",
+        object_kind="Component",
+    )
+
+    assert isinstance(icon_path, str)
+
+
+def test_guess_component_icon_path_returns_string_for_nic():
+    from fuse.plugins.community.sst.sst_icon_resolver import guess_component_icon_path
+
+    icon_path = guess_component_icon_path(
+        name="MemNIC",
+        description="Network interface for memory hierarchy",
+        category="NETWORK COMPONENT",
         iface="",
         element="testElement",
         object_kind="Component",

@@ -27,3 +27,21 @@ def test_about_dialog_opens_and_closes(qtbot):
     qtbot.wait(50)
 
     assert not dialog.isVisible()
+
+
+def test_about_dialog_copy_and_close_places_text_on_clipboard(qtbot):
+    from PySide6.QtGui import QGuiApplication
+
+    from fuse.app.about import AboutDialog
+    from fuse.core.app_info import APP_NAME, APP_VERSION, LICENSE_IDENTIFIER
+
+    dialog = AboutDialog()
+    qtbot.addWidget(dialog)
+
+    dialog.copy_and_close()
+
+    clipboard_text = QGuiApplication.clipboard().text()
+
+    assert APP_NAME in clipboard_text
+    assert APP_VERSION in clipboard_text
+    assert LICENSE_IDENTIFIER in clipboard_text
