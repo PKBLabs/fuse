@@ -96,6 +96,7 @@ class MainWindow(QMainWindow):
         project_settings_action = QAction("Project Settings...", self)
         save_action = QAction("Save", self)
         save_as_action = QAction("Save As...", self)
+        export_sst_json_action = QAction("SST JSON...", self)
         exit_action = QAction("Exit", self)
 
         new_action.triggered.connect(self.new_project)
@@ -103,6 +104,7 @@ class MainWindow(QMainWindow):
         project_settings_action.triggered.connect(self.show_project_settings)
         save_action.triggered.connect(self.save_model)
         save_as_action.triggered.connect(self.save_model_as)
+        export_sst_json_action.triggered.connect(self.export_sst_json)
         exit_action.triggered.connect(self.close)
 
         file_menu.addAction(new_action)
@@ -111,6 +113,10 @@ class MainWindow(QMainWindow):
         file_menu.addSeparator()
         file_menu.addAction(save_action)
         file_menu.addAction(save_as_action)
+
+        export_menu = file_menu.addMenu("Export")
+        export_menu.addAction(export_sst_json_action)
+
         file_menu.addSeparator()
         file_menu.addAction(exit_action)
 
@@ -335,6 +341,75 @@ class MainWindow(QMainWindow):
 
         self.set_current_project_path(file_path)
         self.save_model()
+
+    def export_sst_json(self):
+        """
+        Export the current FUSE model to SST's JSON configuration format.
+
+        This does not replace the native .fse project save format. The .fse
+        file remains the editable FUSE project file. This method writes a
+        generated SST JSON configuration file for use with SST.
+        """
+        if not self.scene.component_items():
+            QMessageBox.information(
+                self,
+                "Export SST JSON",
+                "There are no components to export.",
+            )
+            return
+
+        active = self.project_settings.active_plugin_settings()
+
+        if active is None or active.plugin_id != "sst":
+            QMessageBox.warning(
+                self,
+                "Export SST JSON",
+                (
+                    "The active project target is not SST.\n\n"
+                    "Open Project Settings and select an SST target before "
+                    "exporting to SST JSON."
+                ),
+            )
+            return
+
+        if not self.validate_model_before_save():
+            return
+
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export SST JSON",
+            str(self.current_project_path.with_suffix(".sst.json"))
+            if self.current_project_path
+            else "",
+            "SST JSON (*.json);;All Files (*)",
+        )
+
+        if not file_path:
+            return
+
+        if not file_path.lower().endswith(".json"):
+            file_path += ".json"
+
+        try:
+            from fuse.plugins.community.sst.export_json import export_sst_json
+
+            export_sst_json(
+                scene=self.scene,
+                output_path=file_path,
+            )
+
+        except Exception as error:
+            QMessageBox.critical(
+                self,
+                "Export SST JSON Failed",
+                str(error),
+            )
+            return
+
+        self.statusBar().showMessage(
+            f"Exported SST JSON to {file_path}",
+            5000,
+        )
 
     def open_model(self):
         file_path, _ = QFileDialog.getOpenFileName(
