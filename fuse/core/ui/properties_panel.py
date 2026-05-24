@@ -120,6 +120,8 @@ class PropertiesPanel(QWidget):
         self.add_property(object_group, "Element", component.element, "component.element", editable=False)
         self.add_property(object_group, "Component Type", component.name, "component.type", editable=False)
         self.add_property(object_group, "Interface", component.iface or "", "component.iface", editable=False)
+        self.add_property(object_group, "Target", component.target_label or component.target_id or "", "component.target", editable=False)
+        self.add_property(object_group, "Framework Version", component.framework_version or "", "component.framework_version", editable=False)
 
         icon_item = self.add_property(
             object_group,
@@ -225,6 +227,7 @@ class PropertiesPanel(QWidget):
             details = get_component_details(
                 node.component.plugin_id,
                 component_id,
+                node.component.target_id,
             )
         except Exception as exc:
             print(f"Failed to load component details for {component_id}: {exc}")

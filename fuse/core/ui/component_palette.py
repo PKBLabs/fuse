@@ -22,9 +22,16 @@ from fuse.core.model.models import MIME_COMPONENT
 class ComponentPalette(QListWidget):
     def __init__(self):
         super().__init__()
+        self.active_plugin_id: str | None = None
+        self.active_target_id: str | None = None
         self.setSelectionMode(QListWidget.SingleSelection)
         self.setDragEnabled(True)
         self.setAlternatingRowColors(True)
+
+    def set_active_target(self, plugin_id: str | None, target_id: str | None):
+        self.active_plugin_id = plugin_id
+        self.active_target_id = target_id
+        self.load_components()
 
     def startDrag(self, supported_actions):
         item = self.currentItem()
@@ -46,7 +53,15 @@ class ComponentPalette(QListWidget):
     def load_components(self):
         self.clear()
 
-        components = load_component_definitions()
+        try:
+            components = load_component_definitions(
+                plugin_id=self.active_plugin_id,
+                target_id=self.active_target_id,
+            )
+        except TypeError:
+            # Backward compatibility for older tests that monkeypatch
+            # load_component_definitions with a no-argument callable.
+            components = load_component_definitions()
 
         for component in components:
             item = QListWidgetItem(component.display_name)

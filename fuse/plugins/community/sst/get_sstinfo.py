@@ -11,14 +11,27 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from pathlib import Path
+import argparse
+import os
 import re
 import subprocess
 import sys
 
+from fuse.core.model.project_settings import ToolchainSettings
+from fuse.core.toolchains.providers import (
+    CommandExecutionResult,
+    LocalCommandProvider,
+    provider_from_toolchain,
+)
+
 from fuse.core.persistence.database import get_connection
 from fuse.plugins.community.sst.initialize_db import (
+    get_or_create_sst_framework_version,
     initialize_database,
     save_sst_info_run,
 )
@@ -94,38 +107,144 @@ ELEMENT_RE = re.compile(r"^ELEMENT LIBRARY\s+\d+\s+=\s+(.+?)\s+\(")
 COMPONENT_RE = re.compile(r"^(Component|SubComponent)\s+\d+:\s+(.+)$")
 
 
-def get_sstinfo(args=None, timeout_seconds=60) -> CommandResult:
+def default_sst_version_label() -> str:
+    return os.environ.get("FUSE_SST_VERSION", "15.0.0")
+
+
+def resolve_framework_version_id(
+    conn,
+    version: str | None = None,
+    label: str | None = None,
+    source_kind: str = "sst-info",
+    source_path: str = "",
+    command: str = "",
+    is_default: bool = False,
+) -> int:
+    resolved_version = version or default_sst_version_label()
+
+    return get_or_create_sst_framework_version(
+        conn=conn,
+        version=resolved_version,
+        label=label or f"SST {resolved_version}",
+        source_kind=source_kind,
+        source_path=source_path,
+        command=command,
+        is_default=is_default,
+    )
+
+
+def get_sstinfo(
+    args=None,
+    timeout_seconds=60,
+    provider=None,
+    sst_info_path: str = "sst-info",
+    env: dict[str, str] | None = None,
+) -> CommandResult:
     if args is None:
         args = []
 
-    command = ["sst-info", *args]
+    command = [sst_info_path or "sst-info", *args]
 
-    completed = subprocess.run(
+    if provider is None:
+        provider = LocalCommandProvider()
+
+    completed = provider.run(
         command,
-        text=True,
-        capture_output=True,
-        check=False,
-        timeout=timeout_seconds,
+        timeout_seconds=timeout_seconds,
+        env=env,
     )
 
     return CommandResult(
-        command=command,
-        return_code=completed.returncode,
+        command=completed.command,
+        return_code=completed.return_code,
         stdout=completed.stdout,
         stderr=completed.stderr,
     )
 
 
-def run_and_store_raw_sstinfo(args=None) -> int:
+def get_sstinfo_for_toolchain(
+    toolchain: ToolchainSettings,
+    args=None,
+    timeout_seconds=60,
+) -> CommandResult:
+    provider = provider_from_toolchain(toolchain)
+    sst_info_path = toolchain.tool_paths.get("sstInfo") or toolchain.tool_paths.get("sst_info") or "sst-info"
+
+    return get_sstinfo(
+        args=args,
+        timeout_seconds=timeout_seconds,
+        provider=provider,
+        sst_info_path=sst_info_path,
+        env=toolchain.environment,
+    )
+
+
+def validate_sst_toolchain(
+    toolchain: ToolchainSettings,
+    expected_version: str = "",
+    timeout_seconds=60,
+) -> tuple[bool, str, CommandResult | None]:
+    result = get_sstinfo_for_toolchain(
+        toolchain=toolchain,
+        args=["--version"],
+        timeout_seconds=timeout_seconds,
+    )
+
+    output = (result.stdout + "\n" + result.stderr).strip()
+
+    if result.return_code != 0:
+        return (
+            False,
+            f"sst-info failed with return code {result.return_code}.\n{output}",
+            result,
+        )
+
+    if expected_version and expected_version not in output:
+        return (
+            False,
+            (
+                f"Configured project target is SST {expected_version}, but the configured "
+                f"sst-info command did not report that version.\n\nOutput:\n{output}"
+            ),
+            result,
+        )
+
+    return True, output or "sst-info completed successfully.", result
+
+
+def run_and_store_raw_sstinfo(
+    args=None,
+    version: str | None = None,
+    label: str | None = None,
+    is_default: bool = True,
+    toolchain: ToolchainSettings | None = None,
+) -> int:
     initialize_database()
 
-    result = get_sstinfo(args=args)
+    if toolchain is not None:
+        result = get_sstinfo_for_toolchain(toolchain, args=args)
+    else:
+        result = get_sstinfo(args=args)
+
+    command_text = " ".join(result.command)
+
+    with get_connection() as conn:
+        framework_version_id = resolve_framework_version_id(
+            conn=conn,
+            version=version,
+            label=label,
+            source_kind="sst-info",
+            source_path="",
+            command=command_text,
+            is_default=is_default,
+        )
 
     run_id = save_sst_info_run(
         command=result.command,
         return_code=result.return_code,
         stdout=result.stdout,
         stderr=result.stderr,
+        framework_version_id=framework_version_id,
     )
 
     if result.return_code != 0:
@@ -136,7 +255,6 @@ def run_and_store_raw_sstinfo(args=None) -> int:
 
     return run_id
 
-
 def split_name_and_rest(line: str) -> tuple[str, str]:
     if ":" not in line:
         return line.strip(), ""
@@ -146,12 +264,6 @@ def split_name_and_rest(line: str) -> tuple[str, str]:
 
 
 def find_outer_final_bracket(text: str) -> int | None:
-    """
-    Finds the '[' that matches a final trailing ']'.
-
-    Example:
-        'foo [[1.0]]' -> returns index of the outer '['
-    """
     if not text.endswith("]"):
         return None
 
@@ -218,10 +330,6 @@ def parse_statistic_line(line: str) -> ParsedStatistic:
 
 
 def append_continuation(item, text: str) -> None:
-    """
-    Some sst-info descriptions may wrap onto a following line.
-    This appends that continuation text to the previous parsed item.
-    """
     if item is None:
         return
 
@@ -289,8 +397,6 @@ def parse_sstinfo_output(stdout: str) -> tuple[list[ParsedElement], list[ParsedC
             last_detail_item = None
             continue
 
-        # These are real sst-info sections, but they do not fit the current schema.
-        # Add separate SST-prefixed tables later if you want to track them.
         if stripped.startswith(
             (
                 "Modules (",
@@ -436,14 +542,15 @@ def parse_sstinfo_output(stdout: str) -> tuple[list[ParsedElement], list[ParsedC
     return list(elements_by_name.values()), components
 
 
-def get_or_create_element(conn, name: str, description: str = "") -> int:
+def get_or_create_element(conn, framework_version_id: int, name: str, description: str = "") -> int:
     row = conn.execute(
         """
         SELECT id
         FROM sst_elements
-        WHERE name = ?
+        WHERE framework_version_id = ?
+          AND name = ?
         """,
-        (name,),
+        (framework_version_id, name),
     ).fetchone()
 
     if row is not None:
@@ -453,46 +560,43 @@ def get_or_create_element(conn, name: str, description: str = "") -> int:
                 UPDATE sst_elements
                 SET description = ?
                 WHERE id = ?
+                  AND framework_version_id = ?
                 """,
-                (description, row["id"]),
+                (description, row["id"], framework_version_id),
             )
 
         return int(row["id"])
 
     cursor = conn.execute(
         """
-        INSERT INTO sst_elements (
-            name,
-            description
-        )
-        VALUES (?, ?)
+        INSERT INTO sst_elements (framework_version_id, name, description)
+        VALUES (?, ?, ?)
         """,
-        (name, description),
+        (framework_version_id, name, description),
     )
 
     return int(cursor.lastrowid)
 
 
-def get_component_id(conn, parent_id: int, name: str, is_subcomp: int) -> int | None:
+def get_component_id(conn, framework_version_id: int, parent_id: int, name: str, is_subcomp: int) -> int | None:
     row = conn.execute(
         """
         SELECT id
         FROM sst_components
-        WHERE parent_id = ?
+        WHERE framework_version_id = ?
+          AND parent_id = ?
           AND name = ?
           AND is_subcomp = ?
         """,
-        (parent_id, name, is_subcomp),
+        (framework_version_id, parent_id, name, is_subcomp),
     ).fetchone()
 
-    if row is None:
-        return None
-
-    return int(row["id"])
+    return int(row["id"]) if row is not None else None
 
 
 def insert_or_update_component(
     conn,
+    framework_version_id: int,
     parent_id: int,
     name: str,
     description: str,
@@ -502,51 +606,29 @@ def insert_or_update_component(
     functionality: str,
     checkpointable: int,
 ) -> int:
-    existing_id = get_component_id(
-        conn=conn,
-        parent_id=parent_id,
-        name=name,
-        is_subcomp=is_subcomp,
-    )
+    existing_id = get_component_id(conn, framework_version_id, parent_id, name, is_subcomp)
 
     if existing_id is not None:
         conn.execute(
             """
             UPDATE sst_components
-            SET description = ?,
-                iface = ?,
-                category = ?,
-                functionality = ?,
-                checkpointable = ?
-            WHERE id = ?
+            SET description = ?, iface = ?, category = ?, functionality = ?, checkpointable = ?
+            WHERE id = ? AND framework_version_id = ?
             """,
-            (
-                description,
-                iface,
-                category,
-                functionality,
-                checkpointable,
-                existing_id,
-            ),
+            (description, iface, category, functionality, checkpointable, existing_id, framework_version_id),
         )
-
         return existing_id
 
     cursor = conn.execute(
         """
         INSERT INTO sst_components (
-            name,
-            description,
-            is_subcomp,
-            iface,
-            parent_id,
-            category,
-            functionality,
-            checkpointable
+            framework_version_id, name, description, is_subcomp, iface,
+            parent_id, category, functionality, checkpointable
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
+            framework_version_id,
             name,
             description,
             is_subcomp,
@@ -561,33 +643,28 @@ def insert_or_update_component(
     return int(cursor.lastrowid)
 
 
-def backfill_component_icons(conn) -> None:
-    """
-    Fill sst_components.icon_path for components/subcomponents that do not
-    already have an icon.
+def backfill_component_icons(conn, framework_version_id: int | None = None) -> None:
+    params: list[int] = []
+    where = "WHERE c.icon_path IS NULL OR c.icon_path = ''"
 
-    This intentionally only updates rows where icon_path is NULL or empty, so
-    manual user choices are not overwritten during future sst-info refreshes.
-    """
+    if framework_version_id is not None:
+        where += " AND c.framework_version_id = ?"
+        params.append(framework_version_id)
+
     rows = conn.execute(
-        """
-        SELECT
-            c.id,
-            c.name,
-            COALESCE(c.description, '') AS description,
-            COALESCE(c.category, '') AS category,
-            COALESCE(c.iface, '') AS iface,
-            COALESCE(e.name, '') AS element,
-            c.is_subcomp
+        f"""
+        SELECT c.id, c.name, COALESCE(c.description, '') AS description,
+               COALESCE(c.category, '') AS category, COALESCE(c.iface, '') AS iface,
+               COALESCE(e.name, '') AS element, c.is_subcomp
         FROM sst_components c
         JOIN sst_elements e ON c.parent_id = e.id
-        WHERE c.icon_path IS NULL OR c.icon_path = ''
-        """
+        {where}
+        """,
+        params,
     ).fetchall()
 
     for row in rows:
         object_kind = "SubComponent" if int(row["is_subcomp"]) else "Component"
-
         icon_path = guess_component_icon_path(
             name=row["name"],
             description=row["description"],
@@ -599,121 +676,80 @@ def backfill_component_icons(conn) -> None:
 
         if icon_path:
             conn.execute(
-                """
-                UPDATE sst_components
-                SET icon_path = ?
-                WHERE id = ?
-                """,
+                "UPDATE sst_components SET icon_path = ? WHERE id = ?",
                 (icon_path, int(row["id"])),
             )
 
 
-def get_statistic_id(conn, parent_id: int, name: str) -> int | None:
+def get_statistic_id(conn, framework_version_id: int, parent_id: int, name: str) -> int | None:
     row = conn.execute(
         """
         SELECT id
         FROM sst_statistics
-        WHERE parent_id = ?
-          AND name = ?
+        WHERE framework_version_id = ? AND parent_id = ? AND name = ?
         """,
-        (parent_id, name),
+        (framework_version_id, parent_id, name),
     ).fetchone()
 
-    if row is None:
-        return None
-
-    return int(row["id"])
+    return int(row["id"]) if row is not None else None
 
 
 def insert_or_update_statistic(
     conn,
+    framework_version_id: int,
     parent_id: int,
     name: str,
     description: str,
     units: str,
     iface: str,
 ) -> int:
-    existing_id = get_statistic_id(
-        conn=conn,
-        parent_id=parent_id,
-        name=name,
-    )
+    existing_id = get_statistic_id(conn, framework_version_id, parent_id, name)
 
     if existing_id is not None:
         conn.execute(
             """
             UPDATE sst_statistics
-            SET description = ?,
-                units = ?,
-                iface = ?
-            WHERE id = ?
+            SET description = ?, units = ?, iface = ?
+            WHERE id = ? AND framework_version_id = ?
             """,
-            (
-                description,
-                units,
-                iface,
-                existing_id,
-            ),
+            (description, units, iface, existing_id, framework_version_id),
         )
-
         return existing_id
 
     cursor = conn.execute(
         """
-        INSERT INTO sst_statistics (
-            name,
-            description,
-            units,
-            iface,
-            parent_id
-        )
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO sst_statistics (framework_version_id, name, description, units, iface, parent_id)
+        VALUES (?, ?, ?, ?, ?, ?)
         """,
-        (
-            name,
-            description,
-            units,
-            iface,
-            parent_id,
-        ),
+        (framework_version_id, name, description, units, iface, parent_id),
     )
 
     return int(cursor.lastrowid)
 
 
-def delete_parameters_for(conn, parent_type: str, parent_id: int) -> None:
+def delete_parameters_for(conn, framework_version_id: int, parent_type: str, parent_id: int) -> None:
     conn.execute(
         """
         DELETE FROM sst_parameters
-        WHERE parent_type = ?
-          AND parent_id = ?
+        WHERE framework_version_id = ? AND parent_type = ? AND parent_id = ?
         """,
-        (parent_type, parent_id),
+        (framework_version_id, parent_type, parent_id),
     )
 
 
-def insert_parameter(
-    conn,
-    parent_type: str,
-    parent_id: int,
-    parameter: ParsedParameter,
-) -> int:
+def insert_parameter(conn, framework_version_id: int, parent_type: str, parent_id: int, parameter: ParsedParameter) -> int:
     if parent_type not in {SST_COMPONENT_PARENT_TYPE, SST_STATISTIC_PARENT_TYPE}:
         raise ValueError(f"Unsupported parameter parent_type: {parent_type}")
 
     cursor = conn.execute(
         """
         INSERT INTO sst_parameters (
-            name,
-            description,
-            default_val,
-            parent_id,
-            parent_type,
-            required
+            framework_version_id, name, description, default_val, parent_id, parent_type, required
         )
-        VALUES (?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
         (
+            framework_version_id,
             parameter.name,
             parameter.description,
             parameter.default_val,
@@ -726,133 +762,123 @@ def insert_parameter(
     return int(cursor.lastrowid)
 
 
-def replace_component_children(
-    conn,
-    component_id: int,
-    component: ParsedComponent,
-) -> None:
-    delete_parameters_for(
-        conn=conn,
-        parent_type=SST_COMPONENT_PARENT_TYPE,
-        parent_id=component_id,
+def replace_component_children(conn, framework_version_id: int, component_id: int, component: ParsedComponent) -> None:
+    delete_parameters_for(conn, framework_version_id, SST_COMPONENT_PARENT_TYPE, component_id)
+
+    conn.execute(
+        "DELETE FROM sst_ports WHERE framework_version_id = ? AND parent_id = ?",
+        (framework_version_id, component_id),
+    )
+    conn.execute(
+        "DELETE FROM sst_subcomp_slots WHERE framework_version_id = ? AND parent_id = ?",
+        (framework_version_id, component_id),
     )
 
-    conn.execute("DELETE FROM sst_ports WHERE parent_id = ?", (component_id,))
-    conn.execute("DELETE FROM sst_subcomp_slots WHERE parent_id = ?", (component_id,))
-
     old_statistics = conn.execute(
-        """
-        SELECT id
-        FROM sst_statistics
-        WHERE parent_id = ?
-        """,
-        (component_id,),
+        "SELECT id FROM sst_statistics WHERE framework_version_id = ? AND parent_id = ?",
+        (framework_version_id, component_id),
     ).fetchall()
 
     for old_statistic in old_statistics:
-        delete_parameters_for(
-            conn=conn,
-            parent_type=SST_STATISTIC_PARENT_TYPE,
-            parent_id=int(old_statistic["id"]),
-        )
+        delete_parameters_for(conn, framework_version_id, SST_STATISTIC_PARENT_TYPE, int(old_statistic["id"]))
 
-    conn.execute("DELETE FROM sst_statistics WHERE parent_id = ?", (component_id,))
+    conn.execute(
+        "DELETE FROM sst_statistics WHERE framework_version_id = ? AND parent_id = ?",
+        (framework_version_id, component_id),
+    )
 
     for parameter in component.parameters:
-        insert_parameter(
-            conn=conn,
-            parent_type=SST_COMPONENT_PARENT_TYPE,
-            parent_id=component_id,
-            parameter=parameter,
-        )
+        insert_parameter(conn, framework_version_id, SST_COMPONENT_PARENT_TYPE, component_id, parameter)
 
     for port in component.ports:
         conn.execute(
             """
-            INSERT INTO sst_ports (
-                name,
-                description,
-                iface,
-                parent_id
-            )
-            VALUES (?, ?, ?, ?)
+            INSERT INTO sst_ports (framework_version_id, name, description, iface, parent_id)
+            VALUES (?, ?, ?, ?, ?)
             """,
-            (
-                port.name,
-                port.description,
-                port.iface,
-                component_id,
-            ),
+            (framework_version_id, port.name, port.description, port.iface, component_id),
         )
 
     for slot in component.subcomp_slots:
         conn.execute(
             """
-            INSERT INTO sst_subcomp_slots (
-                name,
-                description,
-                iface,
-                parent_id
-            )
-            VALUES (?, ?, ?, ?)
+            INSERT INTO sst_subcomp_slots (framework_version_id, name, description, iface, parent_id)
+            VALUES (?, ?, ?, ?, ?)
             """,
-            (
-                slot.name,
-                slot.description,
-                slot.iface,
-                component_id,
-            ),
+            (framework_version_id, slot.name, slot.description, slot.iface, component_id),
         )
 
     for statistic in component.statistics:
         statistic_id = insert_or_update_statistic(
-            conn=conn,
-            parent_id=component_id,
-            name=statistic.name,
-            description=statistic.description,
-            units=statistic.units,
-            iface=statistic.iface,
+            conn,
+            framework_version_id,
+            component_id,
+            statistic.name,
+            statistic.description,
+            statistic.units,
+            statistic.iface,
         )
 
         for parameter in statistic.parameters:
-            insert_parameter(
-                conn=conn,
-                parent_type=SST_STATISTIC_PARENT_TYPE,
-                parent_id=statistic_id,
-                parameter=parameter,
-            )
+            insert_parameter(conn, framework_version_id, SST_STATISTIC_PARENT_TYPE, statistic_id, parameter)
 
 
 def sync_parsed_sstinfo_to_database(
-    elements: list[ParsedElement],
-    components: list[ParsedComponent],
+    framework_version_id: int | list[ParsedElement],
+    elements: list[ParsedElement] | list[ParsedComponent] | None = None,
+    components: list[ParsedComponent] | None = None,
 ) -> None:
+    """Sync parsed SST metadata into the versioned catalog.
+
+    Preferred call form:
+        sync_parsed_sstinfo_to_database(framework_version_id, elements, components)
+
+    Backward-compatible call form for existing tests/scripts:
+        sync_parsed_sstinfo_to_database(elements, components)
+    """
+    initialize_database()
+
+    if components is None:
+        parsed_elements = framework_version_id
+        parsed_components = elements
+
+        with get_connection() as conn:
+            resolved_framework_version_id = resolve_framework_version_id(
+                conn=conn,
+                version=None,
+                label=None,
+                source_kind="test-or-legacy",
+                source_path="",
+                command="legacy parsed import",
+                is_default=True,
+            )
+
+        framework_version_id = resolved_framework_version_id
+        elements = parsed_elements
+        components = parsed_components
+
+    if elements is None or components is None:
+        raise TypeError("sync_parsed_sstinfo_to_database requires elements and components.")
+
+    framework_version_id = int(framework_version_id)
+
     with get_connection() as conn:
         element_ids_by_name: dict[str, int] = {}
 
         for element in elements:
-            element_id = get_or_create_element(
-                conn=conn,
-                name=element.name,
-                description=element.description,
-            )
-
+            element_id = get_or_create_element(conn, framework_version_id, element.name, element.description)
             element_ids_by_name[element.name] = element_id
 
         for component in components:
             element_id = element_ids_by_name.get(component.element_name)
 
             if element_id is None:
-                element_id = get_or_create_element(
-                    conn=conn,
-                    name=component.element_name,
-                    description="",
-                )
-
+                element_id = get_or_create_element(conn, framework_version_id, component.element_name, "")
                 element_ids_by_name[component.element_name] = element_id
 
             component_id = insert_or_update_component(
                 conn=conn,
+                framework_version_id=framework_version_id,
                 parent_id=element_id,
                 name=component.name,
                 description=component.description,
@@ -863,25 +889,44 @@ def sync_parsed_sstinfo_to_database(
                 checkpointable=component.checkpointable,
             )
 
-            replace_component_children(
-                conn=conn,
-                component_id=component_id,
-                component=component,
-            )
+            replace_component_children(conn, framework_version_id, component_id, component)
 
-        backfill_component_icons(conn)
+        backfill_component_icons(conn, framework_version_id=framework_version_id)
 
 
-def sync_sstinfo_to_database(args=None) -> int:
+def sync_sstinfo_to_database(
+    args=None,
+    version: str | None = None,
+    label: str | None = None,
+    is_default: bool = True,
+    toolchain: ToolchainSettings | None = None,
+) -> int:
     initialize_database()
 
-    result = get_sstinfo(args=args)
+    if toolchain is not None:
+        result = get_sstinfo_for_toolchain(toolchain, args=args)
+    else:
+        result = get_sstinfo(args=args)
+
+    command_text = " ".join(result.command)
+
+    with get_connection() as conn:
+        framework_version_id = resolve_framework_version_id(
+            conn=conn,
+            version=version,
+            label=label,
+            source_kind="sst-info",
+            source_path="",
+            command=command_text,
+            is_default=is_default,
+        )
 
     run_id = save_sst_info_run(
         command=result.command,
         return_code=result.return_code,
         stdout=result.stdout,
         stderr=result.stderr,
+        framework_version_id=framework_version_id,
     )
 
     if result.return_code != 0:
@@ -891,39 +936,81 @@ def sync_sstinfo_to_database(args=None) -> int:
         )
 
     elements, components = parse_sstinfo_output(result.stdout)
-
-    sync_parsed_sstinfo_to_database(
-        elements=elements,
-        components=components,
-    )
+    sync_parsed_sstinfo_to_database(framework_version_id, elements, components)
 
     return run_id
 
-
-def sync_sstinfo_file_to_database(path: str) -> None:
+def sync_sstinfo_file_to_database(
+    path: str,
+    version: str | None = None,
+    label: str | None = None,
+    is_default: bool = True,
+) -> None:
     initialize_database()
 
-    stdout = Path(path).read_text(encoding="utf-8")
+    path_obj = Path(path)
+    stdout = path_obj.read_text(encoding="utf-8")
+
+    with get_connection() as conn:
+        framework_version_id = resolve_framework_version_id(
+            conn=conn,
+            version=version,
+            label=label,
+            source_kind="file",
+            source_path=str(path_obj),
+            command=f"sst-info file import: {path_obj}",
+            is_default=is_default,
+        )
 
     elements, components = parse_sstinfo_output(stdout)
 
     print(f"Parsed {len(elements)} elements")
     print(f"Parsed {len(components)} components/subcomponents")
 
-    sync_parsed_sstinfo_to_database(
-        elements=elements,
-        components=components,
-    )
+    sync_parsed_sstinfo_to_database(framework_version_id, elements, components)
 
     print("Database populated from file.")
 
 
 def main():
-    if len(sys.argv) == 3 and sys.argv[1] == "--from-file":
-        sync_sstinfo_file_to_database(sys.argv[2])
+    parser = argparse.ArgumentParser(description="Import SST component metadata into the FUSE database.")
+
+    parser.add_argument(
+        "--from-file",
+        help="Import from a saved sst-info output file instead of running sst-info.",
+    )
+    parser.add_argument(
+        "--version",
+        default=None,
+        help="SST version/catalog label to import as, for example 15.0.0 or 16.0.0.",
+    )
+    parser.add_argument(
+        "--label",
+        default=None,
+        help="Human-readable target label, for example 'SST 16.0.0'.",
+    )
+    parser.add_argument(
+        "--no-default",
+        action="store_true",
+        help="Do not mark this imported SST catalog as the default target.",
+    )
+
+    args = parser.parse_args()
+
+    if args.from_file:
+        sync_sstinfo_file_to_database(
+            path=args.from_file,
+            version=args.version,
+            label=args.label,
+            is_default=not args.no_default,
+        )
         return
 
-    run_id = sync_sstinfo_to_database()
+    run_id = sync_sstinfo_to_database(
+        version=args.version,
+        label=args.label,
+        is_default=not args.no_default,
+    )
 
     print(f"Stored and synced sst-info run with id: {run_id}")
 

@@ -32,31 +32,40 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from fuse.core.ui.component_palette import ComponentPalette
-from fuse.core.persistence.db_access import ensure_database_ready
-from fuse.core.ui.model_scene import ModelScene
-from fuse.core.ui.model_view import ModelView
+from fuse.app.about import AboutDialog
+from fuse.app.splash import create_splash_screen
+from fuse.app.project_settings_dialog import ProjectSettingsDialog
+from fuse.core.app_info import APP_NAME, ORG_NAME
+from fuse.core.model.project_settings import ProjectSettings
+from fuse.core.model.validation import validate_model
+from fuse.core.persistence.db_access import ensure_database_ready, load_framework_targets
 from fuse.core.persistence.project_io import (
     build_project_dict,
     load_project_file,
     load_project_into_scene,
     save_project_file,
 )
+from fuse.core.ui.component_palette import ComponentPalette
+from fuse.core.ui.model_scene import ModelScene
+from fuse.core.ui.model_view import ModelView
 from fuse.core.ui.properties_panel import PropertiesPanel
-from fuse.core.model.validation import validate_model
-from fuse.app.splash import create_splash_screen
-from fuse.core.app_info import APP_NAME, ORG_NAME
-from fuse.app.about import AboutDialog
 
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("FUSE SST Model Builder")
+        self.setWindowTitle("FUSE")
         self.resize(1300, 800)
 
         self.current_project_path: Optional[Path] = None
-        self.project_name = "Untitled FUSE Model"
+        self.project_name = "Untitled FUSE Project"
+        self.project_settings = ProjectSettings(
+            project_name=self.project_name,
+            active_plugin_id="sst",
+        )
+        self.active_plugin_id: str | None = None
+        self.active_target_id: str | None = None
+        self.project_target_label = QLabel("No project target selected")
 
         self.palette = ComponentPalette()
         self.scene = ModelScene()
@@ -70,7 +79,7 @@ class MainWindow(QMainWindow):
         self.setup_status_bar()
 
         ensure_database_ready()
-        self.palette.load_components()
+        self.load_framework_targets()
 
     def setup_menu_bar(self):
         menu_bar = QMenuBar(self)
@@ -82,27 +91,31 @@ class MainWindow(QMainWindow):
         tools_menu = menu_bar.addMenu("Tools")
         help_menu = menu_bar.addMenu("Help")
 
-        new_action = QAction("New Model", self)
-        open_action = QAction("Open...", self)
+        new_action = QAction("New Project...", self)
+        open_action = QAction("Open Project...", self)
+        project_settings_action = QAction("Project Settings...", self)
         save_action = QAction("Save", self)
         save_as_action = QAction("Save As...", self)
         exit_action = QAction("Exit", self)
 
-        new_action.triggered.connect(self.new_model)
+        new_action.triggered.connect(self.new_project)
         open_action.triggered.connect(self.open_model)
+        project_settings_action.triggered.connect(self.show_project_settings)
         save_action.triggered.connect(self.save_model)
         save_as_action.triggered.connect(self.save_model_as)
         exit_action.triggered.connect(self.close)
 
         file_menu.addAction(new_action)
         file_menu.addAction(open_action)
+        file_menu.addAction(project_settings_action)
+        file_menu.addSeparator()
         file_menu.addAction(save_action)
         file_menu.addAction(save_as_action)
         file_menu.addSeparator()
         file_menu.addAction(exit_action)
 
         refresh_action = QAction("Refresh Component List", self)
-        refresh_action.triggered.connect(self.palette.load_components)
+        refresh_action.triggered.connect(self.load_framework_targets)
         tools_menu.addAction(refresh_action)
 
         show_links_action = QAction("Show Links", self)
@@ -126,6 +139,8 @@ class MainWindow(QMainWindow):
         left_panel = QWidget()
         left_layout = QVBoxLayout(left_panel)
         left_layout.setContentsMargins(8, 8, 8, 8)
+        left_layout.addWidget(QLabel("Project Target"))
+        left_layout.addWidget(self.project_target_label)
         left_layout.addWidget(QLabel("Available Components"))
         left_layout.addWidget(self.palette)
 
@@ -157,8 +172,130 @@ class MainWindow(QMainWindow):
         status.showMessage("Ready")
         self.setStatusBar(status)
 
+    def load_framework_targets(self):
+        """Initialize the project target from imported plugin targets.
+
+        New projects default to the imported default SST catalog. Existing
+        projects keep their saved project settings.
+        """
+        targets = load_framework_targets()
+        active = self.project_settings.active_plugin_settings()
+
+        if active is None or not active.target_id:
+            chosen = None
+            for target in targets:
+                if target.plugin_id == "sst" and target.is_default:
+                    chosen = target
+                    break
+
+            if chosen is None:
+                for target in targets:
+                    if target.plugin_id == "sst":
+                        chosen = target
+                        break
+
+            if chosen is not None:
+                self.project_settings.active_plugin_id = chosen.plugin_id
+                settings = self.project_settings.plugin_settings(chosen.plugin_id)
+                settings.enabled = True
+                settings.target_id = chosen.target_id
+                settings.target_label = chosen.display_name
+                settings.framework_version = chosen.framework_version
+
+        self.apply_project_settings_to_ui()
+
+    def apply_project_settings_to_ui(self):
+        active = self.project_settings.active_plugin_settings()
+
+        if active is None or not active.enabled:
+            self.active_plugin_id = None
+            self.active_target_id = None
+            self.project_target_label.setText("No project target selected")
+            self.palette.set_active_target(None, None)
+            return
+
+        self.active_plugin_id = active.plugin_id
+        self.active_target_id = active.target_id
+
+        target_label = active.target_label or active.framework_version or active.target_id or "Unspecified"
+        self.project_target_label.setText(f"{active.plugin_id}: {target_label}")
+        self.palette.set_active_target(active.plugin_id, active.target_id)
+
+    def show_project_settings(self):
+        dialog = ProjectSettingsDialog(self.project_settings, self)
+
+        if dialog.exec() != dialog.Accepted:
+            return
+
+        new_settings = dialog.settings()
+        old_active = self.project_settings.active_plugin_settings()
+        new_active = new_settings.active_plugin_settings()
+
+        old_key = (
+            old_active.plugin_id if old_active else "",
+            old_active.target_id if old_active else "",
+        )
+        new_key = (
+            new_active.plugin_id if new_active else "",
+            new_active.target_id if new_active else "",
+        )
+
+        if self.scene.component_items() and old_key != new_key:
+            response = QMessageBox.warning(
+                self,
+                "Project Target Changed",
+                (
+                    "Changing the framework target for a non-empty project can make "
+                    "existing components, ports, parameters, or links invalid.\n\n"
+                    "FUSE will keep the model unchanged and validation will report "
+                    "any incompatibilities. Continue?"
+                ),
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+
+            if response != QMessageBox.Yes:
+                return
+
+        self.project_settings = new_settings
+        self.project_name = self.project_settings.project_name or self.project_name
+        self.apply_project_settings_to_ui()
+        self.statusBar().showMessage("Project settings updated", 3000)
+
+    def new_project(self):
+        settings = ProjectSettings(
+            project_name="Untitled FUSE Project",
+            active_plugin_id="sst",
+        )
+
+        dialog = ProjectSettingsDialog(settings, self)
+
+        if dialog.exec() != dialog.Accepted:
+            return
+
+        self.project_settings = dialog.settings()
+        self.project_name = self.project_settings.project_name or "Untitled FUSE Project"
+        self.scene.clear_model()
+        self.properties_panel.set_validation_issues([])
+        self.properties_panel.show_empty()
+        self.set_current_project_path(None)
+        self.apply_project_settings_to_ui()
+        self.statusBar().showMessage("New project created", 3000)
+
+    def new_model(self):
+        # Backward-compatible alias for older tests/callers.
+        self.new_project()
+
     def project_dict(self) -> dict:
-        return build_project_dict(self.scene, self.model_view, self.project_name)
+        self.project_settings.project_name = self.project_name
+        return build_project_dict(
+            self.scene,
+            self.model_view,
+            self.project_name,
+            active_plugin_id=self.active_plugin_id,
+            active_target_id=self.active_target_id,
+            project_settings=self.project_settings,
+        )
 
     def set_current_project_path(self, path: Optional[str | Path]) -> None:
         self.current_project_path = Path(path) if path else None
@@ -167,15 +304,8 @@ class MainWindow(QMainWindow):
             self.project_name = self.current_project_path.stem
             self.setWindowTitle(f"FUSE - {self.current_project_path.name}")
         else:
-            self.project_name = "Untitled FUSE Model"
+            self.project_name = "Untitled FUSE Project"
             self.setWindowTitle("FUSE")
-
-    def new_model(self):
-        self.scene.clear_model()
-        self.properties_panel.set_validation_issues([])
-        self.properties_panel.show_empty()
-        self.set_current_project_path(None)
-        self.statusBar().showMessage("New model created", 3000)
 
     def save_model(self):
         if not self.validate_model_before_save():
@@ -219,6 +349,8 @@ class MainWindow(QMainWindow):
 
         try:
             project = load_project_file(file_path)
+            self.project_settings = ProjectSettings.from_project_dict(project)
+            active_target = project.get("activeTarget", {})
             load_project_into_scene(project, self.scene)
             self.properties_panel.set_validation_issues([])
             self.properties_panel.show_empty()
@@ -227,6 +359,9 @@ class MainWindow(QMainWindow):
             return
 
         self.set_current_project_path(file_path)
+
+        self.apply_project_settings_to_ui()
+
         self.statusBar().showMessage(f"Opened {file_path}", 3000)
 
     def show_about(self):
