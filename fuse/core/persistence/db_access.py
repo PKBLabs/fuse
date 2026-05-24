@@ -13,6 +13,7 @@
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 from fuse.core.persistence.database import initialize_core_database, get_connection
 from fuse.core.plugin_runtime.manager import (
+    list_all_targets,
     load_enabled_plugins,
     load_all_palette_items,
     load_item_details,
@@ -57,15 +58,25 @@ def ensure_database_ready(run_plugin_bootstrap: bool = False) -> None:
                 instance.bootstrap_database()
 
 
-def load_component_definitions() -> list[ComponentDefinition]:
+def load_framework_targets():
+    return list_all_targets()
+
+
+def load_component_definitions(
+    plugin_id: str | None = None,
+    target_id: str | None = None,
+) -> list[ComponentDefinition]:
     definitions = []
 
-    for item in load_all_palette_items():
+    for item in load_all_palette_items(plugin_id=plugin_id, target_id=target_id):
         definitions.append(
             ComponentDefinition(
                 plugin_id=item.plugin_id,
+                target_id=item.target_id,
+                target_label=item.target_label,
+                framework_version=item.framework_version,
                 component_id=item.item_id,
-                element=item.category,
+                element=getattr(item, "element_name", "") or item.category,
                 name=item.type_name,
                 category=item.category,
                 iface="",
@@ -77,13 +88,21 @@ def load_component_definitions() -> list[ComponentDefinition]:
     return definitions
 
 
-def load_port_names_for_component(plugin_id: str, component_id: str) -> list[str]:
-    details = load_item_details(plugin_id, component_id)
+def load_port_names_for_component(
+    plugin_id: str,
+    component_id: str,
+    target_id: str | None = None,
+) -> list[str]:
+    details = load_item_details(plugin_id, component_id, target_id=target_id)
     return [connector.name for connector in details.connectors]
 
 
-def get_component_details(plugin_id: str, component_id: str):
-    details = load_item_details(plugin_id, component_id)
+def get_component_details(
+    plugin_id: str,
+    component_id: str,
+    target_id: str | None = None,
+):
+    details = load_item_details(plugin_id, component_id, target_id=target_id)
 
     return {
         "component": {
@@ -91,6 +110,9 @@ def get_component_details(plugin_id: str, component_id: str):
             "description": details.palette_item.description,
             "category": details.palette_item.category,
             "icon_path": details.palette_item.icon_path,
+            "target_id": details.palette_item.target_id,
+            "target_label": details.palette_item.target_label,
+            "framework_version": details.palette_item.framework_version,
         },
         "parameters": [
             {

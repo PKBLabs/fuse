@@ -125,7 +125,13 @@ def validate_required_component_parameters(scene) -> list[ValidationIssue]:
             continue
 
         try:
-            details = get_component_details(plugin_id, component_id)
+            target_id = getattr(node.component, "target_id", "")
+            try:
+                details = get_component_details(plugin_id, component_id, target_id)
+            except TypeError:
+                # Backward compatibility for tests that monkeypatch a two-argument
+                # get_component_details callable.
+                details = get_component_details(plugin_id, component_id)
         except Exception:
             continue
 

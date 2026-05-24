@@ -421,10 +421,19 @@ class ComponentNodeItem(QGraphicsRectItem):
                 connection.update_tooltip()
 
     def add_ports_from_database_or_defaults(self):
-        port_names = load_port_names_for_component(
-            self.component.plugin_id,
-            self.component.component_id,
-        )
+        try:
+            port_names = load_port_names_for_component(
+                self.component.plugin_id,
+                self.component.component_id,
+                self.component.target_id,
+            )
+        except TypeError:
+            # Backward compatibility for tests that monkeypatch a two-argument
+            # load_port_names_for_component callable.
+            port_names = load_port_names_for_component(
+                self.component.plugin_id,
+                self.component.component_id,
+            )
 
         if not port_names:
             port_names = ["in", "out"]

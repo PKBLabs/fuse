@@ -19,6 +19,7 @@ from fuse.core.ui.graphics_items import ComponentNodeItem, ConnectionItem
 from fuse.core.ui.model_scene import ModelScene
 from fuse.core.ui.model_view import ModelView
 from fuse.core.model.models import ComponentDefinition, ModelLink, SCHEMA_VERSION
+from fuse.core.model.project_settings import ProjectSettings
 
 
 def now_iso() -> str:
@@ -33,6 +34,9 @@ def component_node_to_save_dict(node: ComponentNodeItem) -> dict:
         "element": node.component.element,
         "name": node.component.name,
         "pluginId": node.component.plugin_id,
+        "targetId": node.component.target_id,
+        "targetLabel": node.component.target_label,
+        "frameworkVersion": node.component.framework_version,
         "componentId": node.component.component_id,
         "isSubcomponent": node.component.is_subcomp,
         "category": node.component.category,
@@ -66,12 +70,41 @@ def model_link_to_save_dict(link: ModelLink) -> dict:
     }
 
 
-def build_project_dict(scene: ModelScene, model_view: ModelView, project_name: str) -> dict:
+def build_project_dict(
+    scene: ModelScene,
+    model_view: ModelView,
+    project_name: str,
+    active_plugin_id: str | None = None,
+    active_target_id: str | None = None,
+    project_settings: ProjectSettings | None = None,
+) -> dict:
+    if project_settings is not None:
+        active_plugin_id = project_settings.active_plugin_id
+        active_settings = project_settings.active_plugin_settings()
+        active_target_id = active_settings.target_id if active_settings else ""
+
     return {
         "schemaVersion": SCHEMA_VERSION,
         "project": {
-            "name": project_name or "Untitled SST Model",
+            "name": project_name or "Untitled FUSE Model",
             "updatedAt": now_iso(),
+        },
+        "projectSettings": (
+            project_settings.to_dict()
+            if project_settings is not None
+            else ProjectSettings(
+                project_name=project_name or "Untitled FUSE Model",
+                active_plugin_id=active_plugin_id or "",
+            ).to_dict()
+        ),
+        "pluginSettings": (
+            project_settings.to_dict().get("plugins", {})
+            if project_settings is not None
+            else {}
+        ),
+        "activeTarget": {
+            "pluginId": active_plugin_id or "",
+            "targetId": active_target_id or "",
         },
         "components": [
             component_node_to_save_dict(node)
@@ -137,6 +170,9 @@ def load_project_into_scene(project: dict, scene: ModelScene) -> None:
 
         component = ComponentDefinition(
             plugin_id=component_data.get("pluginId", component_data.get("plugin_id", "core")),
+            target_id=component_data.get("targetId", component_data.get("target_id", "")),
+            target_label=component_data.get("targetLabel", ""),
+            framework_version=component_data.get("frameworkVersion", ""),
             component_id=component_data.get("componentId"),
             element=component_data.get("element", ""),
             name=component_data.get("name", ""),

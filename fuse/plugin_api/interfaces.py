@@ -16,15 +16,29 @@ from typing import Protocol
 
 
 @dataclass
+class FrameworkTarget:
+    plugin_id: str
+    target_id: str
+    display_name: str
+    framework_name: str = ""
+    framework_version: str = ""
+    is_default: bool = False
+
+
+@dataclass
 class PaletteItem:
     plugin_id: str
     item_id: str
     display_name: str
     type_name: str
+    element_name: str = ""
     category: str = ""
     description: str = ""
     icon_path: str = ""
     raw_kind: str = ""
+    target_id: str = ""
+    target_label: str = ""
+    framework_version: str = ""
 
 
 @dataclass
@@ -61,8 +75,21 @@ class FusePlugin(Protocol):
     def bootstrap_database(self) -> None:
         ...
 
-    def load_palette_items(self) -> list[PaletteItem]:
+    def list_targets(self) -> list[FrameworkTarget]:
         ...
 
-    def load_item_details(self, item_id: str) -> ItemDetails:
+    def load_palette_items(self, target_id: str | None = None) -> list[PaletteItem]:
+        ...
+
+    def load_item_details(
+        self,
+        item_id: str,
+        target_id: str | None = None,
+    ) -> ItemDetails:
+        ...
+
+    def validate_toolchain(self, plugin_settings) -> tuple[bool, str]:
+        ...
+
+    def import_metadata_for_toolchain(self, plugin_settings) -> None:
         ...

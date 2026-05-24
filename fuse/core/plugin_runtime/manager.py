@@ -110,22 +110,39 @@ def get_plugin_by_id(plugin_id: str):
     )
 
 
-def load_all_palette_items():
-    items = []
+def list_all_targets():
+    targets = []
 
     for plugin in load_enabled_plugins():
         instance = plugin.instance
 
+        if hasattr(instance, "list_targets"):
+            targets.extend(instance.list_targets())
+
+    return targets
+
+
+def load_all_palette_items(plugin_id: str | None = None, target_id: str | None = None):
+    items = []
+
+    for plugin in load_enabled_plugins():
+        instance_plugin_id = getattr(plugin.instance, "plugin_id", plugin.plugin_id)
+
+        if plugin_id is not None and plugin.plugin_id != plugin_id and instance_plugin_id != plugin_id:
+            continue
+
+        instance = plugin.instance
+
         if hasattr(instance, "load_palette_items"):
-            items.extend(instance.load_palette_items())
+            items.extend(instance.load_palette_items(target_id=target_id))
 
     return items
 
 
-def load_item_details(plugin_id: str, item_id: str):
+def load_item_details(plugin_id: str, item_id: str, target_id: str | None = None):
     plugin = get_plugin_by_id(plugin_id)
 
     if not hasattr(plugin, "load_item_details"):
         raise KeyError(f"Plugin '{plugin_id}' does not provide item details.")
 
-    return plugin.load_item_details(item_id)
+    return plugin.load_item_details(item_id, target_id=target_id)
