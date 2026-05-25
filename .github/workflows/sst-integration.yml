@@ -27,7 +27,7 @@ jobs:
     timeout-minutes: 60
 
     container:
-      image: ghcr.io/${{ github.repository_owner }}/fuse-sst-ci:sst-15.0.0
+      image: ghcr.io/pkblabs/fuse-sst-ci:sst-15.1.2
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -41,7 +41,7 @@ jobs:
       QT_QPA_PLATFORM: offscreen
       FUSE_SPLASH_MS: "0"
       FUSE_TEST_AUTOCLOSE_MS: "100"
-      FUSE_SST_VERSION: "15.0.0"
+      FUSE_SST_VERSION: "15.1.2"
 
     steps:
       - name: Check out repository

@@ -3,10 +3,22 @@ name: Build SST CI Image
 on:
   workflow_dispatch:
     inputs:
-      sst_version:
-        description: "SST version"
+      image_tag:
+        description: "Docker image tag suffix, e.g. sst-15.1.2 or sst-16.0.0"
         required: true
-        default: "15.0.0"
+        default: "sst-15.1.2"
+      sst_version:
+        description: "Version label exposed to FUSE_SST_VERSION"
+        required: true
+        default: "15.1.2"
+      sst_core_ref:
+        description: "sst-core git tag/ref"
+        required: true
+        default: "v15.1.2_Final"
+      sst_elements_ref:
+        description: "sst-elements git tag/ref"
+        required: true
+        default: "v15.1.0_Final"
 
 permissions:
   contents: read
@@ -23,22 +35,29 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set image name
+        run: |
+          echo "SST_IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/fuse-sst-ci" >> "$GITHUB_ENV"
+
       - name: Build SST CI image
         run: |
           docker build \
+            --progress=plain \
             --build-arg SST_VERSION=${{ github.event.inputs.sst_version }} \
+            --build-arg SST_CORE_REF=${{ github.event.inputs.sst_core_ref }} \
+            --build-arg SST_ELEMENTS_REF=${{ github.event.inputs.sst_elements_ref }} \
             -f docker/sst-ci/Dockerfile \
-            -t ghcr.io/${{ github.repository_owner }}/fuse-sst-ci:sst-${{ github.event.inputs.sst_version }} \
-            -t ghcr.io/${{ github.repository_owner }}/fuse-sst-ci:latest \
+            -t "$SST_IMAGE:${{ github.event.inputs.image_tag }}" \
+            -t "$SST_IMAGE:latest" \
             .
 
       - name: Push SST CI image
         run: |
-          docker push ghcr.io/${{ github.repository_owner }}/fuse-sst-ci:sst-${{ github.event.inputs.sst_version }}
-          docker push ghcr.io/${{ github.repository_owner }}/fuse-sst-ci:latest
+          docker push "$SST_IMAGE:${{ github.event.inputs.image_tag }}"
+          docker push "$SST_IMAGE:latest"

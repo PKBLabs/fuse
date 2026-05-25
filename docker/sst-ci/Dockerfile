@@ -1,7 +1,9 @@
 FROM ubuntu:24.04
 
 ARG DEBIAN_FRONTEND=noninteractive
-ARG SST_VERSION=15.0.0
+ARG SST_CORE_REF=v15.1.2_Final
+ARG SST_ELEMENTS_REF=v15.1.0_Final
+ARG SST_VERSION=15.1.2
 ARG SST_PREFIX=/opt/sst
 
 ENV SST_CORE_HOME=${SST_PREFIX}
@@ -50,27 +52,29 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /tmp/sst-build
 
-RUN curl -L -o sstcore.tar.gz \
-    https://github.com/sstsimulator/sst-core/releases/download/v${SST_VERSION}_Final/sstcore-${SST_VERSION}.tar.gz
+RUN git clone --depth 1 --branch ${SST_CORE_REF} \
+    https://github.com/sstsimulator/sst-core.git
 
-RUN tar xzf sstcore.tar.gz \
-    && cd sstcore-${SST_VERSION} \
+RUN cd sst-core \
+    && ./autogen.sh \
     && ./configure --prefix=${SST_PREFIX} \
     && make -j"$(nproc)" \
     && make install
 
-RUN curl -L -o sstelements.tar.gz \
-    https://github.com/sstsimulator/sst-elements/releases/download/v${SST_VERSION}_Final/sstelements-${SST_VERSION}.tar.gz
+RUN git clone --depth 1 --branch ${SST_ELEMENTS_REF} \
+    https://github.com/sstsimulator/sst-elements.git
 
-RUN tar xzf sstelements.tar.gz \
-    && cd sstelements-${SST_VERSION} \
+RUN cd sst-elements \
+    && ./autogen.sh \
     && ./configure --prefix=${SST_PREFIX} --with-sst-core=${SST_PREFIX} \
     && make -j"$(nproc)" \
     && make install
 
 RUN ldconfig
 
+RUN which sst
 RUN which sst-info
+RUN sst --version || true
 RUN sst-info --version || true
 RUN sst-info | head -100
 
