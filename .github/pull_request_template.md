@@ -22,7 +22,7 @@ Fixes #
 
 - [ ] I have read `CONTRIBUTING.md`.
 - [ ] I understand that FUSE is a maintainer-led project.
-- [ ] I have signed the FUSE Contributor License Agreement, or I am willing to do so before merge.
+- [ ] I acknowledge the FUSE Contributor License Agreement requirement described in `CLA.md`.
 - [ ] I have the right to submit this contribution.
 - [ ] My contribution may be used in open-source and commercial versions of FUSE.
 - [ ] I have not introduced incompatible third-party licensing obligations.

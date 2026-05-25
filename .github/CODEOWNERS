@@ -1,7 +1,31 @@
 # FUSE code ownership
-* @bripage
 
-# Plugin API requires explicit owner review
-/fuse/plugin_api/ @bripage
-/PLUGIN-API-STABILITY.md @bripage
-/PLUGIN-POLICY.md @bripage
+# Default owner for the repository.
+* @PKBLabs/fuse-maintainers
+
+# Governance, licensing, contribution, and release policy.
+LICENSE @PKBLabs/fuse-maintainers
+COPYING @PKBLabs/fuse-maintainers
+CONTRIBUTING.md @PKBLabs/fuse-maintainers
+CLA.md @PKBLabs/fuse-maintainers
+README.md @PKBLabs/fuse-maintainers
+PLUGIN-POLICY.md @PKBLabs/fuse-maintainers
+PLUGIN-API-STABILITY.md @PKBLabs/fuse-maintainers
+
+# GitHub automation and repository policy.
+.github/ @PKBLabs/fuse-maintainers
+
+# Core app and plugin API.
+fuse/app/ @PKBLabs/fuse-maintainers
+fuse/core/ @PKBLabs/fuse-maintainers
+fuse/plugin_api/ @PKBLabs/fuse-maintainers
+
+# Community plugins.
+fuse/plugins/community/sst/ @PKBLabs/fuse-maintainers
+fuse/plugins/community/gem5/ @PKBLabs/fuse-maintainers
+
+# Packaging, setup, CI containers, docs, and examples.
+fuse/scripts/ @PKBLabs/fuse-maintainers
+docker/ @PKBLabs/fuse-maintainers
+docs/ @PKBLabs/fuse-maintainers
+examples/ @PKBLabs/fuse-maintainers

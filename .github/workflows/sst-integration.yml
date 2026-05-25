@@ -7,6 +7,7 @@ on:
   push:
     branches:
       - main
+      - develop
     paths:
       - "fuse/plugins/community/sst/**"
       - "fuse/core/persistence/**"
@@ -22,12 +23,21 @@ permissions:
 
 jobs:
   sst-live:
-    name: SST 15.0.0 live integration tests
+    name: SST ${{ matrix.sst.version }} live integration tests
     runs-on: ubuntu-24.04
     timeout-minutes: 60
 
+    strategy:
+      fail-fast: false
+      matrix:
+        sst:
+          - version: "15.1.2"
+            image: "ghcr.io/pkblabs/fuse-sst-ci:sst-15.1.2"
+          - version: "16.0.0"
+            image: "ghcr.io/pkblabs/fuse-sst-ci:sst-16.0.0"
+
     container:
-      image: ghcr.io/pkblabs/fuse-sst-ci:sst-15.1.2
+      image: ${{ matrix.sst.image }}
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -41,7 +51,7 @@ jobs:
       QT_QPA_PLATFORM: offscreen
       FUSE_SPLASH_MS: "0"
       FUSE_TEST_AUTOCLOSE_MS: "100"
-      FUSE_SST_VERSION: "15.1.2"
+      FUSE_SST_VERSION: ${{ matrix.sst.version }}
 
     steps:
       - name: Check out repository
@@ -49,7 +59,9 @@ jobs:
 
       - name: Verify SST installation
         run: |
+          which sst
           which sst-info
+          sst --version || true
           sst-info --version || true
           sst-info | head -100
 

@@ -7,6 +7,7 @@ on:
   push:
     branches:
       - main
+      - develop
     paths:
       - "fuse/plugins/community/gem5/**"
       - "fuse/core/plugin_runtime/**"
@@ -21,12 +22,21 @@ permissions:
 
 jobs:
   gem5-live:
-    name: gem5 live integration tests
+    name: gem5 ${{ matrix.gem5.version }} live integration tests
     runs-on: ubuntu-24.04
     timeout-minutes: 60
 
+    strategy:
+      fail-fast: false
+      matrix:
+        gem5:
+          - version: "25.1.0.1"
+            image: "ghcr.io/pkblabs/fuse-gem5-ci:gem5-v25.1.0.1"
+          - version: "24.1.0.3"
+            image: "ghcr.io/pkblabs/fuse-gem5-ci:gem5-v24.1.0.3"
+
     container:
-      image: ghcr.io/${{ github.repository_owner }}/fuse-gem5-ci:latest
+      image: ${{ matrix.gem5.image }}
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -40,6 +50,7 @@ jobs:
       QT_QPA_PLATFORM: offscreen
       FUSE_SPLASH_MS: "0"
       FUSE_TEST_AUTOCLOSE_MS: "100"
+      FUSE_GEM5_VERSION: ${{ matrix.gem5.version }}
       GEM5_ROOT: /opt/gem5
       GEM5_BINARY: /opt/gem5/build/X86/gem5.opt
 

@@ -3,10 +3,18 @@ name: Build gem5 CI Image
 on:
   workflow_dispatch:
     inputs:
-      gem5_ref:
-        description: "gem5 git ref/tag/branch"
+      image_tag:
+        description: "Docker image tag suffix, e.g. gem5-v25.1.0.1"
         required: true
-        default: "stable"
+        default: "gem5-v25.1.0.1"
+      gem5_ref:
+        description: "gem5 git tag/ref"
+        required: true
+        default: "v25.1.0.1"
+      gem5_build_isa:
+        description: "gem5 build ISA target"
+        required: true
+        default: "X86"
 
 permissions:
   contents: read
@@ -23,22 +31,28 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set image name
+        run: |
+          echo "GEM5_IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/fuse-gem5-ci" >> "$GITHUB_ENV"
+
       - name: Build gem5 CI image
         run: |
           docker build \
+            --progress=plain \
             --build-arg GEM5_REF=${{ github.event.inputs.gem5_ref }} \
+            --build-arg GEM5_BUILD_ISA=${{ github.event.inputs.gem5_build_isa }} \
             -f docker/gem5-ci/Dockerfile \
-            -t ghcr.io/${{ github.repository_owner }}/fuse-gem5-ci:${{ github.event.inputs.gem5_ref }} \
-            -t ghcr.io/${{ github.repository_owner }}/fuse-gem5-ci:latest \
+            -t "$GEM5_IMAGE:${{ github.event.inputs.image_tag }}" \
+            -t "$GEM5_IMAGE:latest" \
             .
 
       - name: Push gem5 CI image
         run: |
-          docker push ghcr.io/${{ github.repository_owner }}/fuse-gem5-ci:${{ github.event.inputs.gem5_ref }}
-          docker push ghcr.io/${{ github.repository_owner }}/fuse-gem5-ci:latest
+          docker push "$GEM5_IMAGE:${{ github.event.inputs.image_tag }}"
+          docker push "$GEM5_IMAGE:latest"
