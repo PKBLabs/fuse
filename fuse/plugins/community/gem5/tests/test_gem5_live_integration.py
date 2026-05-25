@@ -15,6 +15,7 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
+
 import pytest
 
 
@@ -23,18 +24,22 @@ pytestmark = pytest.mark.gem5_live
 
 def find_gem5_binary():
     env_path = os.environ.get("GEM5_BINARY")
+
     if env_path and Path(env_path).exists():
         return env_path
 
     path_binary = shutil.which("gem5")
+
     if path_binary:
         return path_binary
 
     gem5_root = os.environ.get("GEM5_ROOT")
+
     if gem5_root:
         candidates = [
             Path(gem5_root) / "build" / "X86" / "gem5.opt",
-            Path(gem5_root) / "build" / "ALL" / "gem5.opt",
+            Path(gem5_root) / "build" / "ARM" / "gem5.opt",
+            Path(gem5_root) / "build" / "RISCV" / "gem5.opt",
             Path(gem5_root) / "build" / "NULL" / "gem5.opt",
         ]
 
@@ -56,5 +61,12 @@ def test_real_gem5_binary_runs():
         timeout=20,
     )
 
+    output = result.stdout + result.stderr
+
     assert result.returncode == 0
-    assert "gem5" in (result.stdout + result.stderr).lower()
+    assert "gem5" in output.lower()
+
+    expected_version = os.environ.get("FUSE_GEM5_VERSION", "").strip()
+
+    if expected_version:
+        assert expected_version in output

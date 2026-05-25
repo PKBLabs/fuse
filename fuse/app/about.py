@@ -9,10 +9,11 @@
 # version.
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QGuiApplication, QPixmap
+from PySide6.QtGui import QColor, QGuiApplication, QPixmap
 from PySide6.QtWidgets import (
     QDialog,
     QFrame,
+    QGraphicsDropShadowEffect,
     QHBoxLayout,
     QLabel,
     QPushButton,
@@ -58,19 +59,37 @@ class AboutDialog(QDialog):
         super().__init__(parent)
 
         self.setWindowTitle(f"About {APP_NAME}")
-        self.setMinimumWidth(700)
-        self.setMinimumHeight(550)
+        self.setMinimumWidth(820)
+        self.setMinimumHeight(670)
         self.setModal(True)
+
+        # Native framed windows cannot reliably draw their own outside shadow.
+        # Use a translucent frameless window and put the real content inside a
+        # shadowed card.
+        self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
 
         self.setStyleSheet(
             """
             QDialog {
-                background-color: #eeeeee;
+                background-color: transparent;
                 color: #000000;
+            }
+
+            QFrame#aboutCard {
+                background-color: #f8fafc;
+                color: #000000;
+                border: 1px solid #cbd5e1;
             }
 
             QLabel {
                 color: #000000;
+            }
+
+            QLabel#titleBar {
+                font-size: 13px;
+                font-weight: 600;
+                color: #111827;
             }
 
             QLabel#productTitle {
@@ -85,7 +104,7 @@ class AboutDialog(QDialog):
             }
 
             QTextEdit {
-                background-color: #eeeeee;
+                background-color: #f8fafc;
                 color: #000000;
                 border: none;
                 font-size: 13px;
@@ -114,12 +133,64 @@ class AboutDialog(QDialog):
             QPushButton#primaryButton:hover {
                 background-color: #1d4ed8;
             }
+
+            QPushButton#windowCloseButton {
+                background-color: transparent;
+                color: #111827;
+                border: none;
+                border-radius: 0;
+                padding: 2px 8px;
+                min-width: 28px;
+                font-size: 16px;
+                font-weight: 700;
+            }
+
+            QPushButton#windowCloseButton:hover {
+                background-color: #e5e7eb;
+            }
             """
         )
 
-        root = QVBoxLayout(self)
-        root.setContentsMargins(24, 24, 24, 18)
-        root.setSpacing(18)
+        outer_layout = QVBoxLayout(self)
+
+        # Transparent space around the card where the shadow can be painted.
+        # If this margin is too small, the shadow is clipped.
+        outer_layout.setContentsMargins(48, 48, 48, 48)
+        outer_layout.setSpacing(0)
+
+        card = QFrame(self)
+        card.setObjectName("aboutCard")
+        card.setFrameShape(QFrame.NoFrame)
+        card.setAttribute(Qt.WA_StyledBackground, True)
+
+        shadow = QGraphicsDropShadowEffect(card)
+        shadow.setBlurRadius(56)
+        shadow.setOffset(0, 14)
+        shadow.setColor(QColor(0, 0, 0, 180))
+        card.setGraphicsEffect(shadow)
+
+        outer_layout.addWidget(card)
+
+        root = QVBoxLayout(card)
+        root.setContentsMargins(24, 14, 24, 18)
+        root.setSpacing(16)
+
+        title_bar_layout = QHBoxLayout()
+        title_bar_layout.setContentsMargins(0, 0, 0, 0)
+
+        title_bar = QLabel(f"About {APP_NAME}", self)
+        title_bar.setObjectName("titleBar")
+        title_bar.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
+
+        window_close_button = QPushButton("×", self)
+        window_close_button.setObjectName("windowCloseButton")
+        window_close_button.setFixedSize(32, 28)
+        window_close_button.clicked.connect(self.accept)
+
+        title_bar_layout.addWidget(title_bar, stretch=1)
+        title_bar_layout.addWidget(window_close_button)
+
+        root.addLayout(title_bar_layout)
 
         content_layout = QHBoxLayout()
         content_layout.setSpacing(24)
@@ -164,7 +235,7 @@ class AboutDialog(QDialog):
 
         separator = QFrame(self)
         separator.setFrameShape(QFrame.HLine)
-        separator.setStyleSheet("color: #2f343a; background-color: #2f343a;")
+        separator.setStyleSheet("color: #c7cdd4; background-color: #c7cdd4;")
         right_layout.addWidget(separator)
 
         info = QTextEdit(self)
