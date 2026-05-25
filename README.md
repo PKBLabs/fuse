@@ -12,9 +12,9 @@ The goal of FUSE is to provide an extensible editor where users can drag archite
 
 ## Testing status
 
-[![Core Tests](https://github.com/PKBLabs/fuse/actions/workflows/core-tests.yml/badge.svg?branch=devlop)](https://github.com/PKBLabs/fuse/actions/workflows/core-tests.yml)
-[![SST Integration Tests](https://github.com/PKBLabs/fuse/actions/workflows/sst-integration.yml/badge.svg?branch=devlop)](https://github.com/PKBLabs/fuse/actions/workflows/sst-integration.yml)
-[![gem5 Integration Tests](https://github.com/PKBLabs/fuse/actions/workflows/gem5-integration.yml/badge.svg?branch=devlop)](https://github.com/PKBLabs/fuse/actions/workflows/gem5-integration.yml)
+[![Core Tests](https://github.com/PKBLabs/fuse/actions/workflows/core-tests.yml/badge.svg?branch=develop)](https://github.com/PKBLabs/fuse/actions/workflows/core-tests.yml)
+[![SST Integration Tests](https://github.com/PKBLabs/fuse/actions/workflows/sst-integration.yml/badge.svg?branch=develop)](https://github.com/PKBLabs/fuse/actions/workflows/sst-integration.yml)
+[![gem5 Integration Tests](https://github.com/PKBLabs/fuse/actions/workflows/gem5-integration.yml/badge.svg?branch=develop)](https://github.com/PKBLabs/fuse/actions/workflows/gem5-integration.yml)
 
 Core tests run on every push and pull request. SST and gem5 integration tests require prebuilt simulator CI images and are run manually, weekly, or when relevant plugin code changes.
 
