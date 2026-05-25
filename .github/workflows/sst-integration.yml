@@ -12,6 +12,7 @@ on:
       - "fuse/plugins/community/sst/**"
       - "fuse/core/persistence/**"
       - "fuse/core/plugin_runtime/**"
+      - "fuse/core/toolchains/**"
       - "fuse/plugin_api/**"
       - "fuse/requirements*.txt"
       - ".github/workflows/sst-integration.yml"

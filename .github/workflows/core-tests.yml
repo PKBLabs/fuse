@@ -1,8 +1,11 @@
 name: Core Tests
 
 on:
-  push:
   pull_request:
+  push:
+    branches:
+      - main
+      - develop
 
 permissions:
   contents: read

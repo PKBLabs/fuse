@@ -11,6 +11,7 @@ on:
     paths:
       - "fuse/plugins/community/gem5/**"
       - "fuse/core/plugin_runtime/**"
+      - "fuse/core/toolchains/**"
       - "fuse/plugin_api/**"
       - "fuse/requirements*.txt"
       - ".github/workflows/gem5-integration.yml"
