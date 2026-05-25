@@ -20,6 +20,7 @@ from PySide6.QtCore import Qt, QElapsedTimer, QTimer
 from PySide6.QtGui import QAction, QColor
 from PySide6.QtWidgets import (
     QApplication,
+    QDialog,
     QDockWidget,
     QFileDialog,
     QLabel,
@@ -65,7 +66,6 @@ class MainWindow(QMainWindow):
         )
         self.active_plugin_id: str | None = None
         self.active_target_id: str | None = None
-        self.project_target_label = QLabel("No project target selected")
 
         self.palette = ComponentPalette()
         self.scene = ModelScene()
@@ -145,8 +145,6 @@ class MainWindow(QMainWindow):
         left_panel = QWidget()
         left_layout = QVBoxLayout(left_panel)
         left_layout.setContentsMargins(8, 8, 8, 8)
-        left_layout.addWidget(QLabel("Project Target"))
-        left_layout.addWidget(self.project_target_label)
         left_layout.addWidget(QLabel("Available Components"))
         left_layout.addWidget(self.palette)
 
@@ -216,21 +214,18 @@ class MainWindow(QMainWindow):
         if active is None or not active.enabled:
             self.active_plugin_id = None
             self.active_target_id = None
-            self.project_target_label.setText("No project target selected")
             self.palette.set_active_target(None, None)
             return
 
         self.active_plugin_id = active.plugin_id
         self.active_target_id = active.target_id
 
-        target_label = active.target_label or active.framework_version or active.target_id or "Unspecified"
-        self.project_target_label.setText(f"{active.plugin_id}: {target_label}")
         self.palette.set_active_target(active.plugin_id, active.target_id)
 
     def show_project_settings(self):
         dialog = ProjectSettingsDialog(self.project_settings, self)
 
-        if dialog.exec() != dialog.Accepted:
+        if dialog.exec() != QDialog.Accepted:
             return
 
         new_settings = dialog.settings()
@@ -276,7 +271,7 @@ class MainWindow(QMainWindow):
 
         dialog = ProjectSettingsDialog(settings, self)
 
-        if dialog.exec() != dialog.Accepted:
+        if dialog.exec() != QDialog.Accepted:
             return
 
         self.project_settings = dialog.settings()

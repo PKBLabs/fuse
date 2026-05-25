@@ -22,6 +22,7 @@ import re
 import subprocess
 import sys
 
+from fuse.core.toolchains.version_match import compare_version_prefix
 from fuse.core.model.project_settings import ToolchainSettings
 from fuse.core.toolchains.providers import (
     CommandExecutionResult,
@@ -195,16 +196,37 @@ def validate_sst_toolchain(
     if result.return_code != 0:
         return (
             False,
-            f"sst-info failed with return code {result.return_code}.\n{output}",
+            (
+                f"sst-info failed with return code {result.return_code}.\n\n"
+                f"Command: {' '.join(result.command)}\n\n"
+                f"Output:\n{output}"
+            ),
             result,
         )
 
-    if expected_version and expected_version not in output:
+    if expected_version:
+        match = compare_version_prefix(
+            expected_version=expected_version,
+            detected_text=output,
+            policy="major",
+        )
+
+        if not match.matched:
+            return (
+                False,
+                (
+                    f"{match.message}\n\n"
+                    f"Configured project target: SST {expected_version}\n\n"
+                    f"Toolchain output:\n{output}"
+                ),
+                result,
+            )
+
         return (
-            False,
+            True,
             (
-                f"Configured project target is SST {expected_version}, but the configured "
-                f"sst-info command did not report that version.\n\nOutput:\n{output}"
+                f"{match.message}\n\n"
+                f"Toolchain output:\n{output}"
             ),
             result,
         )
