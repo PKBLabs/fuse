@@ -1,4 +1,44 @@
-name: build-gem5-ci-image.yml
+name: Build gem5 CI Image
+
 on:
+  workflow_dispatch:
+    inputs:
+      gem5_ref:
+        description: "gem5 git ref/tag/branch"
+        required: true
+        default: "stable"
+
+permissions:
+  contents: read
+  packages: write
 
 jobs:
+  build-gem5-image:
+    name: Build and push gem5 CI image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build gem5 CI image
+        run: |
+          docker build \
+            --build-arg GEM5_REF=${{ github.event.inputs.gem5_ref }} \
+            -f docker/gem5-ci/Dockerfile \
+            -t ghcr.io/${{ github.repository_owner }}/fuse-gem5-ci:${{ github.event.inputs.gem5_ref }} \
+            -t ghcr.io/${{ github.repository_owner }}/fuse-gem5-ci:latest \
+            .
+
+      - name: Push gem5 CI image
+        run: |
+          docker push ghcr.io/${{ github.repository_owner }}/fuse-gem5-ci:${{ github.event.inputs.gem5_ref }}
+          docker push ghcr.io/${{ github.repository_owner }}/fuse-gem5-ci:latest

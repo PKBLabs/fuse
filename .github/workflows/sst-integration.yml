@@ -1,4 +1,64 @@
-name: sst-integration.yml
+name: SST Integration Tests
+
 on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 8 * * 1"
+  push:
+    branches:
+      - main
+    paths:
+      - "fuse/plugins/community/sst/**"
+      - "fuse/core/persistence/**"
+      - "fuse/core/plugin_runtime/**"
+      - "fuse/plugin_api/**"
+      - "fuse/requirements*.txt"
+      - ".github/workflows/sst-integration.yml"
+      - "docker/sst-ci/**"
+
+permissions:
+  contents: read
+  packages: read
 
 jobs:
+  sst-live:
+    name: SST 15.0.0 live integration tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    container:
+      image: ghcr.io/${{ github.repository_owner }}/fuse-sst-ci:sst-15.0.0
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    defaults:
+      run:
+        shell: bash
+        working-directory: fuse
+
+    env:
+      QT_QPA_PLATFORM: offscreen
+      FUSE_SPLASH_MS: "0"
+      FUSE_TEST_AUTOCLOSE_MS: "100"
+      FUSE_SST_VERSION: "15.0.0"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Verify SST installation
+        run: |
+          which sst-info
+          sst-info --version || true
+          sst-info | head -100
+
+      - name: Create Python virtual environment
+        run: |
+          python3 -m venv .venv
+          .venv/bin/python -m pip install --upgrade pip
+          .venv/bin/python -m pip install -r requirements-dev.txt
+
+      - name: Run live SST tests
+        run: |
+          .venv/bin/python -m pytest -q -m "sst_live"
