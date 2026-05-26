@@ -15,6 +15,10 @@ on:
         description: "gem5 build ISA target"
         required: true
         default: "X86"
+      make_jobs:
+        description: "Parallel SCons jobs used while building gem5"
+        required: true
+        default: "2"
 
 permissions:
   contents: read
@@ -24,7 +28,7 @@ jobs:
   build-gem5-image:
     name: Build and push gem5 CI image
     runs-on: ubuntu-24.04
-    timeout-minutes: 360
+    timeout-minutes: 420
 
     steps:
       - name: Check out repository
@@ -41,16 +45,35 @@ jobs:
         run: |
           echo "GEM5_IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/fuse-gem5-ci" >> "$GITHUB_ENV"
 
+      - name: Free runner disk space
+        run: |
+          set -euxo pipefail
+          df -h
+          sudo rm -rf /usr/local/lib/android || true
+          sudo rm -rf /usr/share/dotnet || true
+          sudo rm -rf /opt/ghc || true
+          sudo rm -rf /opt/hostedtoolcache/CodeQL || true
+          sudo rm -rf /opt/hostedtoolcache/PyPy || true
+          sudo rm -rf /opt/hostedtoolcache/go || true
+          sudo rm -rf /opt/hostedtoolcache/Ruby || true
+          sudo rm -rf /opt/hostedtoolcache/node || true
+          docker system prune -af || true
+          df -h
+
       - name: Build gem5 CI image
         run: |
           docker build \
-            --progress=plain \
             --build-arg GEM5_REF=${{ github.event.inputs.gem5_ref }} \
             --build-arg GEM5_BUILD_ISA=${{ github.event.inputs.gem5_build_isa }} \
+            --build-arg GEM5_BUILD_JOBS=${{ github.event.inputs.make_jobs }} \
             -f docker/gem5-ci/Dockerfile \
             -t "$GEM5_IMAGE:${{ github.event.inputs.image_tag }}" \
             -t "$GEM5_IMAGE:latest" \
             .
+
+      - name: Show built image size
+        run: |
+          docker image ls "$GEM5_IMAGE"
 
       - name: Push gem5 CI image
         run: |
