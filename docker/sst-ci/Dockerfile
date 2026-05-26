@@ -79,10 +79,6 @@ RUN set -eux; \
     rm -rf /root/.cache /tmp/*; \
     df -h
 
-# SST Elements registration can include build/source/test paths. Those paths do
-# not exist in the runtime stage and they also make the installed metadata less
-# relocatable. Keep the installed library paths, but remove obvious build-tree
-# references where possible.
 RUN set -eux; \
     grep -RIl "/tmp/sst-build" "${SST_PREFIX}" 2>/dev/null | while read -r file; do \
         sed -i \
@@ -115,6 +111,7 @@ ENV QT_QPA_PLATFORM=offscreen
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     gfortran \
+    libpython3.12 \
     libboost-atomic1.83.0 \
     libboost-chrono1.83.0 \
     libboost-date-time1.83.0 \
@@ -148,6 +145,18 @@ COPY --from=builder ${SST_PREFIX} ${SST_PREFIX}
 
 RUN set -eux; \
     ldconfig; \
+    ldd "${SST_PREFIX}/bin/sst"; \
+    ldd "${SST_PREFIX}/bin/sst-info"; \
+    if ldd "${SST_PREFIX}/bin/sst" | grep -q "not found"; then \
+        echo "Missing runtime libraries for sst:"; \
+        ldd "${SST_PREFIX}/bin/sst" | grep "not found"; \
+        exit 1; \
+    fi; \
+    if ldd "${SST_PREFIX}/bin/sst-info" | grep -q "not found"; then \
+        echo "Missing runtime libraries for sst-info:"; \
+        ldd "${SST_PREFIX}/bin/sst-info" | grep "not found"; \
+        exit 1; \
+    fi; \
     which sst; \
     which sst-info; \
     sst --version || true; \
