@@ -19,6 +19,10 @@ on:
         description: "sst-elements git tag/ref"
         required: true
         default: "v15.1.0_Final"
+      make_jobs:
+        description: "Parallel make jobs used while building SST"
+        required: true
+        default: "2"
 
 permissions:
   contents: read
@@ -28,7 +32,7 @@ jobs:
   build-sst-image:
     name: Build and push SST CI image
     runs-on: ubuntu-24.04
-    timeout-minutes: 240
+    timeout-minutes: 300
 
     steps:
       - name: Check out repository
@@ -45,17 +49,36 @@ jobs:
         run: |
           echo "SST_IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/fuse-sst-ci" >> "$GITHUB_ENV"
 
+      - name: Free runner disk space
+        run: |
+          set -euxo pipefail
+          df -h
+          sudo rm -rf /usr/local/lib/android || true
+          sudo rm -rf /usr/share/dotnet || true
+          sudo rm -rf /opt/ghc || true
+          sudo rm -rf /opt/hostedtoolcache/CodeQL || true
+          sudo rm -rf /opt/hostedtoolcache/PyPy || true
+          sudo rm -rf /opt/hostedtoolcache/go || true
+          sudo rm -rf /opt/hostedtoolcache/Ruby || true
+          sudo rm -rf /opt/hostedtoolcache/node || true
+          docker system prune -af || true
+          df -h
+
       - name: Build SST CI image
         run: |
           docker build \
-            --progress=plain \
             --build-arg SST_VERSION=${{ github.event.inputs.sst_version }} \
             --build-arg SST_CORE_REF=${{ github.event.inputs.sst_core_ref }} \
             --build-arg SST_ELEMENTS_REF=${{ github.event.inputs.sst_elements_ref }} \
+            --build-arg MAKE_JOBS=${{ github.event.inputs.make_jobs }} \
             -f docker/sst-ci/Dockerfile \
             -t "$SST_IMAGE:${{ github.event.inputs.image_tag }}" \
             -t "$SST_IMAGE:latest" \
             .
+
+      - name: Show built image size
+        run: |
+          docker image ls "$SST_IMAGE"
 
       - name: Push SST CI image
         run: |

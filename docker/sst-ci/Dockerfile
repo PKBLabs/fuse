@@ -5,11 +5,12 @@ ARG SST_CORE_REF=v15.1.2_Final
 ARG SST_ELEMENTS_REF=v15.1.0_Final
 ARG SST_VERSION=15.1.2
 ARG SST_PREFIX=/opt/sst
+ARG MAKE_JOBS=2
 
 ENV SST_CORE_HOME=${SST_PREFIX}
 ENV SST_ELEMENTS_HOME=${SST_PREFIX}
 ENV PATH=${SST_PREFIX}/bin:${PATH}
-ENV LD_LIBRARY_PATH=${SST_PREFIX}/lib:${SST_PREFIX}/lib/sst-elements-library:${LD_LIBRARY_PATH}
+ENV LD_LIBRARY_PATH=${SST_PREFIX}/lib:${SST_PREFIX}/lib/sst-elements-library:${SST_PREFIX}/lib/sst-elements-library/ext:${LD_LIBRARY_PATH}
 ENV PYTHONPATH=${SST_PREFIX}/lib/python3.12/site-packages:${SST_PREFIX}/lib/python3.12/dist-packages:${PYTHONPATH}
 ENV QT_QPA_PLATFORM=offscreen
 
@@ -46,23 +47,57 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /tmp/sst-build
 
-RUN git clone --depth 1 --branch ${SST_CORE_REF} \
-    https://github.com/sstsimulator/sst-core.git
+RUN set -eux; \
+    df -h; \
+    git clone --depth 1 --branch "${SST_CORE_REF}" https://github.com/sstsimulator/sst-core.git; \
+    cd sst-core; \
+    ./autogen.sh; \
+    ./configure --prefix="${SST_PREFIX}"; \
+    make -j"${MAKE_JOBS}"; \
+    make install; \
+    cd /tmp/sst-build; \
+    rm -rf sst-core; \
+    rm -rf /root/.cache /tmp/*; \
+    df -h
 
-RUN cd sst-core \
-    && ./autogen.sh \
-    && ./configure --prefix=${SST_PREFIX} \
-    && make -j"$(nproc)" \
-    && make install
+RUN set -eux; \
+    df -h; \
+    git clone --depth 1 --branch "${SST_ELEMENTS_REF}" https://github.com/sstsimulator/sst-elements.git; \
+    cd sst-elements; \
+    ./autogen.sh; \
+    ./configure --prefix="${SST_PREFIX}" --with-sst-core="${SST_PREFIX}"; \
+    make -j"${MAKE_JOBS}"; \
+    make install; \
+    cd /tmp/sst-build; \
+    rm -rf sst-elements; \
+    find "${SST_PREFIX}" -name "*.a" -type f -delete; \
+    find "${SST_PREFIX}" -name "*.la" -type f -delete; \
+    find "${SST_PREFIX}" -name "*.lai" -type f -delete; \
+    find "${SST_PREFIX}" -name "__pycache__" -type d -prune -exec rm -rf {} +; \
+    find "${SST_PREFIX}" -name "*.pyc" -type f -delete; \
+    find "${SST_PREFIX}" -name "*.pyo" -type f -delete; \
+    rm -rf /root/.cache /tmp/*; \
+    df -h
 
-RUN git clone --depth 1 --branch ${SST_ELEMENTS_REF} \
-    https://github.com/sstsimulator/sst-elements.git
-
-RUN cd sst-elements \
-    && ./autogen.sh \
-    && ./configure --prefix=${SST_PREFIX} --with-sst-core=${SST_PREFIX} \
-    && make -j"$(nproc)" \
-    && make install
+# SST Elements registration can include build/source/test paths. Those paths do
+# not exist in the runtime stage and they also make the installed metadata less
+# relocatable. Keep the installed library paths, but remove obvious build-tree
+# references where possible.
+RUN set -eux; \
+    grep -RIl "/tmp/sst-build" "${SST_PREFIX}" 2>/dev/null | while read -r file; do \
+        sed -i \
+            -e 's#/tmp/sst-build/sst-elements##g' \
+            -e 's#/tmp/sst-build/sst-core##g' \
+            "$file" || true; \
+    done; \
+    find "${SST_PREFIX}" -name "*.a" -type f -delete; \
+    find "${SST_PREFIX}" -name "*.la" -type f -delete; \
+    find "${SST_PREFIX}" -name "*.lai" -type f -delete; \
+    find "${SST_PREFIX}" -name "__pycache__" -type d -prune -exec rm -rf {} +; \
+    find "${SST_PREFIX}" -name "*.pyc" -type f -delete; \
+    find "${SST_PREFIX}" -name "*.pyo" -type f -delete; \
+    du -sh "${SST_PREFIX}"; \
+    df -h
 
 
 FROM ubuntu:24.04 AS runtime
@@ -73,7 +108,7 @@ ARG SST_PREFIX=/opt/sst
 ENV SST_CORE_HOME=${SST_PREFIX}
 ENV SST_ELEMENTS_HOME=${SST_PREFIX}
 ENV PATH=${SST_PREFIX}/bin:${PATH}
-ENV LD_LIBRARY_PATH=${SST_PREFIX}/lib:${SST_PREFIX}/lib/sst-elements-library:${LD_LIBRARY_PATH}
+ENV LD_LIBRARY_PATH=${SST_PREFIX}/lib:${SST_PREFIX}/lib/sst-elements-library:${SST_PREFIX}/lib/sst-elements-library/ext:${LD_LIBRARY_PATH}
 ENV PYTHONPATH=${SST_PREFIX}/lib/python3.12/site-packages:${SST_PREFIX}/lib/python3.12/dist-packages:${PYTHONPATH}
 ENV QT_QPA_PLATFORM=offscreen
 
@@ -111,11 +146,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=builder ${SST_PREFIX} ${SST_PREFIX}
 
-RUN ldconfig \
-    && which sst \
-    && which sst-info \
-    && sst --version || true \
-    && sst-info --version || true \
-    && sst-info | head -100
+RUN set -eux; \
+    ldconfig; \
+    which sst; \
+    which sst-info; \
+    sst --version || true; \
+    sst-info --version || true; \
+    sst-info | head -100; \
+    du -sh "${SST_PREFIX}"; \
+    df -h
 
 WORKDIR /workspace
