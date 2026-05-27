@@ -79,4 +79,4 @@ jobs:
 
       - name: Run live SST tests
         run: |
-          /tmp/fuse-venv/bin/python -m pytest -q -m "sst_live"
+          /tmp/fuse-venv/bin/python -m pytest -vv -s -m "sst_live"
