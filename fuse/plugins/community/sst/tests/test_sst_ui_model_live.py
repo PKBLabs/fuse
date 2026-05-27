@@ -58,6 +58,28 @@ def find_tree_item_by_key(panel, key):
     raise AssertionError(f"No property item found for key {key!r}")
 
 
+
+
+def valid_parameter_update_value(parameter):
+    default_value = str(parameter.get("default_val") or "")
+
+    if default_value == "<required>":
+        default_value = ""
+
+    if default_value:
+        try:
+            return str(int(default_value) + 1)
+        except ValueError:
+            pass
+
+        try:
+            return str(float(default_value) + 1.0)
+        except ValueError:
+            pass
+
+    return "fuse_test_value"
+
+
 def component_with_parameters(components):
     from fuse.core.persistence.db_access import get_component_details
 
@@ -129,6 +151,7 @@ def test_sst_live_parameter_updates_write_back_to_component_instance(qtbot):
         panel,
         f"component.parameter.{first_parameter['name']}",
     )
-    parameter_item.setText(1, "fuse_test_value")
+    updated_value = valid_parameter_update_value(first_parameter)
+    parameter_item.setText(1, updated_value)
 
-    assert node.parameters[first_parameter["name"]] == "fuse_test_value"
+    assert node.parameters[first_parameter["name"]] == updated_value
