@@ -35,6 +35,8 @@ class ModelScene(QGraphicsScene):
         self.properties_panel: Optional["PropertiesPanel"] = None
         self.links: list[ModelLink] = []
         self._next_link_id = 1
+        self.model_changed_callback = None
+        self.component_added_callback = None
 
         # Link routing is relatively expensive. A component drag can generate
         # hundreds of ItemPositionHasChanged events per second. During drag we
@@ -59,6 +61,39 @@ class ModelScene(QGraphicsScene):
         self.links = []
         self._next_link_id = 1
         ComponentNodeItem._next_node_id = 1
+        self.notify_model_changed()
+
+    def notify_model_changed(self):
+        if self.model_changed_callback is not None:
+            self.model_changed_callback()
+
+    def notify_component_added(self, node: ComponentNodeItem):
+        if self.component_added_callback is not None:
+            self.component_added_callback(node)
+        self.notify_model_changed()
+
+    def existing_component_names(self) -> set[str]:
+        return {node.instance_name for node in self.component_items()}
+
+    def generate_unique_component_name(self, component) -> str:
+        base_name = component.name or "Component"
+        used_names = self.existing_component_names()
+
+        index = 1
+        while f"{base_name}_{index}" in used_names:
+            index += 1
+
+        return f"{base_name}_{index}"
+
+    def create_component_node(self, component, scene_pos, instance_name: str | None = None):
+        node = ComponentNodeItem(
+            component,
+            instance_name=instance_name or self.generate_unique_component_name(component),
+        )
+        node.setPos(scene_pos)
+        self.addItem(node)
+        self.notify_component_added(node)
+        return node
 
     def find_port(self, node_id: int, port_name: str) -> Optional[PortItem]:
         for node in self.component_items():

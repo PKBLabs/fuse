@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
     QDockWidget,
     QFileDialog,
     QLabel,
+    QListWidget,
     QMainWindow,
     QMenuBar,
     QMessageBox,
@@ -66,15 +67,21 @@ class MainWindow(QMainWindow):
         )
         self.active_plugin_id: str | None = None
         self.active_target_id: str | None = None
+        self.is_dirty = False
 
         self.palette = ComponentPalette()
         self.scene = ModelScene()
         self.model_view = ModelView(self.scene)
         self.properties_panel = PropertiesPanel()
+        self.model_outline = QListWidget()
         self.scene.properties_panel = self.properties_panel
+        self.scene.model_changed_callback = self.mark_dirty
+        self.scene.component_added_callback = self.on_component_added
+        self.properties_panel.property_changed_callback = self.on_property_changed
 
         self.setup_menu_bar()
         self.setup_layout()
+        self.setup_model_outline()
         self.setup_properties_panel()
         self.setup_status_bar()
 
@@ -154,6 +161,22 @@ class MainWindow(QMainWindow):
         splitter.setSizes([320, 980])
 
         self.setCentralWidget(splitter)
+
+    def setup_model_outline(self):
+        dock = QDockWidget("Model Outline", self)
+        dock.setWidget(self.model_outline)
+        dock.setAllowedAreas(
+            Qt.LeftDockWidgetArea
+            | Qt.RightDockWidgetArea
+            | Qt.TopDockWidgetArea
+            | Qt.BottomDockWidgetArea
+        )
+        dock.setFeatures(
+            QDockWidget.DockWidgetMovable
+            | QDockWidget.DockWidgetFloatable
+            | QDockWidget.DockWidgetClosable
+        )
+        self.addDockWidget(Qt.LeftDockWidgetArea, dock)
 
     def setup_properties_panel(self):
         dock = QDockWidget("Properties", self)
@@ -262,6 +285,32 @@ class MainWindow(QMainWindow):
         self.project_name = self.project_settings.project_name or self.project_name
         self.apply_project_settings_to_ui()
         self.statusBar().showMessage("Project settings updated", 3000)
+        self.mark_dirty()
+
+    def on_component_added(self, node):
+        self.update_model_outline()
+
+    def on_property_changed(self):
+        self.update_model_outline()
+        self.mark_dirty()
+
+    def update_model_outline(self):
+        self.model_outline.clear()
+
+        for node in self.scene.component_items():
+            self.model_outline.addItem(node.instance_name)
+
+    def set_dirty(self, dirty: bool):
+        self.is_dirty = dirty
+        marker = "*" if dirty else ""
+
+        if self.current_project_path is not None:
+            self.setWindowTitle(f"FUSE - {self.current_project_path.name}{marker}")
+        else:
+            self.setWindowTitle(f"FUSE{marker}")
+
+    def mark_dirty(self):
+        self.set_dirty(True)
 
     def new_project(self):
         settings = ProjectSettings(
@@ -281,6 +330,8 @@ class MainWindow(QMainWindow):
         self.properties_panel.show_empty()
         self.set_current_project_path(None)
         self.apply_project_settings_to_ui()
+        self.update_model_outline()
+        self.set_dirty(False)
         self.statusBar().showMessage("New project created", 3000)
 
     def new_model(self):
@@ -303,10 +354,10 @@ class MainWindow(QMainWindow):
 
         if self.current_project_path is not None:
             self.project_name = self.current_project_path.stem
-            self.setWindowTitle(f"FUSE - {self.current_project_path.name}")
         else:
             self.project_name = "Untitled FUSE Project"
-            self.setWindowTitle("FUSE")
+
+        self.set_dirty(self.is_dirty)
 
     def save_model(self):
         if not self.validate_model_before_save():
@@ -318,6 +369,7 @@ class MainWindow(QMainWindow):
 
         project = self.project_dict()
         save_project_file(project, self.current_project_path)
+        self.set_dirty(False)
         self.statusBar().showMessage(f"Saved {self.current_project_path}", 3000)
 
     def save_model_as(self):
@@ -431,6 +483,8 @@ class MainWindow(QMainWindow):
         self.set_current_project_path(file_path)
 
         self.apply_project_settings_to_ui()
+        self.update_model_outline()
+        self.set_dirty(False)
 
         self.statusBar().showMessage(f"Opened {file_path}", 3000)
 

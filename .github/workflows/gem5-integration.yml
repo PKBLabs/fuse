@@ -10,7 +10,11 @@ on:
       - develop
     paths:
       - "fuse/plugins/community/gem5/**"
+      - "fuse/core/persistence/**"
       - "fuse/core/plugin_runtime/**"
+      - "fuse/core/ui/**"
+      - "fuse/core/model/**"
+      - "fuse/app/**"
       - "fuse/core/toolchains/**"
       - "fuse/plugin_api/**"
       - "fuse/requirements*.txt"

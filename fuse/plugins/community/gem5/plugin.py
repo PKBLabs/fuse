@@ -16,12 +16,84 @@ from __future__ import annotations
 from fuse.core.model.project_settings import PluginProjectSettings, ToolchainSettings
 from fuse.core.persistence.database import get_connection, rows_to_dicts
 from fuse.core.toolchains.providers import provider_from_toolchain
-from fuse.plugin_api.interfaces import FrameworkTarget, ItemDetails, PaletteItem
+from fuse.plugin_api.interfaces import (
+    ConnectorDefinition,
+    FrameworkTarget,
+    ItemDetails,
+    PaletteItem,
+    PropertyDefinition,
+)
 
 
 DEFAULT_GEM5_VERSION = "25.1.0.1"
 PREVIOUS_GEM5_VERSION = "24.1.0.3"
 DEFAULT_GEM5_ISA = "X86"
+
+
+BUILTIN_GEM5_COMPONENTS = {
+    "system": {
+        "display_name": "gem5.System (Component)",
+        "type_name": "System",
+        "element_name": "gem5",
+        "category": "System",
+        "description": "Top-level gem5 system object.",
+        "connectors": [
+            {"name": "mem_ranges", "description": "System memory ranges", "interface": "memory_range"},
+            {"name": "membus", "description": "System memory bus", "interface": "bus"},
+        ],
+        "properties": [
+            {"name": "clock", "description": "System clock frequency", "default_value": "1GHz", "required": True},
+            {"name": "mem_mode", "description": "gem5 memory mode", "default_value": "timing", "required": True},
+            {"name": "cache_line_size", "description": "Cache line size in bytes", "default_value": "64", "required": True},
+        ],
+    },
+    "timing_simple_cpu": {
+        "display_name": "gem5.TimingSimpleCPU (Component)",
+        "type_name": "TimingSimpleCPU",
+        "element_name": "gem5",
+        "category": "CPU",
+        "description": "TimingSimpleCPU SimObject for timing-mode gem5 models.",
+        "connectors": [
+            {"name": "icache_port", "description": "Instruction cache port", "interface": "request_port"},
+            {"name": "dcache_port", "description": "Data cache port", "interface": "request_port"},
+        ],
+        "properties": [
+            {"name": "numThreads", "description": "Number of hardware threads", "default_value": "1", "required": True},
+            {"name": "clock", "description": "CPU clock frequency", "default_value": "2GHz", "required": True},
+        ],
+    },
+    "system_xbar": {
+        "display_name": "gem5.SystemXBar (Component)",
+        "type_name": "SystemXBar",
+        "element_name": "gem5",
+        "category": "Interconnect",
+        "description": "gem5 system crossbar interconnect.",
+        "connectors": [
+            {"name": "cpu_side_ports", "description": "CPU-side ports", "interface": "response_port"},
+            {"name": "mem_side_ports", "description": "Memory-side ports", "interface": "request_port"},
+        ],
+        "properties": [
+            {"name": "width", "description": "Crossbar width in bytes", "default_value": "16", "required": True},
+            {"name": "frontend_latency", "description": "Frontend latency in cycles", "default_value": "3", "required": True},
+            {"name": "forward_latency", "description": "Forward latency in cycles", "default_value": "4", "required": True},
+            {"name": "response_latency", "description": "Response latency in cycles", "default_value": "2", "required": True},
+        ],
+    },
+    "ddr3_1600_8x8": {
+        "display_name": "gem5.DDR3_1600_8x8 (Component)",
+        "type_name": "DDR3_1600_8x8",
+        "element_name": "gem5",
+        "category": "Memory",
+        "description": "Common gem5 DDR3 memory controller model.",
+        "connectors": [
+            {"name": "port", "description": "Memory controller port", "interface": "response_port"},
+        ],
+        "properties": [
+            {"name": "range", "description": "Address range served by this controller", "default_value": "512MiB", "required": True},
+            {"name": "addr_mapping", "description": "Address mapping policy", "default_value": "RoRaBaChCo", "required": False},
+        ],
+    },
+}
 
 
 class Gem5Plugin:
@@ -97,17 +169,90 @@ class Gem5Plugin:
         return targets
 
     def load_palette_items(self, target_id: str | None = None) -> list[PaletteItem]:
-        # Placeholder for future gem5 SimObject/model-template palette support.
-        # Returning an empty list is valid: it makes the gem5 target selectable
-        # in Project Settings without yet exposing gem5 components in the palette.
-        return []
+        targets = self.list_targets()
+
+        if target_id is None and targets:
+            target_id = next((target.target_id for target in targets if target.is_default), targets[0].target_id)
+
+        target_by_id = {target.target_id: target for target in targets}
+        target = target_by_id.get(str(target_id)) if target_id is not None else None
+        framework_version = target.framework_version if target is not None else DEFAULT_GEM5_VERSION
+        target_label = target.display_name if target is not None else f"gem5 {framework_version}"
+
+        items: list[PaletteItem] = []
+
+        for item_id, metadata in BUILTIN_GEM5_COMPONENTS.items():
+            items.append(
+                PaletteItem(
+                    plugin_id=self.plugin_id,
+                    item_id=item_id,
+                    display_name=metadata["display_name"],
+                    type_name=metadata["type_name"],
+                    element_name=metadata["element_name"],
+                    category=metadata["category"],
+                    description=metadata["description"],
+                    raw_kind="Component",
+                    target_id=str(target_id or ""),
+                    target_label=target_label,
+                    framework_version=framework_version,
+                )
+            )
+
+        return items
 
     def load_item_details(
         self,
         item_id: str,
         target_id: str | None = None,
     ) -> ItemDetails:
-        raise KeyError(f"gem5 item details are not implemented yet: {item_id}")
+        metadata = BUILTIN_GEM5_COMPONENTS.get(str(item_id))
+
+        if metadata is None:
+            raise KeyError(f"gem5 item details are not implemented for item: {item_id}")
+
+        target = None
+        for candidate in self.list_targets():
+            if target_id is None or candidate.target_id == str(target_id):
+                target = candidate
+                break
+
+        framework_version = target.framework_version if target is not None else DEFAULT_GEM5_VERSION
+        target_label = target.display_name if target is not None else f"gem5 {framework_version}"
+
+        palette_item = PaletteItem(
+            plugin_id=self.plugin_id,
+            item_id=str(item_id),
+            display_name=metadata["display_name"],
+            type_name=metadata["type_name"],
+            element_name=metadata["element_name"],
+            category=metadata["category"],
+            description=metadata["description"],
+            raw_kind="Component",
+            target_id=str(target_id or ""),
+            target_label=target_label,
+            framework_version=framework_version,
+        )
+
+        return ItemDetails(
+            palette_item=palette_item,
+            connectors=[
+                ConnectorDefinition(
+                    name=connector["name"],
+                    description=connector.get("description", ""),
+                    interface=connector.get("interface", ""),
+                )
+                for connector in metadata["connectors"]
+            ],
+            properties=[
+                PropertyDefinition(
+                    name=property_definition["name"],
+                    description=property_definition.get("description", ""),
+                    default_value=property_definition.get("default_value", ""),
+                    required=bool(property_definition.get("required", False)),
+                )
+                for property_definition in metadata["properties"]
+            ],
+        )
 
     def validate_toolchain(
         self,
