@@ -63,14 +63,23 @@ jobs:
         run: |
           echo "$GEM5_ROOT"
           echo "$GEM5_BINARY"
-          "$GEM5_BINARY" --version
+          test -x "$GEM5_BINARY"
+          ldd "$GEM5_BINARY" | tee /tmp/gem5-ldd.txt
+          if grep -q "not found" /tmp/gem5-ldd.txt; then
+            echo "Missing gem5 runtime shared libraries:"
+            grep "not found" /tmp/gem5-ldd.txt
+            exit 1
+          fi
+          "$GEM5_BINARY" --help > /tmp/gem5-help.txt 2>&1
+          head -40 /tmp/gem5-help.txt
 
       - name: Create Python virtual environment
         run: |
-          python3 -m venv .venv
-          .venv/bin/python -m pip install --upgrade pip
-          .venv/bin/python -m pip install -r requirements-dev.txt
+          rm -rf /tmp/fuse-venv
+          python3 -m venv /tmp/fuse-venv
+          /tmp/fuse-venv/bin/python -m pip install --upgrade pip
+          /tmp/fuse-venv/bin/python -m pip install -r requirements-dev.txt
 
       - name: Run live gem5 tests
         run: |
-          .venv/bin/python -m pytest -q -m "gem5_live"
+          /tmp/fuse-venv/bin/python -m pytest -q -m "gem5_live"

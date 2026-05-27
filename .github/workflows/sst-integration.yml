@@ -64,14 +64,16 @@ jobs:
           which sst-info
           sst --version || true
           sst-info --version || true
-          sst-info | head -100
+          sst-info > /tmp/sst-info.txt
+          head -100 /tmp/sst-info.txt
 
       - name: Create Python virtual environment
         run: |
-          python3 -m venv .venv
-          .venv/bin/python -m pip install --upgrade pip
-          .venv/bin/python -m pip install -r requirements-dev.txt
+          rm -rf /tmp/fuse-venv
+          python3 -m venv /tmp/fuse-venv
+          /tmp/fuse-venv/bin/python -m pip install --upgrade pip
+          /tmp/fuse-venv/bin/python -m pip install -r requirements-dev.txt
 
       - name: Run live SST tests
         run: |
-          .venv/bin/python -m pytest -q -m "sst_live"
+          /tmp/fuse-venv/bin/python -m pytest -q -m "sst_live"

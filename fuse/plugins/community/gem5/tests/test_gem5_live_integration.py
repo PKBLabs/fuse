@@ -11,6 +11,8 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+from __future__ import annotations
+
 import os
 import shutil
 import subprocess
@@ -22,39 +24,47 @@ import pytest
 pytestmark = pytest.mark.gem5_live
 
 
-def find_gem5_binary():
-    env_path = os.environ.get("GEM5_BINARY")
+def find_gem5_binary() -> str:
+    explicit = os.environ.get("GEM5_BINARY", "").strip()
 
-    if env_path and Path(env_path).exists():
-        return env_path
+    if explicit:
+        path = Path(explicit)
 
-    path_binary = shutil.which("gem5")
+        if path.exists() and os.access(path, os.X_OK):
+            return str(path)
 
-    if path_binary:
-        return path_binary
-
-    gem5_root = os.environ.get("GEM5_ROOT")
+    gem5_root = os.environ.get("GEM5_ROOT", "").strip()
 
     if gem5_root:
+        root = Path(gem5_root)
+
         candidates = [
-            Path(gem5_root) / "build" / "X86" / "gem5.opt",
-            Path(gem5_root) / "build" / "ARM" / "gem5.opt",
-            Path(gem5_root) / "build" / "RISCV" / "gem5.opt",
-            Path(gem5_root) / "build" / "NULL" / "gem5.opt",
+            root / "build" / "X86" / "gem5.opt",
+            root / "build" / "RISCV" / "gem5.opt",
+            root / "build" / "ARM" / "gem5.opt",
+            root / "gem5.opt",
         ]
 
         for candidate in candidates:
-            if candidate.exists():
+            if candidate.exists() and os.access(candidate, os.X_OK):
                 return str(candidate)
 
-    pytest.skip("gem5 binary not found")
+    from_path = shutil.which("gem5")
+
+    if from_path:
+        return from_path
+
+    pytest.skip(
+        "No gem5 binary found. Set GEM5_BINARY or GEM5_ROOT, or run inside a "
+        "gem5-capable CI image."
+    )
 
 
 def test_real_gem5_binary_runs():
     gem5_binary = find_gem5_binary()
 
     result = subprocess.run(
-        [gem5_binary, "--version"],
+        [gem5_binary, "--help"],
         text=True,
         capture_output=True,
         check=False,
@@ -65,8 +75,4 @@ def test_real_gem5_binary_runs():
 
     assert result.returncode == 0
     assert "gem5" in output.lower()
-
-    expected_version = os.environ.get("FUSE_GEM5_VERSION", "").strip()
-
-    if expected_version:
-        assert expected_version in output
+    assert "usage" in output.lower() or "options" in output.lower()

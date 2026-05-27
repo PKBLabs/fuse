@@ -27,6 +27,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libffi-dev \
     libhdf5-dev \
     libltdl-dev \
+    libncurses-dev \
     libopenmpi-dev \
     libreadline-dev \
     libsqlite3-dev \
@@ -111,29 +112,60 @@ ENV QT_QPA_PLATFORM=offscreen
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     gfortran \
-    libpython3.12 \
     libboost-atomic1.83.0 \
     libboost-chrono1.83.0 \
     libboost-date-time1.83.0 \
     libboost-filesystem1.83.0 \
+    libboost-iostreams1.83.0 \
     libboost-program-options1.83.0 \
     libboost-regex1.83.0 \
     libboost-serialization1.83.0 \
     libboost-system1.83.0 \
     libboost-thread1.83.0 \
     libconfig9 \
+    libdbus-1-3 \
     libegl1 \
     libffi8 \
+    libfontconfig1 \
+    libfreetype6 \
     libgl1 \
+    libglib2.0-0 \
     libhdf5-103-1t64 \
     libltdl7 \
+    libncurses6 \
+    libncursesw6 \
     libopenmpi3t64 \
+    libpython3.12 \
     libreadline8t64 \
     libsqlite3-0 \
     libssl3t64 \
+    libtinfo6 \
+    libx11-6 \
+    libx11-xcb1 \
+    libxcb1 \
+    libxcb-cursor0 \
+    libxcb-glx0 \
+    libxcb-icccm4 \
+    libxcb-image0 \
+    libxcb-keysyms1 \
+    libxcb-randr0 \
+    libxcb-render0 \
+    libxcb-render-util0 \
+    libxcb-shape0 \
+    libxcb-shm0 \
+    libxcb-sync1 \
+    libxcb-util1 \
+    libxcb-xfixes0 \
+    libxcb-xkb1 \
+    libxext6 \
+    libxfixes3 \
+    libxi6 \
+    libxkbcommon0 \
     libxkbcommon-x11-0 \
+    libxrender1 \
     openmpi-bin \
     python3 \
+    python3-dev \
     python3-pip \
     python3-venv \
     tcl \
@@ -145,23 +177,24 @@ COPY --from=builder ${SST_PREFIX} ${SST_PREFIX}
 
 RUN set -eux; \
     ldconfig; \
-    ldd "${SST_PREFIX}/bin/sst"; \
-    ldd "${SST_PREFIX}/bin/sst-info"; \
-    if ldd "${SST_PREFIX}/bin/sst" | grep -q "not found"; then \
-        echo "Missing runtime libraries for sst:"; \
-        ldd "${SST_PREFIX}/bin/sst" | grep "not found"; \
+    find "${SST_PREFIX}/bin" "${SST_PREFIX}/lib" \
+        -type f \( -perm /111 -o -name "*.so" -o -name "*.so.*" \) \
+        -print0 \
+      | xargs -0 -r ldd \
+      | tee /tmp/sst-ldd.txt; \
+    if grep -q "not found" /tmp/sst-ldd.txt; then \
+        echo "Missing SST runtime shared libraries:"; \
+        grep "not found" /tmp/sst-ldd.txt; \
         exit 1; \
     fi; \
-    if ldd "${SST_PREFIX}/bin/sst-info" | grep -q "not found"; then \
-        echo "Missing runtime libraries for sst-info:"; \
-        ldd "${SST_PREFIX}/bin/sst-info" | grep "not found"; \
-        exit 1; \
-    fi; \
+    rm -f /tmp/sst-ldd.txt; \
     which sst; \
     which sst-info; \
     sst --version || true; \
     sst-info --version || true; \
-    sst-info | head -100; \
+    sst-info > /tmp/sst-info.txt; \
+    head -100 /tmp/sst-info.txt; \
+    rm -f /tmp/sst-info.txt; \
     du -sh "${SST_PREFIX}"; \
     df -h
 
