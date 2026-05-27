@@ -55,8 +55,12 @@ def load_enabled_plugins() -> list[LoadedPlugin]:
     loaded: list[LoadedPlugin] = []
 
     for manifest_path in discover_plugin_manifests():
-        with manifest_path.open("rb") as handle:
-            manifest = tomllib.load(handle)
+        try:
+            with manifest_path.open("rb") as handle:
+                manifest = tomllib.load(handle)
+        except tomllib.TOMLDecodeError as exc:
+            print(f"Skipping plugin manifest {manifest_path}: invalid TOML: {exc}")
+            continue
 
         plugin_meta = manifest.get("plugin", {})
         entry_points = manifest.get("entry_points", {})

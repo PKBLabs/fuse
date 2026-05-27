@@ -14,7 +14,6 @@
 from PySide6.QtGui import QPainter
 from PySide6.QtWidgets import QGraphicsView
 
-from fuse.core.ui.graphics_items import ComponentNodeItem
 from fuse.core.model.models import ComponentDefinition, MIME_COMPONENT
 from fuse.core.ui.model_scene import ModelScene
 
@@ -48,8 +47,15 @@ class ModelView(QGraphicsView):
         component = ComponentDefinition.from_drag_text(raw)
 
         scene_pos = self.mapToScene(event.position().toPoint())
-        node = ComponentNodeItem(component)
-        node.setPos(scene_pos)
-        self.scene().addItem(node)
+        scene = self.scene()
+
+        if hasattr(scene, "create_component_node"):
+            scene.create_component_node(component, scene_pos)
+        else:
+            from fuse.core.ui.graphics_items import ComponentNodeItem
+
+            node = ComponentNodeItem(component)
+            node.setPos(scene_pos)
+            scene.addItem(node)
 
         event.acceptProposedAction()

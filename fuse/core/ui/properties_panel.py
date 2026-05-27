@@ -33,6 +33,7 @@ class PropertiesPanel(QWidget):
         self.validation_issues_by_node: dict[int, dict[str, list[str]]] = {}
         self.current_node: Optional[ComponentNodeItem] = None
         self.current_link: Optional[ConnectionItem] = None
+        self.property_changed_callback = None
         self._loading = False
 
         layout = QVBoxLayout(self)
@@ -276,6 +277,9 @@ class PropertiesPanel(QWidget):
                 self.current_node.parameters[parameter_name] = new_value
 
         item.setData(1, Qt.UserRole + 1, new_value)
+
+        if self.property_changed_callback is not None:
+            self.property_changed_callback()
 
     def validate_value(self, key: str, value: str, metadata: dict) -> tuple[bool, str]:
         if key in {"component.name", "link.name"}:

@@ -484,6 +484,9 @@ class ComponentNodeItem(QGraphicsRectItem):
                     for connection in port.connections:
                         connection.update_position()
 
+            if scene is not None and hasattr(scene, "notify_model_changed"):
+                scene.notify_model_changed()
+
         return super().itemChange(change, value)
 
     def set_validation_warnings(self, messages: list[str]):
