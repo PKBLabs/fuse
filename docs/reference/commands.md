@@ -32,6 +32,13 @@ rm -f app_data/app.db
 FUSE_REFRESH_SSTINFO=1 ./scripts/setup_dev.sh
 ```
 
+Import/refresh a specific SST version label from the active SST environment:
+
+```bash
+FUSE_SST_VERSION=15.1.2 FUSE_REFRESH_SSTINFO=1 ./scripts/setup_dev.sh
+FUSE_SST_VERSION=16.0.0 FUSE_REFRESH_SSTINFO=1 ./scripts/setup_dev.sh
+```
+
 ## Run tests
 
 All tests:
@@ -76,4 +83,31 @@ PYTHONPATH="$(pwd)/.." .venv/bin/python -m fuse.plugins.community.sst.get_sstinf
 
 ```bash
 PYTHONPATH="$(pwd)/.." .venv/bin/python -m fuse.plugins.community.sst.audit_sst_icon_mapping --help
+```
+
+## Build simulator CI images locally
+
+SST 15 example:
+
+```bash
+docker build \
+  --build-arg SST_VERSION=15.1.2 \
+  --build-arg SST_CORE_REF=v15.1.2_Final \
+  --build-arg SST_ELEMENTS_REF=v15.1.0_Final \
+  --build-arg MAKE_JOBS=2 \
+  -f docker/sst-ci/Dockerfile \
+  -t ghcr.io/pkblabs/fuse-sst-ci:sst-15.1.2-local \
+  .
+```
+
+gem5 25 example:
+
+```bash
+docker build \
+  --build-arg GEM5_REF=v25.1.0.1 \
+  --build-arg GEM5_BUILD_ISA=X86 \
+  --build-arg GEM5_BUILD_JOBS=2 \
+  -f docker/gem5-ci/Dockerfile \
+  -t ghcr.io/pkblabs/fuse-gem5-ci:gem5-v25.1.0.1-local \
+  .
 ```

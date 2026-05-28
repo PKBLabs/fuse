@@ -31,14 +31,18 @@ The current community version includes:
 - A dockable properties/parameter panel.
 - Basic required-parameter validation.
 - Basic project save/load support.
+- Project Settings for per-project plugin enablement, framework target selection, and toolchain configuration.
+- Local and SSH-oriented toolchain configuration for enabled plugins.
+- Version-aware SST and gem5 framework targets.
+- SST JSON export support.
 - A plugin-oriented architecture.
 - Community plugin directories for:
   - SST
   - gem5
 
-The SST plugin currently provides support for importing SST component metadata using `sst-info` and storing SST-specific metadata in plugin-specific database tables.
+The SST plugin currently supports importing SST component metadata using `sst-info`, storing versioned SST metadata in plugin-specific database tables, validating SST toolchains, exposing SST components/parameters/ports to the editor, and exporting FUSE models to SST JSON.
 
-The gem5 plugin is currently included as part of the community plugin structure, but its functionality may be incomplete or placeholder-level depending on the current development branch.
+The gem5 plugin currently provides built-in component metadata for selected gem5 objects, version-aware gem5 targets, toolchain validation structure, and live CI coverage against gem5 24/25 container images.
 
 This project is not yet a stable production release. File formats, plugin APIs, database schemas, UI behavior, and project structure may change as development continues.
 
@@ -81,7 +85,9 @@ The current development dependencies include:
 - numpy
 - python-dateutil
 
-For SST metadata import, the SST plugin expects `sst-info` to be available on your `PATH`. If `sst-info` is not installed, the SST plugin can still be discovered and initialized, but SST component import will be skipped.
+For SST metadata import, the SST plugin expects `sst-info` to be available either locally or through the configured project SSH environment. If `sst-info` is not installed, the SST plugin can still be discovered and initialized, but SST component import will be skipped.
+
+For gem5 live validation/integration, the gem5 plugin expects a gem5 binary such as `/opt/gem5/build/X86/gem5.opt` or a project-configured equivalent.
 
 ## Setup / development install
 
@@ -147,23 +153,46 @@ FUSE_REFRESH_SSTINFO=1 ./scripts/setup_dev.sh
 
 ## SST plugin
 
-The SST community plugin is intended to support workflows around SST model construction.
+The SST community plugin supports workflows around SST model construction.
 
 Current SST plugin responsibilities include:
 
 - Running or reading `sst-info` output.
 - Parsing SST element, component, subcomponent, parameter, port, statistic, and subcomponent slot metadata.
-- Populating SST-specific database tables.
+- Populating versioned SST-specific database tables.
 - Mapping SST components to generic architecture icons where possible.
 - Providing FUSE palette items and component details through the plugin API.
+- Validating local or SSH SST toolchains against project targets.
+- Exporting FUSE models to SST JSON configuration format.
 
-If `sst-info` is not installed, the SST plugin will skip SST metadata import.
+If `sst-info` is not installed, the SST plugin will skip live metadata import.
 
 ## gem5 plugin
 
-The gem5 community plugin is included as part of the FUSE Community Edition plugin structure.
+The gem5 community plugin provides a starting gem5 catalog and version-aware project integration.
 
-Current gem5 support may be incomplete or placeholder-level depending on the branch. The intended direction is for the gem5 plugin to provide gem5-specific component discovery, metadata import, project integration, and eventual export/generation support through the same public plugin API used by other FUSE plugins.
+Current gem5 plugin responsibilities include:
+
+- Providing built-in targets for gem5 25.1.0.1 and gem5 24.1.0.3.
+- Providing built-in component definitions for selected gem5 objects.
+- Exposing gem5 parameters and ports through the generic plugin API.
+- Supporting project-level gem5 target selection.
+- Supporting local/SSH-oriented gem5 toolchain validation.
+- Running live integration tests in prebuilt gem5 CI images.
+
+Future work may add broader gem5 SimObject discovery/import and gem5-specific export/generation support.
+
+## Documentation
+
+Documentation lives under `docs/`. Important starting points include:
+
+- `docs/INDEX.md` — documentation index.
+- `docs/user/model-editor-workflow.md` — basic model workflow.
+- `docs/user/properties-and-validation.md` — property editing and validation behavior.
+- `docs/reference/component-metadata.md` — component, parameter, port, and compatibility metadata.
+- `docs/reference/fse-format.md` — FUSE project file format.
+- `docs/plugins/plugin-development-guide.md` — plugin authoring guide.
+- `docs/ci/github-actions.md` — CI/CD workflow overview.
 
 ## Contributing
 

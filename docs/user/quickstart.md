@@ -66,6 +66,21 @@ If you are inside the FUSE package root:
 PYTHONPATH="$(pwd)/.." .venv/bin/python -m fuse.app.main
 ```
 
+
+## Create your first project
+
+After FUSE opens, use:
+
+```text
+File -> New Project
+```
+
+Then open Project Settings to choose the active plugin and target version/catalog. For example, select `SST 15.1.2` for an SST project or `gem5 25.1.0.1` for a gem5 project.
+
+Use **Discover Local Tools** to populate local simulator paths where possible, then use **Validate Enabled Toolchains** to confirm the configured local or SSH toolchain matches the selected project target.
+
+Drag components from the left palette into the canvas, edit required parameters in the properties panel, connect ports, and save the result as a `.fse` project file.
+
 ## Reset the development database
 
 ```bash

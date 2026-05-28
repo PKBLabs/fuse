@@ -12,6 +12,19 @@ FUSE_DB_PATH=/tmp/fuse-test.db .venv/bin/python -m pytest -q
 
 Used heavily by tests to avoid touching the developer database.
 
+## `FUSE_SST_VERSION`
+
+Selects the SST version label used during SST metadata import/bootstrap.
+
+Example:
+
+```bash
+FUSE_SST_VERSION=15.1.2 FUSE_REFRESH_SSTINFO=1 ./scripts/setup_dev.sh
+FUSE_SST_VERSION=16.0.0 FUSE_REFRESH_SSTINFO=1 ./scripts/setup_dev.sh
+```
+
+This does not install SST. It labels/imports metadata from the currently configured/reachable SST environment.
+
 ## `FUSE_REFRESH_SSTINFO`
 
 Forces the SST plugin to rerun `sst-info` even if a successful run already exists.
@@ -52,6 +65,16 @@ Alternative:
 
 ```bash
 QT_QPA_PLATFORM=xcb xvfb-run -a .venv/bin/python -m pytest -q
+```
+
+## `FUSE_GEM5_VERSION`
+
+Version label used by gem5 live tests and CI matrices.
+
+Example:
+
+```bash
+FUSE_GEM5_VERSION=25.1.0.1 .venv/bin/python -m pytest -q -m "gem5_live"
 ```
 
 ## `GEM5_ROOT`

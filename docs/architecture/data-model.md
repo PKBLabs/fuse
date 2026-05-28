@@ -1,6 +1,16 @@
 # Data Model
 
-FUSE currently separates project-instance data from plugin catalog data.
+FUSE separates project-instance data from plugin catalog data. This keeps `.fse` project files small and simulator-independent while still allowing plugins to provide rich simulator-specific metadata.
+
+## Two data layers
+
+```text
+Plugin catalog data
+  Available component types, parameters, ports, statistics, framework targets
+
+Project-instance data
+  User-created component instances, positions, links, parameter overrides
+```
 
 ## Project-instance data
 
@@ -10,14 +20,18 @@ Core model classes include:
 
 - `ComponentDefinition`
 - `ModelLink`
+- `ProjectSettings`
+- `PluginProjectSettings`
+- `ToolchainSettings`
 
 These are defined in:
 
 ```text
 fuse/core/model/models.py
+fuse/core/model/project_settings.py
 ```
 
-## ComponentDefinition
+## `ComponentDefinition`
 
 `ComponentDefinition` is the generic description used by the editor for palette items and dropped component instances.
 
@@ -26,6 +40,9 @@ Important fields:
 ```text
 plugin_id
 component_id
+target_id
+target_label
+framework_version
 element
 name
 is_subcomp
@@ -35,7 +52,7 @@ icon_path
 display_name_override
 ```
 
-The key field is `plugin_id`. A `component_id` only has meaning within the plugin that created it.
+The key field is `plugin_id`. A `component_id` only has meaning within the plugin that created it. The `target_id` and `framework_version` fields make the definition version-aware.
 
 Example:
 
@@ -43,6 +60,9 @@ Example:
 ComponentDefinition(
     plugin_id="sst",
     component_id="42",
+    target_id="1",
+    target_label="SST 15.1.2",
+    framework_version="15.1.2",
     element="memHierarchy",
     name="Cache",
     category="MEMORY COMPONENT",
@@ -52,15 +72,30 @@ ComponentDefinition(
 
 ## Drag serialization
 
-Component definitions are serialized into drag text using `to_drag_text()` and restored with `from_drag_text()`.
+Component definitions are serialized into a JSON drag payload using `to_drag_text()` and restored with `from_drag_text()`.
 
-The current plugin-aware format is:
+Example payload:
 
-```text
-component_id | plugin_id | element | name | is_subcomp | category | iface | icon_path | display_name_override
+```json
+{
+  "component_id": "42",
+  "plugin_id": "sst",
+  "target_id": "1",
+  "target_label": "SST 15.1.2",
+  "framework_version": "15.1.2",
+  "element": "memHierarchy",
+  "name": "Cache",
+  "is_subcomp": 0,
+  "category": "MEMORY COMPONENT",
+  "iface": "",
+  "icon_path": "core/resources/media/arch_component_icons/memory_cache.png",
+  "display_name_override": "memHierarchy.Cache (Component)"
+}
 ```
 
-## ModelLink
+Backward-compatible pipe-delimited formats are still parsed for older tests/files, but new code should use the JSON payload.
+
+## `ModelLink`
 
 `ModelLink` represents a point-to-point link between two component instance ports.
 
@@ -95,6 +130,40 @@ ModelLink(
 )
 ```
 
+## Project settings model
+
+Project settings are stored in `.fse` files and determine which plugin/target/version the model is being built against.
+
+```python
+ProjectSettings(
+    project_name="Example Project",
+    active_plugin_id="sst",
+    plugins={
+        "sst": PluginProjectSettings(
+            plugin_id="sst",
+            enabled=True,
+            target_id="1",
+            target_label="SST 15.1.2",
+            framework_version="15.1.2",
+            toolchain=ToolchainSettings(...),
+        )
+    },
+)
+```
+
+`ToolchainSettings` stores execution environment information:
+
+```text
+backend                  local or ssh
+tool_paths               paths such as sstInfo, sst, gem5Binary
+environment              extra environment variables
+options                  plugin/tool-specific options
+host, port, username     SSH connection fields
+remote_setup_command     optional command such as module load sst/15.1.2
+```
+
+Secrets must not be stored in project settings.
+
 ## Canvas items
 
 The Qt graphics layer wraps model objects in visual items:
@@ -111,15 +180,94 @@ The Qt graphics layer wraps model objects in visual items:
 - `icon_path`
 - port items
 
+`ModelScene` manages:
+
+- Component node creation.
+- Unique default component names.
+- Link creation.
+- Link routing.
+- Model changed notifications.
+- Component-added notifications.
+
+`ModelView` handles drag/drop and converts viewport drop positions to scene/model coordinates with `mapToScene(...)`.
+
 ## Plugin catalog data
 
 Plugin catalog data describes available component types. It is not embedded wholesale into project files.
 
-For SST, catalog data lives in `sst_*` tables.
-
 Plugins translate catalog records into generic API objects:
 
+- `FrameworkTarget`
 - `PaletteItem`
 - `ConnectorDefinition`
 - `PropertyDefinition`
 - `ItemDetails`
+
+See [Component Metadata Reference](../reference/component-metadata.md).
+
+## Database-backed catalog data
+
+FUSE core owns only core tables such as:
+
+```text
+core_plugins
+core_schema_migrations
+```
+
+Plugins own plugin-prefixed tables.
+
+For SST:
+
+```text
+sst_framework_versions
+sst_info_runs
+sst_elements
+sst_components
+sst_parameters
+sst_ports
+sst_statistics
+sst_subcomp_slots
+```
+
+For gem5:
+
+```text
+gem5_framework_versions
+```
+
+Additional gem5 metadata tables may be added as the gem5 plugin evolves.
+
+## Model save/load flow
+
+Save:
+
+```text
+ModelScene + ModelView + ProjectSettings
+  -> build_project_dict(...)
+  -> validate_project_dict(...)
+  -> JSON .fse file
+```
+
+Load:
+
+```text
+JSON .fse file
+  -> validate_project_dict(...)
+  -> ProjectSettings.from_project_dict(...)
+  -> ComponentDefinition objects
+  -> ComponentNodeItem objects
+  -> ModelLink + ConnectionItem objects
+```
+
+## Dirty-state/change tracking
+
+The scene and main window cooperate to track model changes. Component additions, property edits, and project-setting changes notify the app that the project has changed and may need saving.
+
+Examples of edits that should mark the model dirty:
+
+- Dropping a new component.
+- Editing a component name.
+- Editing a component parameter.
+- Editing a link name or latency.
+- Creating or modifying a link.
+- Changing project settings.

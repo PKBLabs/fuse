@@ -1,6 +1,6 @@
 # gem5 Plugin
 
-The gem5 plugin is included in the community plugin tree as a placeholder for gem5 model-building support.
+The gem5 plugin provides FUSE integration for gem5-oriented model-building workflows.
 
 Plugin path:
 
@@ -10,7 +10,17 @@ fuse/plugins/community/gem5/
 
 ## Current status
 
-The current gem5 plugin can be discovered by the FUSE plugin runtime and initialized, but it does not yet provide a complete gem5 component catalog.
+The current gem5 plugin is no longer only a placeholder. It provides:
+
+- Plugin discovery through `plugin.toml`.
+- Built-in gem5 framework targets.
+- Built-in palette metadata for selected gem5 objects.
+- Parameter/property metadata for those objects.
+- Port metadata for those objects.
+- Local/SSH toolchain validation structure.
+- Live CI integration against gem5 container images.
+
+The gem5 plugin does not yet include a full automatic metadata importer equivalent to SST's `sst-info` flow.
 
 ## Manifest
 
@@ -18,22 +28,95 @@ The current gem5 plugin can be discovered by the FUSE plugin runtime and initial
 fuse/plugins/community/gem5/plugin.toml
 ```
 
-Example entry point:
+Entry point:
 
 ```toml
 [entry_points]
 register = "fuse.plugins.community.gem5.plugin:register_plugin"
 ```
 
-## Intended future responsibilities
+## Framework targets
 
-The gem5 plugin is expected to provide:
+The gem5 plugin currently creates built-in targets for:
 
-- gem5 component discovery.
-- gem5 parameter/property metadata.
-- gem5 model construction assistance.
-- gem5 configuration generation/export.
-- gem5 live integration tests.
+```text
+gem5 25.1.0.1
+gem5 24.1.0.3
+```
+
+These appear in Project Settings as target version/catalog choices.
+
+## Built-in component metadata
+
+The plugin currently includes built-in definitions for selected gem5 objects, such as:
+
+```text
+gem5.System
+gem5.TimingSimpleCPU
+gem5.SystemXBar
+gem5.DDR3_1600_8x8
+```
+
+Example palette item:
+
+```python
+PaletteItem(
+    plugin_id="gem5",
+    item_id="timing_simple_cpu",
+    display_name="gem5.TimingSimpleCPU (Component)",
+    type_name="TimingSimpleCPU",
+    element_name="gem5",
+    category="CPU",
+    description="TimingSimpleCPU SimObject for timing-mode gem5 models.",
+    raw_kind="Component",
+    target_label="gem5 25.1.0.1",
+    framework_version="25.1.0.1",
+)
+```
+
+Example details:
+
+```python
+ItemDetails(
+    palette_item=item,
+    connectors=[
+        ConnectorDefinition(name="icache_port", interface="request_port"),
+        ConnectorDefinition(name="dcache_port", interface="request_port"),
+    ],
+    properties=[
+        PropertyDefinition(name="numThreads", default_value="1", required=True),
+        PropertyDefinition(name="clock", default_value="2GHz", required=True),
+    ],
+)
+```
+
+## Toolchain validation
+
+Project Settings can point to a local or SSH gem5 executable.
+
+The main path is:
+
+```text
+gem5Binary
+```
+
+In CI containers this is typically:
+
+```text
+/opt/gem5/build/X86/gem5.opt
+```
+
+Some gem5 versions do not support `--version`, so health checks should use `--help` or a lightweight command that the selected gem5 version supports.
+
+## Database schema
+
+The gem5 plugin currently owns:
+
+```text
+gem5_framework_versions
+```
+
+Future versions may add plugin-owned metadata tables for imported SimObject schemas.
 
 ## Live tests
 
@@ -43,4 +126,19 @@ Tests requiring a real gem5 binary should be marked:
 @pytest.mark.gem5_live
 ```
 
-The CI workflow for these tests should use a gem5-capable Docker image or a self-hosted runner.
+The GitHub Actions gem5 integration workflow runs these tests in prebuilt images:
+
+```text
+ghcr.io/pkblabs/fuse-gem5-ci:gem5-v25.1.0.1
+ghcr.io/pkblabs/fuse-gem5-ci:gem5-v24.1.0.3
+```
+
+## Intended future responsibilities
+
+Future gem5 plugin work may include:
+
+- Broader gem5 SimObject metadata discovery.
+- gem5 parameter/property schema import.
+- gem5 model construction assistance.
+- gem5 configuration generation/export.
+- Richer gem5-specific validation.

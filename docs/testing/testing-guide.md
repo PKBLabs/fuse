@@ -66,19 +66,50 @@ Tests should set `FUSE_DB_PATH` to a temporary SQLite database. The root `confte
 
 ## What to test in core
 
-Core/app tests should cover:
+Core/app tests should cover generic FUSE behavior that is not specific to one simulator plugin:
 
 - Application launch/shutdown.
 - Main window construction.
 - Plugin discovery.
 - Database initialization.
 - Project save/load.
-- Routing.
+- Project settings save/load.
+- Component catalog/list behavior.
+- Population of the component palette from database/plugin metadata.
+- Handling of invalid plugin metadata and manifests.
+- Component drag payload serialization/deserialization.
+- Drag/drop behavior for creating component instances.
+- Conversion of drop positions into model scene coordinates.
+- Component addition callbacks/model outline updates.
+- Unique default component instance naming.
+- Properties panel generation from component metadata.
+- Display of correct parameter metadata for selected components.
+- Parameter input validation.
+- Required parameter validation.
+- Writing parameter edits back to the model.
+- Dirty-state tracking after edits.
+- Routing and link creation.
 - Validation.
-- Component palette.
-- Properties panel.
 - Splash screen.
 - About dialog.
+
+
+## Current core UI/metadata test areas
+
+The current core test suite includes coverage for component drag/drop, palette population, model-view drop creation, component instance naming, outline/dirty-state behavior, plugin metadata validation, and properties panel parameter editing.
+
+Representative files:
+
+```text
+fuse/tests/test_component_definition_drag.py
+fuse/tests/test_component_palette.py
+fuse/tests/test_model_view_component_drop.py
+fuse/tests/test_component_instance_naming_outline_dirty.py
+fuse/tests/test_plugin_metadata_validation.py
+fuse/tests/test_properties_panel_parameter_editing.py
+```
+
+Keep simulator-specific tests out of these core files. SST-specific behavior belongs under `fuse/plugins/community/sst/tests/`; gem5-specific behavior belongs under `fuse/plugins/community/gem5/tests/`.
 
 ## What to test in plugins
 

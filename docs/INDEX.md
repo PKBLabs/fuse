@@ -51,6 +51,7 @@ This documentation is organized by audience and topic.
 - [Command reference](reference/commands.md)
 - [Environment variables](reference/environment-variables.md)
 - [FUSE project file format](reference/fse-format.md)
+- [Component metadata reference](reference/component-metadata.md)
 - [Plugin manifest reference](reference/plugin-manifest.md)
 - [Plugin API reference](reference/plugin-api.md)
 - [Database table reference](reference/database-tables.md)
@@ -61,4 +62,5 @@ This documentation is organized by audience and topic.
 - [Example: build a simple model](examples/simple-model.md)
 - [Example: import SST metadata](examples/import-sst-metadata.md)
 - [Example: write a simple plugin](examples/write-a-plugin.md)
+- [Example: component definitions](examples/component-definitions.md)
 - [Example: troubleshoot validation issues](examples/validation-walkthrough.md)

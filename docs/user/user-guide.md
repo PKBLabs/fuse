@@ -12,14 +12,39 @@ The main window contains:
 - A dockable properties panel.
 - A status bar.
 
+## Projects and Project Settings
+
+FUSE projects are configured through:
+
+```text
+File -> New Project
+File -> Open Project
+File -> Project Settings
+```
+
+Project Settings define:
+
+- Project name.
+- Active framework/plugin.
+- Enabled plugins.
+- Target version/catalog for each enabled plugin.
+- Local or remote SSH execution environment.
+- Tool paths for enabled simulator/framework toolchains.
+
+Project-specific settings are saved in the `.fse` file. This lets one project target SST 15.1.2 while another targets SST 16.0.0 or gem5 25.1.0.1.
+
 ## Component palette
 
-The component palette lists components provided by enabled plugins. For the Community Edition, the included community plugin directories are:
+The component palette lists components provided by the active plugin and selected target/catalog.
+
+The Community Edition includes community plugin directories for:
 
 - `plugins/community/sst/`
 - `plugins/community/gem5/`
 
 The SST plugin populates palette items by reading SST metadata from `sst-info`, parsing it, storing it in `sst_*` database tables, and translating records into generic FUSE palette items.
+
+The gem5 plugin currently provides built-in metadata for supported gem5 objects such as `System`, `TimingSimpleCPU`, `SystemXBar`, and `DDR3_1600_8x8`.
 
 ## Adding a component to the model
 
@@ -27,7 +52,9 @@ The SST plugin populates palette items by reading SST metadata from `sst-info`, 
 2. Drag it into the model canvas.
 3. Drop it where you want the component instance to appear.
 
-A component instance appears as an architecture icon with ports. The exact ports come from plugin-provided item details. If no ports are available, FUSE falls back to basic `in` and `out` ports.
+When the component is dropped, FUSE converts the drop location into model coordinates, creates a component instance, assigns a unique default instance name, adds the node to the model, and marks the project dirty.
+
+A component instance appears as an architecture icon with ports. The exact ports come from plugin-provided item details. If no ports are available, FUSE may use fallback ports so the component remains usable.
 
 ## Selecting a component
 
@@ -37,7 +64,9 @@ The properties panel updates to show:
 
 - Instance name.
 - Component kind.
-- Source plugin/type metadata.
+- Element/category/type metadata.
+- Target/catalog metadata.
+- Framework version.
 - Icon path.
 - Parameters.
 
@@ -53,7 +82,7 @@ Common editable fields include:
 - `Icon Path`
 - Parameter values
 
-The component instance name must be unique within the model.
+The component instance name must be unique within the model. Parameter edits are written back to the component instance and saved in the `.fse` project file.
 
 ## Creating links
 
@@ -85,6 +114,21 @@ The selected link is highlighted.
 
 Click a component instance to highlight links attached to that component. This helps identify link ownership in dense models.
 
+## Validating a model
+
+FUSE validates generic model rules before save/export workflows.
+
+Current validation checks include:
+
+- Empty component names.
+- Duplicate component names.
+- Empty link names.
+- Duplicate link names.
+- Missing required component parameters.
+- Missing link latency.
+
+Project Settings also validates configured toolchains for enabled plugins.
+
 ## Saving a project
 
 Use:
@@ -113,14 +157,23 @@ File -> Open...
 
 The project loader restores:
 
+- Project settings.
+- Active plugin/target selection.
 - Component instances.
 - Instance names.
 - Component plugin IDs.
+- Framework target metadata.
 - Instance parameters.
 - Positions.
 - Links.
 - Link latency.
 - Icon paths.
+
+## Exporting simulator-specific output
+
+A `.fse` file is FUSE's native project format. Simulator-specific exports are generated separately.
+
+For SST, FUSE can export the current model to SST JSON configuration format. The generated SST JSON file is intended for SST, while the `.fse` file remains the editable FUSE project.
 
 ## About dialog
 
@@ -131,3 +184,10 @@ Help -> About FUSE
 ```
 
 The About dialog shows version, edition, licensing, copyright, and plugin policy summary information.
+
+## More documentation
+
+- [Model Editor Workflow](model-editor-workflow.md)
+- [Properties and Validation](properties-and-validation.md)
+- [Project Files](project-files.md)
+- [Component Metadata Reference](../reference/component-metadata.md)
