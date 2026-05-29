@@ -24,6 +24,8 @@ from PySide6.QtWidgets import (
 
 from fuse.core.ui.graphics_items import ComponentNodeItem, ConnectionItem, PortItem
 from fuse.core.model.models import ModelLink
+from fuse.core.plugin_runtime.manager import get_plugin_by_id
+from fuse.plugin_api.interfaces import LinkCompatibilityResult, LinkEndpoint
 
 
 class ModelScene(QGraphicsScene):
@@ -37,6 +39,8 @@ class ModelScene(QGraphicsScene):
         self._next_link_id = 1
         self.model_changed_callback = None
         self.component_added_callback = None
+        self.active_plugin_id: str | None = None
+        self.selected_connection: Optional[ConnectionItem] = None
 
         # Link routing is relatively expensive. A component drag can generate
         # hundreds of ItemPositionHasChanged events per second. During drag we
@@ -107,6 +111,8 @@ class ModelScene(QGraphicsScene):
         return None
 
     def clear_link_highlights(self):
+        self.selected_connection = None
+
         for connection in self.connection_items():
             connection.set_highlighted(False)
 
@@ -122,6 +128,7 @@ class ModelScene(QGraphicsScene):
 
     def select_link(self, connection: ConnectionItem):
         self.clear_link_highlights()
+        self.selected_connection = connection
         connection.set_highlighted(True)
 
         if self.properties_panel is not None:
@@ -238,42 +245,184 @@ class ModelScene(QGraphicsScene):
         for connection in sorted(affected, key=lambda item: item.link.link_id):
             connection.update_position()
 
+    def endpoint_for_port(self, port: PortItem) -> LinkEndpoint:
+        return LinkEndpoint(
+            component_name=port.node.instance_name,
+            port_name=port.name,
+            port_metadata=getattr(port, "metadata", {}) or {},
+        )
+
+    def default_link_name(self, source_port: PortItem, target_port: PortItem) -> str:
+        base = f"lnk_{source_port.node.instance_name}_{target_port.node.instance_name}"
+        base = "".join(ch if ch.isalnum() or ch == "_" else "_" for ch in base)
+
+        existing = {link.name for link in self.links}
+
+        if base not in existing:
+            return base
+
+        index = 1
+        while f"{base}_{index}" in existing:
+            index += 1
+
+        return f"{base}_{index}"
+
+    def check_link_compatibility(
+            self,
+            source_port: PortItem,
+            target_port: PortItem,
+    ) -> LinkCompatibilityResult:
+        plugin_id = self.active_plugin_id or getattr(source_port.node.component, "plugin_id", "")
+
+        if not plugin_id:
+            return LinkCompatibilityResult()
+
+        try:
+            plugin = get_plugin_by_id(plugin_id)
+        except Exception:
+            return LinkCompatibilityResult()
+
+        if not hasattr(plugin, "check_link_compatibility"):
+            return LinkCompatibilityResult()
+
+        return plugin.check_link_compatibility(
+            self.endpoint_for_port(source_port),
+            self.endpoint_for_port(target_port),
+        )
+
+    def confirm_link_compatibility_warning(self, result: LinkCompatibilityResult) -> bool:
+        response = QMessageBox.warning(
+            None,
+            result.title or "Link Compatibility Warning",
+            result.message or "The selected ports may not be compatible. Create the link anyway?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+
+        return response == QMessageBox.Yes
+
+    def clear_port_compatibility_highlights(self):
+        for node in self.component_items():
+            for port in node.ports:
+                port.set_compatibility_highlight("")
+
+    def highlight_compatible_ports(self, source_port: PortItem):
+        for node in self.component_items():
+            for port in node.ports:
+                if port is source_port or port.is_connected():
+                    continue
+
+                result = self.check_link_compatibility(source_port, port)
+
+                if result.severity == "ok":
+                    port.set_compatibility_highlight("compatible")
+                elif result.severity == "warning":
+                    port.set_compatibility_highlight("warning")
+                elif result.severity == "error":
+                    port.set_compatibility_highlight("incompatible")
+
+    def create_link_between_ports(
+            self,
+            source_port: PortItem,
+            target_port: PortItem,
+            compatibility: LinkCompatibilityResult,
+    ) -> ConnectionItem:
+        link_id = self._next_link_id
+        self._next_link_id += 1
+
+        link = ModelLink(
+            link_id=link_id,
+            name=self.default_link_name(source_port, target_port),
+            source_node_id=source_port.node.node_id,
+            source_component_name=source_port.node.instance_name,
+            source_port=source_port.name,
+            target_node_id=target_port.node.node_id,
+            target_component_name=target_port.node.instance_name,
+            target_port=target_port.name,
+            source_latency="1ns",
+            target_latency="1ns",
+            link_type="point_to_point",
+            plugin_id=self.active_plugin_id or getattr(source_port.node.component, "plugin_id", ""),
+            compatibility_severity=compatibility.severity,
+            compatibility_code=compatibility.code,
+            compatibility_message=compatibility.message,
+            plugin_metadata={},
+        )
+
+        self.links.append(link)
+
+        connection = ConnectionItem(link, source_port, target_port)
+        self.addItem(connection)
+        connection.update_position()
+        self.select_link(connection)
+        self.notify_model_changed()
+
+        return connection
+
+    def delete_link(self, connection: ConnectionItem):
+        if connection.link in self.links:
+            self.links.remove(connection.link)
+
+        for port in (connection.source_port, connection.target_port):
+            if connection in port.connections:
+                port.connections.remove(connection)
+            port.update_connection_state()
+
+        self.removeItem(connection)
+
+        if self.selected_connection is connection:
+            self.selected_connection = None
+
+        if self.properties_panel is not None:
+            self.properties_panel.show_empty()
+
+        self.notify_model_changed()
+
     def port_clicked(self, port: PortItem):
-        """
-        Two-click connection behavior:
-        - click source port
-        - click target port
-        - create a persistent SST-style link entity and a visual line
-
-        Important SST modeling rule for this editor:
-        one port can be connected to at most one other port. Therefore a link is
-        a 1-to-1 relationship between exactly two currently-unconnected ports.
-        """
-        if self.pending_source_port is None:
-            if port.is_connected():
-                QMessageBox.information(
-                    None,
-                    "Port Already Connected",
-                    f"Port '{port.name}' is already connected to a link.",
-                )
-                return
-
-            self.begin_connection(port)
+        if port.is_connected():
             return
 
-        if port is self.pending_source_port:
+        if self.pending_source_port is None:
+            self.pending_source_port = port
+            self.clear_port_compatibility_highlights()
+            self.highlight_compatible_ports(port)
+
+            self.pending_line = QGraphicsLineItem()
+            self.pending_line.setPen(QPen(QColor("#2f80ed"), 2, Qt.DashLine))
+            self.addItem(self.pending_line)
+            return
+
+        source_port = self.pending_source_port
+        target_port = port
+
+        if source_port is target_port:
             self.cancel_pending_connection()
             return
 
-        if port.is_connected():
-            QMessageBox.information(
-                None,
-                "Port Already Connected",
-                f"Port '{port.name}' is already connected to a link.",
-            )
+        if target_port.is_connected():
+            self.cancel_pending_connection()
             return
 
-        self.finish_connection(port)
+        compatibility = self.check_link_compatibility(source_port, target_port)
+
+        if compatibility.severity == "error" or not compatibility.can_create:
+            QMessageBox.critical(
+                None,
+                compatibility.title or "Cannot Create Link",
+                compatibility.message or "The selected ports cannot be linked.",
+            )
+            self.cancel_pending_connection()
+            return
+
+        if compatibility.severity == "warning":
+            if not self.confirm_link_compatibility_warning(compatibility):
+                self.cancel_pending_connection()
+                return
+
+        self.cancel_pending_visual_line_only()
+        self.clear_port_compatibility_highlights()
+        self.create_link_between_ports(source_port, target_port, compatibility)
+        self.pending_source_port = None
 
     def begin_connection(self, source_port: PortItem):
         self.cancel_pending_connection()
@@ -366,6 +515,16 @@ class ModelScene(QGraphicsScene):
     def cancel_pending_connection(self):
         self.cancel_pending_visual_line_only()
         self.pending_source_port = None
+        self.clear_port_compatibility_highlights()
+
+    def keyPressEvent(self, event):
+        if event.key() in (Qt.Key_Delete, Qt.Key_Backspace):
+            if self.selected_connection is not None:
+                self.delete_link(self.selected_connection)
+                event.accept()
+                return
+
+        super().keyPressEvent(event)
 
     def mouseMoveEvent(self, event):
         if self.pending_line is not None and self.pending_source_port is not None:

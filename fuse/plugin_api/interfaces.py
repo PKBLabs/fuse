@@ -62,6 +62,35 @@ class PropertyDefinition:
 
 
 @dataclass
+class LinkEndpoint:
+    component_name: str
+    port_name: str
+    port_metadata: dict = field(default_factory=dict)
+
+
+@dataclass
+class LinkCompatibilityResult:
+    can_create: bool = True
+    severity: str = "ok"  # ok, warning, error
+    title: str = ""
+    message: str = ""
+    code: str = ""
+    visual_indicator: str = ""  # "", warning, error
+
+    @property
+    def is_ok(self) -> bool:
+        return self.severity == "ok"
+
+    @property
+    def is_warning(self) -> bool:
+        return self.severity == "warning"
+
+    @property
+    def is_error(self) -> bool:
+        return self.severity == "error"
+
+
+@dataclass
 class ItemDetails:
     palette_item: PaletteItem
     connectors: list[ConnectorDefinition] = field(default_factory=list)
@@ -96,4 +125,14 @@ class FusePlugin(Protocol):
         ...
 
     def import_metadata_for_toolchain(self, plugin_settings) -> None:
+        ...
+
+    def check_link_compatibility(
+        self,
+        source: LinkEndpoint,
+        target: LinkEndpoint,
+    ) -> LinkCompatibilityResult:
+        ...
+
+    def validate_links(self, scene) -> list:
         ...

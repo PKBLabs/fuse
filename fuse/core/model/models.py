@@ -139,16 +139,49 @@ class ComponentDefinition:
 @dataclass
 class ModelLink:
     """
-    One point-to-point or bus-like link in the model.
+    One point-to-point link in the model.
+
+    Core FUSE treats links generically. Plugins may interpret endpoint metadata
+    and plugin_metadata to provide framework-specific behavior.
     """
 
     link_id: int
     name: str
-    latency: str
     source_node_id: int
     source_component_name: str
     source_port: str
     target_node_id: int
     target_component_name: str
     target_port: str
+    source_latency: str = "1ns"
+    target_latency: str = "1ns"
     link_type: str = "point_to_point"
+    plugin_id: str = ""
+    compatibility_severity: str = "ok"
+    compatibility_code: str = ""
+    compatibility_message: str = ""
+    plugin_metadata: dict | None = None
+
+    @property
+    def latency(self) -> str:
+        """
+        Backward-compatible single-latency view.
+
+        Older code/files used one latency. If both endpoint latencies are equal,
+        this returns that value. Otherwise it returns the source endpoint latency.
+        """
+        return self.source_latency or self.target_latency or "1ns"
+
+    @latency.setter
+    def latency(self, value: str) -> None:
+        value = str(value or "1ns").strip() or "1ns"
+        self.source_latency = value
+        self.target_latency = value
+
+    @property
+    def has_warning(self) -> bool:
+        return self.compatibility_severity == "warning"
+
+    @property
+    def has_error(self) -> bool:
+        return self.compatibility_severity == "error"

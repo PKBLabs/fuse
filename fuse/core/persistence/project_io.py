@@ -57,6 +57,15 @@ def model_link_to_save_dict(link: ModelLink) -> dict:
         "id": link.link_id,
         "name": link.name,
         "latency": link.latency,
+        "sourceLatency": getattr(link, "source_latency", link.latency),
+        "targetLatency": getattr(link, "target_latency", link.latency),
+        "pluginId": getattr(link, "plugin_id", ""),
+        "compatibility": {
+            "severity": getattr(link, "compatibility_severity", "ok"),
+            "code": getattr(link, "compatibility_code", ""),
+            "message": getattr(link, "compatibility_message", ""),
+        },
+        "pluginMetadata": getattr(link, "plugin_metadata", {}) or {},
         "type": link.link_type,
         "source": {
             "nodeId": link.source_node_id,
@@ -227,10 +236,12 @@ def load_project_into_scene(project: dict, scene: ModelScene) -> None:
         link_id = int(link_data["id"])
         max_link_id = max(max_link_id, link_id)
 
+        legacy_latency = link_data.get("latency", "1ns")
+        compatibility = link_data.get("compatibility", {}) or {}
+
         link = ModelLink(
             link_id=link_id,
             name=link_data.get("name", f"link_{link_id}"),
-            latency=link_data.get("latency", "1ns"),
             source_node_id=source_node_id,
             source_component_name=source.get(
                 "componentName",
@@ -243,7 +254,14 @@ def load_project_into_scene(project: dict, scene: ModelScene) -> None:
                 nodes_by_id[target_node_id].instance_name,
             ),
             target_port=target_port_name,
+            source_latency=link_data.get("sourceLatency", legacy_latency),
+            target_latency=link_data.get("targetLatency", legacy_latency),
             link_type=link_data.get("type", "point_to_point"),
+            plugin_id=link_data.get("pluginId", ""),
+            compatibility_severity=compatibility.get("severity", "ok"),
+            compatibility_code=compatibility.get("code", ""),
+            compatibility_message=compatibility.get("message", ""),
+            plugin_metadata=link_data.get("pluginMetadata", {}) or {},
         )
 
         scene.links.append(link)

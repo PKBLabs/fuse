@@ -59,12 +59,13 @@ class PortItem(QGraphicsEllipseItem):
     LABEL_SCALE = 1.0
 
     def __init__(
-        self,
-        node: "ComponentNodeItem",
-        name: str,
-        x: float,
-        y: float,
-        side: str = "right",
+            self,
+            node: "ComponentNodeItem",
+            name: str,
+            x: float,
+            y: float,
+            side: str = "right",
+            metadata: dict | None = None,
     ):
         super().__init__(
             -self.RADIUS,
@@ -77,6 +78,12 @@ class PortItem(QGraphicsEllipseItem):
         self.node = node
         self.name = name
         self.side = side if side in VALID_PORT_SIDES else "right"
+        self.metadata = metadata or {}
+        self.interface = (
+                self.metadata.get("iface", "")
+                or self.metadata.get("interface", "")
+                or ""
+        )
         self.connections: list[ConnectionItem] = []
 
         self.setPos(x, y)
@@ -84,7 +91,10 @@ class PortItem(QGraphicsEllipseItem):
         self.setPen(QPen(QColor("#1f4e79"), 1))
         self.setFlag(QGraphicsItem.ItemSendsScenePositionChanges, True)
         self.setAcceptHoverEvents(True)
-        self.setToolTip(f"Port: {name}")
+        tooltip = f"Port: {name}"
+        if self.interface:
+            tooltip += f"\nInterface: {self.interface}"
+        self.setToolTip(tooltip)
         self.setZValue(10)
 
         self.label = QGraphicsTextItem(name, node)
@@ -147,16 +157,37 @@ class PortItem(QGraphicsEllipseItem):
     def update_connection_state(self):
         if self.is_connected():
             self.setBrush(QBrush(QColor("#6b7280")))
-            self.setToolTip(f"Port: {self.name}\nConnected")
+            self.setToolTip(f"⚠ Port Occupied\n{self.name}")
         else:
             self.setBrush(QBrush(QColor("#2f80ed")))
-            self.setToolTip(f"Port: {self.name}")
+            tooltip = f"Port: {self.name}"
+            if self.interface:
+                tooltip += f"\nInterface: {self.interface}"
+            self.setToolTip(tooltip)
 
     def mousePressEvent(self, event):
         scene = self.scene()
         if scene is not None and hasattr(scene, "port_clicked"):
             scene.port_clicked(self)
         event.accept()
+
+    def set_compatibility_highlight(self, state: str = ""):
+        if self.is_connected():
+            self.update_connection_state()
+            return
+
+        if state == "compatible":
+            self.setBrush(QBrush(QColor("#22c55e")))
+            self.setPen(QPen(QColor("#15803d"), 2))
+        elif state == "warning":
+            self.setBrush(QBrush(QColor("#f59e0b")))
+            self.setPen(QPen(QColor("#b45309"), 2))
+        elif state == "incompatible":
+            self.setBrush(QBrush(QColor("#ef4444")))
+            self.setPen(QPen(QColor("#b91c1c"), 2))
+        else:
+            self.setPen(QPen(QColor("#1f4e79"), 1))
+            self.update_connection_state()
 
 
 class ConnectionItem(QGraphicsPathItem):
@@ -186,6 +217,8 @@ class ConnectionItem(QGraphicsPathItem):
 
         self.base_color = QColor("#38bdf8")
         self.highlight_color = QColor("#f59e0b")
+        self.warning_color = QColor("#f59e0b")
+        self.error_color = QColor("#ef4444")
 
         self.setPen(QPen(self.base_color, 2))
         self.setZValue(5)
@@ -206,8 +239,13 @@ class ConnectionItem(QGraphicsPathItem):
             f"{self.link.name}\n"
             f"{self.link.source_component_name}.{self.link.source_port} -> "
             f"{self.link.target_component_name}.{self.link.target_port}\n"
-            f"latency: {self.link.latency}"
+            f"source latency: {self.link.source_latency}\n"
+            f"target latency: {self.link.target_latency}"
         )
+
+        if getattr(self.link, "compatibility_severity", "ok") != "ok":
+            tooltip += f"\n\n⚠ {self.link.compatibility_message}"
+
         self.setToolTip(tooltip)
 
     def mousePressEvent(self, event):
@@ -397,12 +435,19 @@ class ConnectionItem(QGraphicsPathItem):
     def is_connected_to_node(self, node: "ComponentNodeItem") -> bool:
         return self.source_port.node is node or self.target_port.node is node
 
+    def link_base_color(self) -> QColor:
+        if getattr(self.link, "compatibility_severity", "ok") == "error":
+            return self.error_color
+        if getattr(self.link, "compatibility_severity", "ok") == "warning":
+            return self.warning_color
+        return self.base_color
+
     def set_highlighted(self, highlighted: bool):
         if highlighted:
             self.setPen(QPen(self.highlight_color, 4))
             self.setZValue(20)
         else:
-            self.setPen(QPen(self.base_color, 2))
+            self.setPen(QPen(self.link_base_color(), 2))
             self.setZValue(5)
 
     def segment_intersects_rect(self, a: QPointF, b: QPointF, rect) -> bool:
@@ -664,7 +709,16 @@ class ComponentNodeItem(QGraphicsRectItem):
         for port_name in desired_names:
             if port_name not in existing_by_name:
                 side = self.preferred_side_for_port(port_name)
-                self.ports.append(PortItem(self, port_name, 0, 0, side=side))
+                self.ports.append(
+                    PortItem(
+                        self,
+                        port_name,
+                        0,
+                        0,
+                        side=side,
+                        metadata=self.metadata_for_expanded_port(port_name),
+                    )
+                )
 
         self.layout_ports(desired_names)
         return True, ""
@@ -1041,3 +1095,21 @@ class ComponentNodeItem(QGraphicsRectItem):
             self.icon_item = None
 
         self.add_icon()
+
+    def metadata_for_expanded_port(self, port_name: str) -> dict:
+        for template in self.port_templates:
+            if not bool(template.get("is_variable")):
+                if template.get("name") == port_name:
+                    return dict(template)
+                continue
+
+            base_name = template.get("base_name", "") or template.get("name", "")
+
+            if port_name.startswith(base_name):
+                suffix = port_name[len(base_name):]
+                if suffix.isdigit():
+                    metadata = dict(template)
+                    metadata["expanded_name"] = port_name
+                    return metadata
+
+        return {}

@@ -262,11 +262,13 @@ class MainWindow(QMainWindow):
         if active is None or not active.enabled:
             self.active_plugin_id = None
             self.active_target_id = None
+            self.scene.active_plugin_id = None
             self.palette.set_active_target(None, None)
             return
 
         self.active_plugin_id = active.plugin_id
         self.active_target_id = active.target_id
+        self.scene.active_plugin_id = active.plugin_id
 
         self.palette.set_active_target(active.plugin_id, active.target_id)
 
