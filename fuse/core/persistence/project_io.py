@@ -15,10 +15,10 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fuse.core.ui.graphics_items import ComponentNodeItem, ConnectionItem
+from fuse.core.ui.graphics_items import ComponentNodeItem, ConnectionItem, SubcompAttachmentItem
 from fuse.core.ui.model_scene import ModelScene
 from fuse.core.ui.model_view import ModelView
-from fuse.core.model.models import ComponentDefinition, ModelLink, SCHEMA_VERSION
+from fuse.core.model.models import ComponentDefinition, ModelLink, ModelSubcompAttachment, SCHEMA_VERSION
 from fuse.core.model.project_settings import ProjectSettings
 
 
@@ -80,6 +80,31 @@ def model_link_to_save_dict(link: ModelLink) -> dict:
     }
 
 
+def subcomp_attachment_to_save_dict(attachment: ModelSubcompAttachment) -> dict:
+    return {
+        "id": attachment.attachment_id,
+        "name": attachment.name,
+        "pluginId": getattr(attachment, "plugin_id", ""),
+        "parent": {
+            "nodeId": attachment.parent_node_id,
+            "componentName": attachment.parent_component_name,
+            "slotName": attachment.slot_name,
+        },
+        "child": {
+            "nodeId": attachment.child_node_id,
+            "componentName": attachment.child_component_name,
+        },
+        "requiredInterface": attachment.required_interface,
+        "providedInterface": attachment.provided_interface,
+        "compatibility": {
+            "severity": attachment.compatibility_severity,
+            "code": attachment.compatibility_code,
+            "message": attachment.compatibility_message,
+        },
+        "pluginMetadata": getattr(attachment, "plugin_metadata", {}) or {},
+    }
+
+
 def build_project_dict(
     scene: ModelScene,
     model_view: ModelView,
@@ -123,6 +148,13 @@ def build_project_dict(
         "links": [
             model_link_to_save_dict(link)
             for link in sorted(scene.links, key=lambda item: item.link_id)
+        ],
+        "subcompAttachments": [
+            subcomp_attachment_to_save_dict(attachment)
+            for attachment in sorted(
+                getattr(scene, "subcomp_attachments", []),
+                key=lambda item: item.attachment_id,
+            )
         ],
         "editor": {
             "sceneRect": {
@@ -270,4 +302,77 @@ def load_project_into_scene(project: dict, scene: ModelScene) -> None:
         connection.update_position()
 
     scene._next_link_id = max_link_id + 1
+
+    max_attachment_id = 0
+
+    for attachment_data in project.get("subcompAttachments", []):
+        parent = attachment_data.get("parent", {})
+        child = attachment_data.get("child", {})
+
+        parent_node_id = int(parent["nodeId"])
+        child_node_id = int(child["nodeId"])
+        slot_name = parent["slotName"]
+
+        slot_connector = scene.find_subcomp_connector(
+            parent_node_id,
+            slot_name,
+            role="slot",
+        )
+        interface_connector = scene.find_subcomp_connector(
+            child_node_id,
+            child.get("connectorName", ""),
+            role="interface",
+        )
+
+        if interface_connector is None:
+            for candidate in getattr(nodes_by_id[child_node_id], "subcomp_connectors", []):
+                if getattr(candidate, "role", "") == "interface":
+                    interface_connector = candidate
+                    break
+
+        if slot_connector is None:
+            raise ValueError(
+                f"Could not restore subcomponent attachment {attachment_data.get('name')}: "
+                f"missing parent slot {parent_node_id}.{slot_name}"
+            )
+
+        if interface_connector is None:
+            raise ValueError(
+                f"Could not restore subcomponent attachment {attachment_data.get('name')}: "
+                f"missing child interface connector for node {child_node_id}"
+            )
+
+        attachment_id = int(attachment_data["id"])
+        max_attachment_id = max(max_attachment_id, attachment_id)
+        compatibility = attachment_data.get("compatibility", {}) or {}
+
+        attachment = ModelSubcompAttachment(
+            attachment_id=attachment_id,
+            name=attachment_data.get("name", f"subcomp_attachment_{attachment_id}"),
+            parent_node_id=parent_node_id,
+            parent_component_name=parent.get(
+                "componentName",
+                nodes_by_id[parent_node_id].instance_name,
+            ),
+            slot_name=slot_name,
+            child_node_id=child_node_id,
+            child_component_name=child.get(
+                "componentName",
+                nodes_by_id[child_node_id].instance_name,
+            ),
+            required_interface=attachment_data.get("requiredInterface", ""),
+            provided_interface=attachment_data.get("providedInterface", ""),
+            compatibility_severity=compatibility.get("severity", "ok"),
+            compatibility_code=compatibility.get("code", ""),
+            compatibility_message=compatibility.get("message", ""),
+            plugin_id=attachment_data.get("pluginId", ""),
+            plugin_metadata=attachment_data.get("pluginMetadata", {}) or {},
+        )
+
+        scene.subcomp_attachments.append(attachment)
+        item = SubcompAttachmentItem(attachment, slot_connector, interface_connector)
+        scene.addItem(item)
+        item.update_position()
+
+    scene._next_subcomp_attachment_id = max_attachment_id + 1
     scene.reroute_all_links()

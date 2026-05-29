@@ -147,8 +147,57 @@ def build_sst_component(node) -> dict[str, Any]:
     return component
 
 
-def _link_latency(link) -> str:
-    latency = getattr(link, "latency", "") or DEFAULT_LINK_LATENCY
+def build_sst_component_tree(
+    node,
+    attachments_by_parent_id: dict[int, list],
+    nodes_by_id: dict[int, object],
+) -> dict[str, Any]:
+    """
+    Build a component/subcomponent tree for SST JSON export.
+
+    Attached child subcomponents are nested under their parent with the slot
+    name that should be used by SST's subcomponent assignment mechanism.
+    """
+    component = build_sst_component(node)
+    children = []
+
+    for attachment in attachments_by_parent_id.get(node.node_id, []):
+        child = nodes_by_id.get(attachment.child_node_id)
+        if child is None:
+            raise SSTJsonExportError(
+                f"Cannot export subcomponent attachment '{attachment.name}': "
+                f"missing child node {attachment.child_node_id}."
+            )
+
+        child_json = build_sst_component_tree(
+            child,
+            attachments_by_parent_id,
+            nodes_by_id,
+        )
+        child_json["slot_name"] = attachment.slot_name
+        children.append(child_json)
+
+    if children:
+        component["subcomponents"] = children
+
+    return component
+
+
+def _source_link_latency(link) -> str:
+    latency = (
+        getattr(link, "source_latency", "")
+        or getattr(link, "latency", "")
+        or DEFAULT_LINK_LATENCY
+    )
+    return str(latency).strip() or DEFAULT_LINK_LATENCY
+
+
+def _target_link_latency(link) -> str:
+    latency = (
+        getattr(link, "target_latency", "")
+        or getattr(link, "latency", "")
+        or DEFAULT_LINK_LATENCY
+    )
     return str(latency).strip() or DEFAULT_LINK_LATENCY
 
 
@@ -162,7 +211,8 @@ def build_sst_link(link) -> dict[str, Any]:
     bus/export rule.
     """
     name = getattr(link, "name", "") or f"link_{getattr(link, 'link_id', '')}"
-    latency = _link_latency(link)
+    source_latency = _source_link_latency(link)
+    target_latency = _target_link_latency(link)
 
     source_component = getattr(link, "source_component_name", "") or ""
     source_port = getattr(link, "source_port", "") or ""
@@ -192,12 +242,12 @@ def build_sst_link(link) -> dict[str, Any]:
         "left": {
             "component": source_component,
             "port": source_port,
-            "latency": latency,
+            "latency": source_latency,
         },
         "right": {
             "component": target_component,
             "port": target_port,
-            "latency": latency,
+            "latency": target_latency,
         },
     }
 
@@ -215,9 +265,23 @@ def build_sst_json_dict(
     This is intentionally separate from writing the file so tests can assert
     on the generated dictionary directly.
     """
+    nodes = scene.component_items()
+    nodes_by_id = {node.node_id: node for node in nodes}
+
+    attachments = list(getattr(scene, "subcomp_attachments", []))
+    attached_child_ids = {attachment.child_node_id for attachment in attachments}
+    attachments_by_parent_id: dict[int, list] = {}
+
+    for attachment in attachments:
+        attachments_by_parent_id.setdefault(
+            attachment.parent_node_id,
+            [],
+        ).append(attachment)
+
     components = [
-        build_sst_component(node)
-        for node in scene.component_items()
+        build_sst_component_tree(node, attachments_by_parent_id, nodes_by_id)
+        for node in nodes
+        if node.node_id not in attached_child_ids
     ]
 
     links = [

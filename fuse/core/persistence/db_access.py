@@ -78,8 +78,9 @@ def load_component_definitions(
                 component_id=item.item_id,
                 element=getattr(item, "element_name", "") or item.category,
                 name=item.type_name,
+                is_subcomp=1 if getattr(item, "raw_kind", "") == "SubComponent" else 0,
                 category=item.category,
-                iface="",
+                iface=getattr(item, "iface", "") or "",
                 icon_path=item.icon_path,
                 display_name_override=item.display_name,
             )
@@ -115,6 +116,27 @@ def load_port_names_for_component(
     target_id: str | None = None,
 ) -> list[str]:
     return [port["name"] for port in load_port_metadata_for_component(plugin_id, component_id, target_id)]
+
+
+def load_subcomp_connector_metadata_for_component(
+    plugin_id: str,
+    component_id: str,
+    target_id: str | None = None,
+) -> list[dict]:
+    details = load_item_details(plugin_id, component_id, target_id=target_id)
+
+    return [
+        {
+            "name": connector.name,
+            "role": getattr(connector, "role", ""),
+            "description": getattr(connector, "description", ""),
+            "required_interface": getattr(connector, "required_interface", ""),
+            "provided_interface": getattr(connector, "provided_interface", ""),
+            "interface": getattr(connector, "interface", ""),
+            "iface": getattr(connector, "interface", ""),
+        }
+        for connector in getattr(details, "subcomp_connectors", [])
+    ]
 
 
 def get_component_details(
@@ -154,6 +176,18 @@ def get_component_details(
                 "default_count": int(getattr(conn, "default_count", 1) or 1),
             }
             for conn in details.connectors
+        ],
+        "subcomp_connectors": [
+            {
+                "name": conn.name,
+                "role": getattr(conn, "role", ""),
+                "description": getattr(conn, "description", ""),
+                "required_interface": getattr(conn, "required_interface", ""),
+                "provided_interface": getattr(conn, "provided_interface", ""),
+                "interface": getattr(conn, "interface", ""),
+                "iface": getattr(conn, "interface", ""),
+            }
+            for conn in getattr(details, "subcomp_connectors", [])
         ],
         "statistics": details.statistics,
         "subcomponent_slots": [],

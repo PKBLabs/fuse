@@ -39,6 +39,7 @@ class PaletteItem:
     target_id: str = ""
     target_label: str = ""
     framework_version: str = ""
+    iface: str = ""
 
 
 @dataclass
@@ -50,6 +51,23 @@ class ConnectorDefinition:
     base_name: str = ""
     count_parameter: str = ""
     default_count: int = 1
+
+
+@dataclass
+class SubcompConnectorDefinition:
+    """
+    Plugin-defined endpoint used to attach SubComponents to parent slots.
+
+    These connectors are not normal link ports and must not export as
+    Link.connect() endpoints.
+    """
+
+    name: str
+    role: str  # slot or interface
+    description: str = ""
+    required_interface: str = ""
+    provided_interface: str = ""
+    interface: str = ""
 
 
 @dataclass
@@ -94,6 +112,7 @@ class LinkCompatibilityResult:
 class ItemDetails:
     palette_item: PaletteItem
     connectors: list[ConnectorDefinition] = field(default_factory=list)
+    subcomp_connectors: list[SubcompConnectorDefinition] = field(default_factory=list)
     properties: list[PropertyDefinition] = field(default_factory=list)
     statistics: list[dict] = field(default_factory=list)
 

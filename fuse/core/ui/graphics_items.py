@@ -16,10 +16,11 @@ from __future__ import annotations
 from typing import Optional
 
 from PySide6.QtCore import Qt, QPointF
-from PySide6.QtGui import QBrush, QColor, QCursor, QPainterPath, QPen, QPixmap
+from PySide6.QtGui import QBrush, QColor, QCursor, QPainterPath, QPen, QPixmap, QPolygonF
 from PySide6.QtWidgets import (
     QGraphicsEllipseItem,
     QGraphicsItem,
+    QGraphicsPolygonItem,
     QGraphicsPathItem,
     QGraphicsPixmapItem,
     QGraphicsRectItem,
@@ -27,10 +28,11 @@ from PySide6.QtWidgets import (
     QMenu,
 )
 
-from fuse.core.model.models import ComponentDefinition, ModelLink
+from fuse.core.model.models import ComponentDefinition, ModelLink, ModelSubcompAttachment
 from fuse.core.persistence.db_access import (
     load_port_metadata_for_component,
     load_port_names_for_component,
+    load_subcomp_connector_metadata_for_component,
 )
 from fuse.core.resource_paths import resolve_icon_path
 from fuse.core.routing.routing import (
@@ -460,6 +462,202 @@ class ConnectionItem(QGraphicsPathItem):
         return segment_intersects_rect(a, b, rect)
 
 
+
+class SubcompConnectorItem(QGraphicsPolygonItem):
+    """
+    Visual endpoint used to attach SST SubComponents to parent slots.
+
+    This is not a normal Link.connect() port. A subcomp_connector creates a
+    ModelSubcompAttachment and exports as a native SST subcomponent assignment.
+    """
+
+    SIZE = 12.0
+    EDGE_GAP = 12.0
+    LABEL_GAP = 8.0
+    LABEL_SCALE = 0.78
+
+    def __init__(
+        self,
+        node: "ComponentNodeItem",
+        name: str,
+        role: str,
+        metadata: dict | None = None,
+    ):
+        half = self.SIZE / 2.0
+        polygon = QPolygonF(
+            [
+                QPointF(0.0, -half),
+                QPointF(half, 0.0),
+                QPointF(0.0, half),
+                QPointF(-half, 0.0),
+            ]
+        )
+        super().__init__(polygon, node)
+
+        self.node = node
+        self.name = name
+        self.role = role
+        self.metadata = metadata or {}
+
+        interface = (
+            self.metadata.get("required_interface", "")
+            or self.metadata.get("provided_interface", "")
+            or self.metadata.get("iface", "")
+            or self.metadata.get("interface", "")
+            or ""
+        )
+        self.interface = interface
+
+        self.normal_brush = QBrush(QColor("#8b5cf6"))
+        self.normal_pen = QPen(QColor("#5b21b6"), 1.5)
+
+        self.compatible_brush = QBrush(QColor("#22c55e"))
+        self.compatible_pen = QPen(QColor("#15803d"), 2.0)
+
+        self.warning_brush = QBrush(QColor("#f59e0b"))
+        self.warning_pen = QPen(QColor("#b45309"), 2.0)
+
+        self.incompatible_brush = QBrush(QColor("#ef4444"))
+        self.incompatible_pen = QPen(QColor("#b91c1c"), 2.0)
+
+        self.setBrush(self.normal_brush)
+        self.setPen(self.normal_pen)
+
+        if role == "slot":
+            tooltip_title = "SubComponent slot"
+        else:
+            tooltip_title = "SubComponent connector"
+
+        tooltip = f"{tooltip_title}: {name}"
+        if interface:
+            tooltip += f"\nInterface: {interface}"
+        self.setToolTip(tooltip)
+        self.setAcceptHoverEvents(True)
+        self.setZValue(12)
+
+        label_text = name if role == "slot" else (interface or name)
+        self.label = QGraphicsTextItem(label_text, node)
+        self.label.setDefaultTextColor(QColor("#4c1d95"))
+        self.label.setScale(self.LABEL_SCALE)
+        self.label.setZValue(13)
+
+        self.side = "bottom" if role == "slot" else "top"
+        self.update_label_position()
+
+    def set_layout_position(self, x: float, y: float, side: str):
+        self.side = side if side in VALID_PORT_SIDES else self.side
+        self.setPos(x, y)
+        self.update_label_position()
+
+    def update_label_position(self):
+        x = self.pos().x()
+        y = self.pos().y()
+        rect = self.label.boundingRect()
+        text_width = rect.width() * self.LABEL_SCALE
+        text_height = rect.height() * self.LABEL_SCALE
+        gap = self.SIZE / 2.0 + self.LABEL_GAP
+
+        self.label.setRotation(0)
+
+        if self.side == "top":
+            self.label.setRotation(-90)
+            self.label.setPos(x - text_height / 2.0, y - gap)
+        elif self.side == "bottom":
+            self.label.setRotation(90)
+            self.label.setPos(x + text_height / 2.0, y + gap)
+        elif self.side == "left":
+            self.label.setPos(x - gap - text_width, y - text_height / 2.0)
+        else:
+            self.label.setPos(x + gap, y - text_height / 2.0)
+
+    def set_compatibility_highlight(self, state: str = ""):
+        if state == "compatible":
+            self.setBrush(self.compatible_brush)
+            self.setPen(self.compatible_pen)
+        elif state == "warning":
+            self.setBrush(self.warning_brush)
+            self.setPen(self.warning_pen)
+        elif state == "incompatible":
+            self.setBrush(self.incompatible_brush)
+            self.setPen(self.incompatible_pen)
+        else:
+            self.setBrush(self.normal_brush)
+            self.setPen(self.normal_pen)
+
+    def scene_center(self) -> QPointF:
+        return self.mapToScene(self.boundingRect().center())
+
+    def mousePressEvent(self, event):
+        scene = self.scene()
+        if scene is not None and hasattr(scene, "subcomp_connector_clicked"):
+            scene.subcomp_connector_clicked(self)
+        event.accept()
+
+
+class SubcompAttachmentItem(QGraphicsPathItem):
+    """Dashed visual edge representing a SubComponent assignment."""
+
+    def __init__(
+        self,
+        attachment: ModelSubcompAttachment,
+        slot_connector: SubcompConnectorItem,
+        interface_connector: SubcompConnectorItem,
+    ):
+        super().__init__()
+        self.attachment = attachment
+        self.source_connector = slot_connector
+        self.target_connector = interface_connector
+        self.base_color = QColor("#8b5cf6")
+        self.highlight_color = QColor("#f59e0b")
+        self.setPen(QPen(self.base_color, 2, Qt.DashLine))
+        self.setZValue(4)
+        self.setFlag(QGraphicsItem.ItemIsSelectable, True)
+        self.setAcceptedMouseButtons(Qt.LeftButton)
+        self.update_tooltip()
+        self.update_position()
+
+    def update_tooltip(self):
+        tooltip = (
+            f"{self.attachment.name}\n"
+            f"{self.attachment.parent_component_name}.{self.attachment.slot_name} -> "
+            f"{self.attachment.child_component_name}\n"
+            f"required: {self.attachment.required_interface or '(unspecified)'}\n"
+            f"provided: {self.attachment.provided_interface or '(unspecified)'}"
+        )
+        if self.attachment.compatibility_severity != "ok":
+            tooltip += f"\n\n⚠ {self.attachment.compatibility_message}"
+        self.setToolTip(tooltip)
+
+    def update_position(self):
+        source = self.source_connector.scene_center()
+        target = self.target_connector.scene_center()
+        mid_x = (source.x() + target.x()) / 2.0
+        path = QPainterPath(source)
+        path.cubicTo(
+            QPointF(mid_x, source.y()),
+            QPointF(mid_x, target.y()),
+            target,
+        )
+        self.setPath(path)
+
+    def mousePressEvent(self, event):
+        scene = self.scene()
+        if scene is not None and hasattr(scene, "select_subcomp_attachment"):
+            scene.select_subcomp_attachment(self)
+        super().mousePressEvent(event)
+
+    def is_connected_to_node(self, node: "ComponentNodeItem") -> bool:
+        return self.source_connector.node is node or self.target_connector.node is node
+
+    def set_highlighted(self, highlighted: bool):
+        if highlighted:
+            self.setPen(QPen(self.highlight_color, 4, Qt.DashLine))
+            self.setZValue(20)
+        else:
+            self.setPen(QPen(self.base_color, 2, Qt.DashLine))
+            self.setZValue(4)
+
+
 class AddPortsButtonItem(QGraphicsTextItem):
     def __init__(self, node: "ComponentNodeItem"):
         super().__init__("+", node)
@@ -537,7 +735,9 @@ class ComponentNodeItem(QGraphicsRectItem):
         }
         self.port_templates: list[dict] = []
         self.variable_port_templates: list[dict] = []
+        self.subcomp_connector_templates: list[dict] = []
         self.ports: list[PortItem] = []
+        self.subcomp_connectors: list[SubcompConnectorItem] = []
         self.add_ports_button: AddPortsButtonItem | None = None
         self.icon_path = component.icon_path or ""
 
@@ -579,6 +779,7 @@ class ComponentNodeItem(QGraphicsRectItem):
             iface.setPos(10, 54)
 
         self.add_ports_from_database_or_defaults()
+        self.add_subcomp_connectors_from_metadata()
 
         self.icon_item = None
         self.add_icon()
@@ -601,30 +802,125 @@ class ComponentNodeItem(QGraphicsRectItem):
                     connection.link.target_component_name = new_name
                 connection.update_tooltip()
 
+        for connector in self.subcomp_connectors:
+            scene = connector.scene()
+            if scene is None or not hasattr(scene, "subcomp_attachment_items"):
+                continue
+            for attachment_item in scene.subcomp_attachment_items():
+                attachment = attachment_item.attachment
+                if attachment_item.source_connector.node is self:
+                    attachment.parent_component_name = new_name
+                if attachment_item.target_connector.node is self:
+                    attachment.child_component_name = new_name
+                attachment_item.update_tooltip()
+
+    def should_add_fallback_ports(self) -> bool:
+        plugin_id = getattr(self.component, "plugin_id", "") or ""
+
+        # SST metadata is authoritative. If sst-info says a component/subcomponent
+        # has zero ports, FUSE should not invent generic in/out ports.
+        if plugin_id == "sst":
+            return False
+
+        return True
+
+    def load_subcomp_connector_templates(self) -> list[dict]:
+        try:
+            return load_subcomp_connector_metadata_for_component(
+                self.component.plugin_id,
+                self.component.component_id,
+                self.component.target_id,
+            )
+        except Exception:
+            return []
+
+    def add_subcomp_connectors_from_metadata(self):
+        self.subcomp_connector_templates = self.load_subcomp_connector_templates()
+
+        for connector in list(self.subcomp_connectors):
+            self.remove_subcomp_connector_item(connector)
+
+        self.subcomp_connectors = []
+
+        for template in self.subcomp_connector_templates:
+            name = template.get("name", "")
+            role = template.get("role", "")
+            if not name or role not in {"slot", "interface"}:
+                continue
+            self.subcomp_connectors.append(
+                SubcompConnectorItem(
+                    self,
+                    name=name,
+                    role=role,
+                    metadata=dict(template),
+                )
+            )
+
+        self.layout_subcomp_connectors()
+
+    def remove_subcomp_connector_item(self, connector: SubcompConnectorItem):
+        if connector in self.subcomp_connectors:
+            self.subcomp_connectors.remove(connector)
+
+        scene = self.scene()
+        if scene is not None:
+            if connector.label.scene() is not None:
+                scene.removeItem(connector.label)
+            if connector.scene() is not None:
+                scene.removeItem(connector)
+        else:
+            connector.label.setParentItem(None)
+            connector.setParentItem(None)
+
+    def layout_subcomp_connectors(self):
+        slots = [item for item in self.subcomp_connectors if item.role == "slot"]
+        interfaces = [item for item in self.subcomp_connectors if item.role == "interface"]
+        self.layout_subcomp_connector_side(slots, "bottom")
+        self.layout_subcomp_connector_side(interfaces, "top")
+
+    def layout_subcomp_connector_side(self, connectors: list[SubcompConnectorItem], side: str):
+        if not connectors:
+            return
+
+        if side in {"top", "bottom"}:
+            spacing = self.WIDTH / (len(connectors) + 1)
+            y = -SubcompConnectorItem.EDGE_GAP if side == "top" else self.HEIGHT + SubcompConnectorItem.EDGE_GAP
+            for index, connector in enumerate(connectors, start=1):
+                connector.set_layout_position(spacing * index, y, side)
+            return
+
+        spacing = self.HEIGHT / (len(connectors) + 1)
+        x = -SubcompConnectorItem.EDGE_GAP if side == "left" else self.WIDTH + SubcompConnectorItem.EDGE_GAP
+        for index, connector in enumerate(connectors, start=1):
+            connector.set_layout_position(x, spacing * index, side)
+
     def add_ports_from_database_or_defaults(self):
         self.port_templates = self.load_port_templates()
 
         if not self.port_templates:
-            self.port_templates = [
-                {
-                    "name": "in",
-                    "description": "",
-                    "iface": "",
-                    "is_variable": False,
-                    "base_name": "in",
-                    "count_parameter": "",
-                    "default_count": 1,
-                },
-                {
-                    "name": "out",
-                    "description": "",
-                    "iface": "",
-                    "is_variable": False,
-                    "base_name": "out",
-                    "count_parameter": "",
-                    "default_count": 1,
-                },
-            ]
+            if self.should_add_fallback_ports():
+                self.port_templates = [
+                    {
+                        "name": "in",
+                        "description": "",
+                        "iface": "",
+                        "is_variable": False,
+                        "base_name": "in",
+                        "count_parameter": "",
+                        "default_count": 1,
+                    },
+                    {
+                        "name": "out",
+                        "description": "",
+                        "iface": "",
+                        "is_variable": False,
+                        "base_name": "out",
+                        "count_parameter": "",
+                        "default_count": 1,
+                    },
+                ]
+            else:
+                self.port_templates = []
 
         self.variable_port_templates = [
             template

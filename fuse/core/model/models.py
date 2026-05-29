@@ -185,3 +185,38 @@ class ModelLink:
     @property
     def has_error(self) -> bool:
         return self.compatibility_severity == "error"
+
+
+@dataclass
+class ModelSubcompAttachment:
+    """
+    Visual/model relationship that installs a SubComponent into a parent
+    component/subcomponent slot.
+
+    This is not an SST Link. The SST exporter writes this as a native SST
+    subcomponent assignment under the parent slot.
+    """
+
+    attachment_id: int
+    name: str
+    parent_node_id: int
+    parent_component_name: str
+    slot_name: str
+    child_node_id: int
+    child_component_name: str
+    required_interface: str = ""
+    provided_interface: str = ""
+    compatibility_severity: str = "ok"
+    compatibility_code: str = ""
+    compatibility_message: str = ""
+    plugin_id: str = ""
+    plugin_metadata: dict | None = None
+
+    @property
+    def has_warning(self) -> bool:
+        return self.compatibility_severity == "warning"
+
+    @property
+    def has_error(self) -> bool:
+        return self.compatibility_severity == "error"
+
