@@ -56,7 +56,7 @@ class PortItem(QGraphicsEllipseItem):
     RADIUS = 5.0
     EDGE_GAP = 4.0
     LABEL_GAP = 8.0
-    LABEL_SCALE = 0.72
+    LABEL_SCALE = 1.0
 
     def __init__(
         self,
@@ -449,8 +449,13 @@ class AddPortsButtonItem(QGraphicsTextItem):
 
 
 class ComponentNodeItem(QGraphicsRectItem):
-    WIDTH = 210
-    HEIGHT = 110
+    WIDTH = 180
+    HEIGHT = 170
+
+    TITLE_Y = 8
+    TITLE_HEIGHT = 28
+    ICON_SIZE = 175
+    ICON_Y = 15
 
     MAX_VERTICAL_PORTS_PER_SIDE = 8
     MAX_HORIZONTAL_PORTS_PER_SIDE = 6
@@ -492,7 +497,7 @@ class ComponentNodeItem(QGraphicsRectItem):
         self.icon_path = component.icon_path or ""
 
         self.setBrush(QBrush(QColor("#ffffff")))
-        self.normal_pen = QPen(QColor("#333333"), 1.5)
+        self.normal_pen = QPen(QColor("#cbd5e1"), 1.25)
         self.validation_pen = QPen(QColor("#dc2626"), 2.5)
         self.setPen(self.normal_pen)
         self.validation_messages: list[str] = []
@@ -504,13 +509,15 @@ class ComponentNodeItem(QGraphicsRectItem):
 
         self.title_item = QGraphicsTextItem(self.instance_name, self)
         self.title_item.setDefaultTextColor(QColor("#111111"))
-        self.title_item.setPos(10, 8)
+        self.title_item.setTextWidth(self.WIDTH)
+        self.title_item.setDefaultTextColor(QColor("#111111"))
+        self.title_item.setPos(0, self.TITLE_Y)
 
-        subtitle_text = "SubComponent" if component.is_subcomp else "Component"
-        subtitle = QGraphicsTextItem(f"{component.element} · {subtitle_text}", self)
-        subtitle.setDefaultTextColor(QColor("#555555"))
-        subtitle.setScale(0.85)
-        subtitle.setPos(10, 32)
+        title_document = self.title_item.document()
+        title_document.setDefaultTextOption(title_document.defaultTextOption())
+        self.title_item.setHtml(
+            f"<div align='center'><b>{self.instance_name}</b></div>"
+        )
 
         self.validation_warning_item = QGraphicsTextItem("⚠", self)
         self.validation_warning_item.setDefaultTextColor(QColor("#f59e0b"))
@@ -537,7 +544,9 @@ class ComponentNodeItem(QGraphicsRectItem):
 
     def set_instance_name(self, new_name: str):
         self.instance_name_value = new_name
-        self.title_item.setPlainText(new_name)
+        self.title_item.setHtml(
+            f"<div align='center'><b>{new_name}</b></div>"
+        )
 
         for port in self.ports:
             for connection in port.connections:
@@ -1008,14 +1017,18 @@ class ComponentNodeItem(QGraphicsRectItem):
             return
 
         pixmap = pixmap.scaled(
-            52,
-            52,
+            self.ICON_SIZE,
+            self.ICON_SIZE,
             Qt.KeepAspectRatio,
             Qt.SmoothTransformation,
         )
 
         self.icon_item = QGraphicsPixmapItem(pixmap, self)
-        self.icon_item.setPos(10, 50)
+
+        icon_x = (self.WIDTH - pixmap.width()) / 2.0
+        icon_y = self.ICON_Y
+
+        self.icon_item.setPos(icon_x, icon_y)
         self.icon_item.setZValue(2)
 
     def set_icon_path(self, icon_path: str):
