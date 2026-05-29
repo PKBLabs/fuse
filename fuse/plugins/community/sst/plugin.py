@@ -198,7 +198,14 @@ class SSTPlugin:
             framework_version_id = int(component_dict["framework_version_id"])
 
             ports = conn.execute("""
-                SELECT name, description, iface
+                SELECT
+                    name,
+                    description,
+                    iface,
+                    is_variable,
+                    base_name,
+                    count_parameter,
+                    default_count
                 FROM sst_ports
                 WHERE framework_version_id = ?
                   AND parent_id = ?
@@ -234,6 +241,10 @@ class SSTPlugin:
                 name=row["name"],
                 description=row["description"] or "",
                 interface=row["iface"] or "",
+                is_variable=bool(row.get("is_variable", 0)),
+                base_name=row.get("base_name", "") or row["name"],
+                count_parameter=row.get("count_parameter", "") or "",
+                default_count=int(row.get("default_count", 1) or 1),
             )
             for row in rows_to_dicts(ports)
         ]

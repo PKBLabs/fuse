@@ -11,36 +11,74 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-from fuse.core.routing.routing import (
-    RoutingConfig,
-    route_orthogonal_path,
-    route_length,
-    simplify_points,
-    segment_intersects_rect,
-)
-from fuse.core.resource_paths import resolve_icon_path
+from __future__ import annotations
+
 from typing import Optional
+
 from PySide6.QtCore import Qt, QPointF
-from PySide6.QtGui import QPen, QBrush, QColor, QPainterPath, QPixmap
+from PySide6.QtGui import QBrush, QColor, QCursor, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import (
     QGraphicsEllipseItem,
     QGraphicsItem,
     QGraphicsPathItem,
+    QGraphicsPixmapItem,
     QGraphicsRectItem,
     QGraphicsTextItem,
-    QGraphicsPixmapItem,
+    QMenu,
 )
 
-from fuse.core.persistence.db_access import load_port_names_for_component
 from fuse.core.model.models import ComponentDefinition, ModelLink
+from fuse.core.persistence.db_access import (
+    load_port_metadata_for_component,
+    load_port_names_for_component,
+)
+from fuse.core.resource_paths import resolve_icon_path
+from fuse.core.routing.routing import (
+    RoutingConfig,
+    route_length,
+    route_orthogonal_path,
+    segment_intersects_rect,
+    simplify_points,
+)
+
+
+VALID_PORT_SIDES = {"left", "right", "top", "bottom"}
+
+
+def _safe_int(value, default: int = 1) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
 
 
 class PortItem(QGraphicsEllipseItem):
-    def __init__(self, node: "ComponentNodeItem", name: str, x: float, y: float):
-        super().__init__(-5, -5, 10, 10, node)
+    RADIUS = 5.0
+    EDGE_GAP = 4.0
+    LABEL_GAP = 8.0
+    LABEL_SCALE = 0.72
+
+    def __init__(
+        self,
+        node: "ComponentNodeItem",
+        name: str,
+        x: float,
+        y: float,
+        side: str = "right",
+    ):
+        super().__init__(
+            -self.RADIUS,
+            -self.RADIUS,
+            self.RADIUS * 2.0,
+            self.RADIUS * 2.0,
+            node,
+        )
+
         self.node = node
         self.name = name
+        self.side = side if side in VALID_PORT_SIDES else "right"
         self.connections: list[ConnectionItem] = []
+
         self.setPos(x, y)
         self.setBrush(QBrush(QColor("#2f80ed")))
         self.setPen(QPen(QColor("#1f4e79"), 1))
@@ -49,14 +87,55 @@ class PortItem(QGraphicsEllipseItem):
         self.setToolTip(f"Port: {name}")
         self.setZValue(10)
 
-        label = QGraphicsTextItem(name, node)
-        label.setDefaultTextColor(QColor("#333333"))
-        label.setScale(0.75)
+        self.label = QGraphicsTextItem(name, node)
+        self.label.setDefaultTextColor(QColor("#333333"))
+        self.label.setScale(self.LABEL_SCALE)
+        self.label.setZValue(11)
 
-        if x <= 0:
-            label.setPos(x + 8, y - 10)
-        else:
-            label.setPos(x - 45, y - 10)
+        self.update_label_position()
+
+    def set_layout_position(self, x: float, y: float, side: str):
+        self.side = side if side in VALID_PORT_SIDES else "right"
+        self.setPos(x, y)
+        self.update_label_position()
+
+    def update_label_position(self):
+        """
+        Place the label outside the component body.
+
+        Left/right labels are horizontal. Top/bottom labels are rotated so
+        labels do not run into each other when many ports are placed along an
+        edge.
+        """
+        x = self.pos().x()
+        y = self.pos().y()
+        label_rect = self.label.boundingRect()
+        text_width = label_rect.width() * self.LABEL_SCALE
+        text_height = label_rect.height() * self.LABEL_SCALE
+
+        gap = self.RADIUS + self.LABEL_GAP
+
+        self.label.setRotation(0)
+
+        if self.side == "left":
+            self.label.setRotation(0)
+            self.label.setPos(x - gap - text_width, y - text_height / 2.0)
+            return
+
+        if self.side == "right":
+            self.label.setRotation(0)
+            self.label.setPos(x + gap, y - text_height / 2.0)
+            return
+
+        if self.side == "top":
+            self.label.setRotation(-90)
+            self.label.setPos(x - text_height / 2.0, y - gap)
+            return
+
+        if self.side == "bottom":
+            self.label.setRotation(90)
+            self.label.setPos(x + text_height / 2.0, y + gap)
+            return
 
     def scene_center(self) -> QPointF:
         return self.mapToScene(self.boundingRect().center())
@@ -134,8 +213,6 @@ class ConnectionItem(QGraphicsPathItem):
     def mousePressEvent(self, event):
         scene = self.scene()
 
-        # Avoid importing ModelScene here. That would create a circular import
-        # once ConnectionItem lives in graphics_items.py.
         if scene is not None and hasattr(scene, "select_link"):
             scene.select_link(self)
 
@@ -176,6 +253,10 @@ class ConnectionItem(QGraphicsPathItem):
         return rects
 
     def port_side(self, port: PortItem) -> str:
+        explicit_side = getattr(port, "side", "")
+        if explicit_side in VALID_PORT_SIDES:
+            return explicit_side
+
         center = port.scene_center()
         rect = self.node_body_rect(port.node)
 
@@ -334,9 +415,46 @@ class ConnectionItem(QGraphicsPathItem):
         return segment_intersects_rect(a, b, rect)
 
 
+class AddPortsButtonItem(QGraphicsTextItem):
+    def __init__(self, node: "ComponentNodeItem"):
+        super().__init__("+", node)
+        self.node = node
+        self.setDefaultTextColor(QColor("#2563eb"))
+        self.setScale(1.35)
+        self.setPos(node.WIDTH - 24, node.HEIGHT - 30)
+        self.setZValue(30)
+        self.setAcceptHoverEvents(True)
+        self.setToolTip("Add Ports")
+
+    def mousePressEvent(self, event):
+        templates = self.node.variable_port_templates
+
+        if not templates:
+            event.accept()
+            return
+
+        menu = QMenu()
+
+        for template in templates:
+            base_name = template.get("base_name", "") or template.get("name", "")
+            action = menu.addAction(f"Add {base_name}")
+            action.triggered.connect(
+                lambda checked=False, name=base_name: self.node.increment_variable_port(
+                    name
+                )
+            )
+
+        menu.exec(QCursor.pos())
+        event.accept()
+
+
 class ComponentNodeItem(QGraphicsRectItem):
     WIDTH = 210
     HEIGHT = 110
+
+    MAX_VERTICAL_PORTS_PER_SIDE = 8
+    MAX_HORIZONTAL_PORTS_PER_SIDE = 6
+    MIN_PORT_SPACING = 18.0
 
     _next_node_id = 1
 
@@ -346,6 +464,7 @@ class ComponentNodeItem(QGraphicsRectItem):
         node_id: Optional[int] = None,
         parameters: Optional[dict] = None,
         instance_name: Optional[str] = None,
+        variable_port_counts: Optional[dict[str, int]] = None,
     ):
         super().__init__(0, 0, self.WIDTH, self.HEIGHT)
 
@@ -362,8 +481,16 @@ class ComponentNodeItem(QGraphicsRectItem):
         self.component = component
         self.instance_name_value = instance_name or f"{component.name}_{self.node_id}"
         self.parameters = parameters or {}
+        self.variable_port_counts = {
+            str(key): max(0, _safe_int(value, 1))
+            for key, value in (variable_port_counts or {}).items()
+        }
+        self.port_templates: list[dict] = []
+        self.variable_port_templates: list[dict] = []
         self.ports: list[PortItem] = []
+        self.add_ports_button: AddPortsButtonItem | None = None
         self.icon_path = component.icon_path or ""
+
         self.setBrush(QBrush(QColor("#ffffff")))
         self.normal_pen = QPen(QColor("#333333"), 1.5)
         self.validation_pen = QPen(QColor("#dc2626"), 2.5)
@@ -421,37 +548,402 @@ class ComponentNodeItem(QGraphicsRectItem):
                 connection.update_tooltip()
 
     def add_ports_from_database_or_defaults(self):
+        self.port_templates = self.load_port_templates()
+
+        if not self.port_templates:
+            self.port_templates = [
+                {
+                    "name": "in",
+                    "description": "",
+                    "iface": "",
+                    "is_variable": False,
+                    "base_name": "in",
+                    "count_parameter": "",
+                    "default_count": 1,
+                },
+                {
+                    "name": "out",
+                    "description": "",
+                    "iface": "",
+                    "is_variable": False,
+                    "base_name": "out",
+                    "count_parameter": "",
+                    "default_count": 1,
+                },
+            ]
+
+        self.variable_port_templates = [
+            template
+            for template in self.port_templates
+            if bool(template.get("is_variable"))
+        ]
+
+        for template in self.variable_port_templates:
+            base_name = template.get("base_name", "") or template.get("name", "")
+            self.variable_port_counts.setdefault(
+                base_name,
+                max(0, _safe_int(template.get("default_count"), 1)),
+            )
+
+        self.sync_ports_to_templates()
+        self.update_add_ports_button_visibility()
+
+    def load_port_templates(self) -> list[dict]:
         try:
-            port_names = load_port_names_for_component(
+            return load_port_metadata_for_component(
                 self.component.plugin_id,
                 self.component.component_id,
                 self.component.target_id,
             )
-        except TypeError:
-            # Backward compatibility for tests that monkeypatch a two-argument
-            # load_port_names_for_component callable.
-            port_names = load_port_names_for_component(
-                self.component.plugin_id,
-                self.component.component_id,
+        except Exception:
+            try:
+                port_names = load_port_names_for_component(
+                    self.component.plugin_id,
+                    self.component.component_id,
+                    self.component.target_id,
+                )
+            except TypeError:
+                port_names = load_port_names_for_component(
+                    self.component.plugin_id,
+                    self.component.component_id,
+                )
+            except Exception:
+                port_names = []
+
+            return [
+                {
+                    "name": port_name,
+                    "description": "",
+                    "iface": "",
+                    "is_variable": False,
+                    "base_name": port_name,
+                    "count_parameter": "",
+                    "default_count": 1,
+                }
+                for port_name in port_names
+            ]
+
+    def expanded_port_names(self) -> list[str]:
+        names: list[str] = []
+
+        for template in self.port_templates:
+            if bool(template.get("is_variable")):
+                base_name = template.get("base_name", "") or template.get("name", "")
+                count = max(0, _safe_int(self.variable_port_counts.get(base_name), 1))
+                names.extend(f"{base_name}{index}" for index in range(count))
+            else:
+                names.append(template.get("name", ""))
+
+        return [name for name in names if name]
+
+    def sync_ports_to_templates(self) -> tuple[bool, str]:
+        desired_names = self.expanded_port_names()
+        desired_set = set(desired_names)
+        existing_by_name = {port.name: port for port in self.ports}
+
+        for port in list(self.ports):
+            if port.name in desired_set:
+                continue
+
+            if port.is_connected():
+                return False, f"Cannot remove connected port '{port.name}'."
+
+            self.remove_port_item(port)
+
+        existing_by_name = {port.name: port for port in self.ports}
+
+        for port_name in desired_names:
+            if port_name not in existing_by_name:
+                side = self.preferred_side_for_port(port_name)
+                self.ports.append(PortItem(self, port_name, 0, 0, side=side))
+
+        self.layout_ports(desired_names)
+        return True, ""
+
+    def remove_port_item(self, port: PortItem):
+        if port in self.ports:
+            self.ports.remove(port)
+
+        scene = self.scene()
+
+        if scene is not None:
+            if port.label.scene() is not None:
+                scene.removeItem(port.label)
+            if port.scene() is not None:
+                scene.removeItem(port)
+        else:
+            port.label.setParentItem(None)
+            port.setParentItem(None)
+
+    def preferred_side_for_port(self, port_name: str) -> str:
+        """
+        Return the preferred semantic side for a port.
+
+        This is only the preference. The final layout may move ports to another
+        side when a preferred side is full.
+        """
+        name = port_name.lower()
+
+        if any(
+            token in name
+            for token in (
+                "lowlink",
+                "low_network",
+                "low",
+                "lower",
+                "downstream",
+            )
+        ):
+            return "left"
+
+        if any(
+            token in name
+            for token in (
+                "highlink",
+                "high_network",
+                "high",
+                "upper",
+                "upstream",
+            )
+        ):
+            return "right"
+
+        if (
+            name in {"in", "input", "request", "req"}
+            or name.startswith(("in", "input", "req", "src", "source", "west", "left"))
+            or name.endswith(("in", "input", "req", "src"))
+        ):
+            return "left"
+
+        if (
+            name in {"out", "output", "response", "resp"}
+            or name.startswith(("out", "output", "resp", "dst", "dest", "east", "right"))
+            or name.endswith(("out", "output", "resp", "dst", "dest"))
+        ):
+            return "right"
+
+        return "right"
+
+    def port_family_name(self, port_name: str) -> str:
+        """
+        Return a stable family name for ports such as lowlink0, lowlink1, etc.
+
+        This helps keep variable ports from the same family together.
+        """
+        index = len(port_name)
+
+        while index > 0 and port_name[index - 1].isdigit():
+            index -= 1
+
+        return port_name[:index] or port_name
+
+    def side_capacity(self, side: str) -> int:
+        if side in {"left", "right"}:
+            return self.MAX_VERTICAL_PORTS_PER_SIDE
+
+        return self.MAX_HORIZONTAL_PORTS_PER_SIDE
+
+    def overflow_sides_for_preference(self, preferred_side: str) -> list[str]:
+        """
+        Return fallback side order.
+
+        Left/right sides are preferred first. Top/bottom are used as overflow
+        only when the vertical sides are crowded.
+        """
+        if preferred_side == "left":
+            return ["left", "right", "bottom", "top"]
+
+        if preferred_side == "right":
+            return ["right", "left", "top", "bottom"]
+
+        if preferred_side == "top":
+            return ["right", "left", "top", "bottom"]
+
+        if preferred_side == "bottom":
+            return ["left", "right", "bottom", "top"]
+
+        return ["right", "left", "top", "bottom"]
+
+    def assign_ports_to_sides(self, ordered_ports: list[PortItem]) -> dict[str, list[PortItem]]:
+        """
+        Assign ports to sides while balancing readability.
+
+        Goals:
+        - Prefer left/right.
+        - Keep semantic families together when possible.
+        - Avoid more than MAX_* ports on any one side.
+        - Overflow to top/bottom only when needed.
+        """
+        side_groups: dict[str, list[PortItem]] = {
+            "left": [],
+            "right": [],
+            "top": [],
+            "bottom": [],
+        }
+
+        family_to_side: dict[str, str] = {}
+
+        for port in ordered_ports:
+            family = self.port_family_name(port.name)
+            preferred = self.preferred_side_for_port(port.name)
+
+            assigned_side = family_to_side.get(family)
+
+            if assigned_side is not None:
+                if len(side_groups[assigned_side]) < self.side_capacity(assigned_side):
+                    side_groups[assigned_side].append(port)
+                    port.side = assigned_side
+                    continue
+
+            for candidate_side in self.overflow_sides_for_preference(preferred):
+                if len(side_groups[candidate_side]) < self.side_capacity(candidate_side):
+                    assigned_side = candidate_side
+                    break
+            else:
+                assigned_side = min(
+                    side_groups,
+                    key=lambda side: len(side_groups[side]),
+                )
+
+            family_to_side.setdefault(family, assigned_side)
+            side_groups[assigned_side].append(port)
+            port.side = assigned_side
+
+        return side_groups
+
+    def layout_ports(self, ordered_names: list[str]):
+        port_by_name = {port.name: port for port in self.ports}
+        ordered_ports = [
+            port_by_name[name] for name in ordered_names if name in port_by_name
+        ]
+
+        side_groups = self.assign_ports_to_sides(ordered_ports)
+
+        self.layout_side_ports(side_groups["left"], "left")
+        self.layout_side_ports(side_groups["right"], "right")
+        self.layout_side_ports(side_groups["top"], "top")
+        self.layout_side_ports(side_groups["bottom"], "bottom")
+
+        self.update_connected_links()
+
+    def layout_side_ports(self, ports: list[PortItem], side: str):
+        if not ports:
+            return
+
+        edge_gap = PortItem.EDGE_GAP
+
+        if side in {"left", "right"}:
+            available = self.HEIGHT
+            spacing = max(
+                self.MIN_PORT_SPACING,
+                available / (len(ports) + 1),
             )
 
-        if not port_names:
-            port_names = ["in", "out"]
+            total_span = spacing * (len(ports) - 1)
+            start_y = (self.HEIGHT - total_span) / 2.0
 
-        left_ports = port_names[::2]
-        right_ports = port_names[1::2]
+            for index, port in enumerate(ports):
+                y = start_y + spacing * index
+                x = -edge_gap if side == "left" else self.WIDTH + edge_gap
+                port.set_layout_position(x, y, side)
 
-        if len(port_names) == 1:
-            left_ports = []
-            right_ports = port_names
+            return
 
-        for index, port_name in enumerate(left_ports):
-            y = self.HEIGHT * (index + 1) / (len(left_ports) + 1)
-            self.ports.append(PortItem(self, port_name, 0, y))
+        available = self.WIDTH
+        spacing = max(
+            self.MIN_PORT_SPACING,
+            available / (len(ports) + 1),
+        )
 
-        for index, port_name in enumerate(right_ports):
-            y = self.HEIGHT * (index + 1) / (len(right_ports) + 1)
-            self.ports.append(PortItem(self, port_name, self.WIDTH, y))
+        total_span = spacing * (len(ports) - 1)
+        start_x = (self.WIDTH - total_span) / 2.0
+
+        for index, port in enumerate(ports):
+            x = start_x + spacing * index
+            y = -edge_gap if side == "top" else self.HEIGHT + edge_gap
+            port.set_layout_position(x, y, side)
+
+    def update_connected_links(self):
+        seen: set[int] = set()
+
+        for port in self.ports:
+            for connection in port.connections:
+                identity = id(connection)
+                if identity in seen:
+                    continue
+                seen.add(identity)
+                connection.update_position()
+
+    def variable_port_template(self, base_name: str) -> dict | None:
+        for template in self.variable_port_templates:
+            if (template.get("base_name", "") or template.get("name", "")) == base_name:
+                return template
+
+        return None
+
+    def connected_ports_removed_by_count(self, base_name: str, new_count: int) -> list[str]:
+        removed_connected = []
+
+        for port in self.ports:
+            if not port.name.startswith(base_name):
+                continue
+
+            suffix = port.name[len(base_name):]
+            if not suffix.isdigit():
+                continue
+
+            if int(suffix) >= new_count and port.is_connected():
+                removed_connected.append(port.name)
+
+        return removed_connected
+
+    def set_variable_port_count(self, base_name: str, count: int) -> tuple[bool, str]:
+        if self.variable_port_template(base_name) is None:
+            return False, f"'{base_name}' is not a variable port family for this component."
+
+        count = max(0, int(count))
+        removed_connected = self.connected_ports_removed_by_count(base_name, count)
+
+        if removed_connected:
+            return (
+                False,
+                "Cannot reduce port count because these ports are connected: "
+                + ", ".join(sorted(removed_connected)),
+            )
+
+        old_count = self.variable_port_counts.get(base_name)
+        self.variable_port_counts[base_name] = count
+        ok, message = self.sync_ports_to_templates()
+
+        if not ok:
+            if old_count is None:
+                self.variable_port_counts.pop(base_name, None)
+            else:
+                self.variable_port_counts[base_name] = old_count
+            self.sync_ports_to_templates()
+            return ok, message
+
+        scene = self.scene()
+        if scene is not None:
+            if hasattr(scene, "reroute_links_for_node"):
+                scene.reroute_links_for_node(self, force_full=True)
+            if hasattr(scene, "notify_model_changed"):
+                scene.notify_model_changed()
+            if hasattr(scene, "properties_panel") and scene.properties_panel is not None:
+                scene.properties_panel.show_component(self)
+
+        return True, ""
+
+    def increment_variable_port(self, base_name: str):
+        current = max(0, _safe_int(self.variable_port_counts.get(base_name), 1))
+        self.set_variable_port_count(base_name, current + 1)
+
+    def update_add_ports_button_visibility(self):
+        if self.variable_port_templates and self.add_ports_button is None:
+            self.add_ports_button = AddPortsButtonItem(self)
+        elif not self.variable_port_templates and self.add_ports_button is not None:
+            self.add_ports_button.setParentItem(None)
+            self.add_ports_button = None
 
     def mousePressEvent(self, event):
         scene = self.scene()

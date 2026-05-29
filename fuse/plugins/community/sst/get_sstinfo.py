@@ -70,6 +70,54 @@ class ParsedPort:
     name: str
     description: str = ""
     iface: str = ""
+    is_variable: int = 0
+    base_name: str = ""
+    count_parameter: str = ""
+    default_count: int = 1
+
+
+@dataclass(frozen=True)
+class VariablePortInfo:
+    is_variable: bool
+    base_name: str
+    count_parameter: str
+    default_count: int = 1
+
+
+_PRINTF_COUNT_PORT_RE = re.compile(
+    r"^(?P<base>.+?)%\((?P<count>[A-Za-z_][A-Za-z0-9_]*)\)d$"
+)
+_SIMPLE_PRINTF_PORT_RE = re.compile(r"^(?P<base>.+?)%d$")
+
+
+def parse_variable_port_name(name: str) -> VariablePortInfo:
+    printf_count_match = _PRINTF_COUNT_PORT_RE.match(name)
+
+    if printf_count_match:
+        return VariablePortInfo(
+            is_variable=True,
+            base_name=printf_count_match.group("base"),
+            count_parameter=printf_count_match.group("count"),
+            default_count=1,
+        )
+
+    simple_match = _SIMPLE_PRINTF_PORT_RE.match(name)
+
+    if simple_match:
+        base_name = simple_match.group("base")
+        return VariablePortInfo(
+            is_variable=True,
+            base_name=base_name,
+            count_parameter=f"{base_name}_ports",
+            default_count=1,
+        )
+
+    return VariablePortInfo(
+        is_variable=False,
+        base_name=name,
+        count_parameter="",
+        default_count=1,
+    )
 
 
 @dataclass
@@ -527,10 +575,16 @@ def parse_sstinfo_output(stdout: str) -> tuple[list[ParsedElement], list[ParsedC
             if ":" in stripped:
                 name, description = split_name_and_rest(stripped)
 
+                variable_info = parse_variable_port_name(name)
+
                 port = ParsedPort(
                     name=name,
                     description=description,
                     iface="",
+                    is_variable=1 if variable_info.is_variable else 0,
+                    base_name=variable_info.base_name,
+                    count_parameter=variable_info.count_parameter,
+                    default_count=variable_info.default_count,
                 )
 
                 current_component.ports.append(port)
@@ -815,10 +869,30 @@ def replace_component_children(conn, framework_version_id: int, component_id: in
     for port in component.ports:
         conn.execute(
             """
-            INSERT INTO sst_ports (framework_version_id, name, description, iface, parent_id)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO sst_ports (
+                framework_version_id,
+                name,
+                description,
+                iface,
+                parent_id,
+                is_variable,
+                base_name,
+                count_parameter,
+                default_count
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (framework_version_id, port.name, port.description, port.iface, component_id),
+            (
+                framework_version_id,
+                port.name,
+                port.description,
+                port.iface,
+                component_id,
+                int(port.is_variable),
+                port.base_name or port.name,
+                port.count_parameter or "",
+                int(port.default_count or 1),
+            ),
         )
 
     for slot in component.subcomp_slots:

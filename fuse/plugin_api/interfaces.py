@@ -46,6 +46,10 @@ class ConnectorDefinition:
     name: str
     description: str = ""
     interface: str = ""
+    is_variable: bool = False
+    base_name: str = ""
+    count_parameter: str = ""
+    default_count: int = 1
 
 
 @dataclass

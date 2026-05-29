@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Optional
 
 from PySide6.QtCore import Qt, QElapsedTimer, QTimer
-from PySide6.QtGui import QAction, QColor
+from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QApplication,
     QDialog,
@@ -35,8 +35,8 @@ from PySide6.QtWidgets import (
 )
 
 from fuse.app.about import AboutDialog
-from fuse.app.splash import create_splash_screen
 from fuse.app.project_settings_dialog import ProjectSettingsDialog
+from fuse.app.splash import create_splash_screen
 from fuse.core.app_info import APP_NAME, ORG_NAME
 from fuse.core.model.project_settings import ProjectSettings
 from fuse.core.model.validation import validate_model
@@ -74,6 +74,10 @@ class MainWindow(QMainWindow):
         self.model_view = ModelView(self.scene)
         self.properties_panel = PropertiesPanel()
         self.model_outline = QListWidget()
+
+        self.properties_dock: QDockWidget | None = None
+        self.model_outline_dock: QDockWidget | None = None
+
         self.scene.properties_panel = self.properties_panel
         self.scene.model_changed_callback = self.mark_dirty
         self.scene.component_added_callback = self.on_component_added
@@ -81,8 +85,7 @@ class MainWindow(QMainWindow):
 
         self.setup_menu_bar()
         self.setup_layout()
-        self.setup_model_outline()
-        self.setup_properties_panel()
+        self.setup_docks()
         self.setup_status_bar()
 
         ensure_database_ready()
@@ -156,15 +159,18 @@ class MainWindow(QMainWindow):
         left_layout.addWidget(self.palette)
 
         splitter = QSplitter(Qt.Horizontal)
+        splitter.setChildrenCollapsible(False)
         splitter.addWidget(left_panel)
         splitter.addWidget(self.model_view)
+        splitter.setStretchFactor(0, 1)
+        splitter.setStretchFactor(1, 4)
         splitter.setSizes([320, 980])
 
         self.setCentralWidget(splitter)
 
-    def setup_model_outline(self):
-        dock = QDockWidget("Model Outline", self)
-        dock.setWidget(self.model_outline)
+    def make_dock(self, title: str, widget: QWidget) -> QDockWidget:
+        dock = QDockWidget(title, self)
+        dock.setWidget(widget)
         dock.setAllowedAreas(
             Qt.LeftDockWidgetArea
             | Qt.RightDockWidgetArea
@@ -176,23 +182,42 @@ class MainWindow(QMainWindow):
             | QDockWidget.DockWidgetFloatable
             | QDockWidget.DockWidgetClosable
         )
-        self.addDockWidget(Qt.LeftDockWidgetArea, dock)
+        return dock
 
-    def setup_properties_panel(self):
-        dock = QDockWidget("Properties", self)
-        dock.setWidget(self.properties_panel)
-        dock.setAllowedAreas(
-            Qt.LeftDockWidgetArea
-            | Qt.RightDockWidgetArea
-            | Qt.TopDockWidgetArea
-            | Qt.BottomDockWidgetArea
+    def setup_docks(self):
+        """
+        Create the default dock layout.
+
+        The right dock column is split vertically:
+        - Properties: about 60% of the column height
+        - Model Outline: about 40% of the column height
+
+        Users can still resize, move, float, or close these docks.
+        """
+        self.properties_dock = self.make_dock("Properties", self.properties_panel)
+        self.model_outline_dock = self.make_dock("Model Outline", self.model_outline)
+
+        self.addDockWidget(Qt.RightDockWidgetArea, self.properties_dock)
+        self.splitDockWidget(
+            self.properties_dock,
+            self.model_outline_dock,
+            Qt.Vertical,
         )
-        dock.setFeatures(
-            QDockWidget.DockWidgetMovable
-            | QDockWidget.DockWidgetFloatable
-            | QDockWidget.DockWidgetClosable
+
+        # Approximate 60/40 default vertical split in the right dock column.
+        # The user can adjust this interactively at runtime.
+        self.resizeDocks(
+            [self.properties_dock, self.model_outline_dock],
+            [600, 400],
+            Qt.Vertical,
         )
-        self.addDockWidget(Qt.RightDockWidgetArea, dock)
+
+        # Give the right dock column a reasonable initial width.
+        self.resizeDocks(
+            [self.properties_dock],
+            [360],
+            Qt.Horizontal,
+        )
 
     def setup_status_bar(self):
         status = QStatusBar(self)
@@ -472,7 +497,6 @@ class MainWindow(QMainWindow):
         try:
             project = load_project_file(file_path)
             self.project_settings = ProjectSettings.from_project_dict(project)
-            active_target = project.get("activeTarget", {})
             load_project_into_scene(project, self.scene)
             self.properties_panel.set_validation_issues([])
             self.properties_panel.show_empty()

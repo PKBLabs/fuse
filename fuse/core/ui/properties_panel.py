@@ -133,6 +133,36 @@ class PropertiesPanel(QWidget):
         )
         icon_item.setToolTip(1, "Path to the icon used for this component instance.")
 
+        if node.variable_port_templates:
+            variable_ports_group = self.add_category("Variable Ports")
+
+            for template in node.variable_port_templates:
+                base_name = template.get("base_name", "") or template.get("name", "")
+                count_parameter = template.get("count_parameter", "") or ""
+                value = node.variable_port_counts.get(
+                    base_name,
+                    int(template.get("default_count", 1) or 1),
+                )
+                display_name = f"{base_name} count"
+                if count_parameter:
+                    display_name = f"{display_name} ({count_parameter})"
+
+                item = self.add_property(
+                    variable_ports_group,
+                    display_name,
+                    str(value),
+                    f"component.variable_port.{base_name}",
+                    editable=True,
+                    metadata={
+                        "name": base_name,
+                        "description": template.get("description", ""),
+                        "required": False,
+                        "type": "variable_port_count",
+                    },
+                )
+                item.setToolTip(0, template.get("description", ""))
+                item.setToolTip(1, "Number of logical ports to expose for this component instance.")
+
         parameters_group = self.add_category("Parameters")
 
         for parameter in self.load_component_parameters(node):
@@ -271,6 +301,17 @@ class PropertiesPanel(QWidget):
             self.current_link.link.latency = new_value
             self.current_link.update_tooltip()
 
+        elif isinstance(key, str) and key.startswith("component.variable_port.") and self.current_node is not None:
+            base_name = metadata.get("name") or key.rsplit(".", 1)[-1]
+            ok, message = self.current_node.set_variable_port_count(base_name, int(new_value))
+
+            if not ok:
+                QMessageBox.warning(self, "Invalid Port Count", message)
+                self._loading = True
+                item.setText(1, old_value)
+                self._loading = False
+                return
+
         elif isinstance(key, str) and key.startswith("component.parameter.") and self.current_node is not None:
             parameter_name = metadata.get("name")
             if parameter_name:
@@ -293,6 +334,17 @@ class PropertiesPanel(QWidget):
 
         if metadata.get("required", False) and not value:
             return False, "This parameter is required."
+
+        if metadata.get("type") == "variable_port_count":
+            try:
+                count = int(value)
+            except ValueError:
+                return False, "Port count must be an integer."
+
+            if count < 0:
+                return False, "Port count cannot be negative."
+
+            return True, ""
 
         if metadata.get("type") == "latency":
             valid_suffixes = ("fs", "ps", "ns", "us", "ms", "s")

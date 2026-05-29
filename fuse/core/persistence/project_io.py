@@ -44,6 +44,7 @@ def component_node_to_save_dict(node: ComponentNodeItem) -> dict:
         "interface": node.component.iface,
         "instanceName": node.instance_name,
         "parameters": node.parameters,
+        "variablePortCounts": getattr(node, "variable_port_counts", {}),
         "position": {
             "x": position.x(),
             "y": position.y(),
@@ -188,6 +189,7 @@ def load_project_into_scene(project: dict, scene: ModelScene) -> None:
             node_id=node_id,
             parameters=component_data.get("parameters", {}),
             instance_name=component_data.get("instanceName"),
+            variable_port_counts=component_data.get("variablePortCounts", {}),
         )
 
         position = component_data.get("position", {})
