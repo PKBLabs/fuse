@@ -19,8 +19,11 @@ from fuse.plugin_api.interfaces import (
     ConnectorDefinition,
     FrameworkTarget,
     ItemDetails,
+    LinkCompatibilityResult,
+    LinkEndpoint,
     PaletteItem,
     PropertyDefinition,
+    SubcompConnectorDefinition,
 )
 from fuse.core.persistence.database import get_connection, rows_to_dicts
 from fuse.plugins.community.sst.initialize_db import initialize_sst_schema
@@ -156,6 +159,7 @@ class SSTPlugin:
                     target_id=str(row["framework_version_id"]),
                     target_label=row["target_label"] or f"SST {row['framework_version']}",
                     framework_version=row["framework_version"] or "",
+                    iface=row["iface"] or "",
                 )
             )
 
@@ -221,6 +225,14 @@ class SSTPlugin:
                 ORDER BY name
             """, (framework_version_id, component_id)).fetchall()
 
+            slots = conn.execute("""
+                SELECT name, description, iface
+                FROM sst_subcomp_slots
+                WHERE framework_version_id = ?
+                  AND parent_id = ?
+                ORDER BY name
+            """, (framework_version_id, component_id)).fetchall()
+
         palette_item = PaletteItem(
             plugin_id=self.plugin_id,
             item_id=str(component_dict["component_id"]),
@@ -249,6 +261,28 @@ class SSTPlugin:
             for row in rows_to_dicts(ports)
         ]
 
+        subcomp_connectors = [
+            SubcompConnectorDefinition(
+                name=row["name"],
+                role="slot",
+                description=row["description"] or "",
+                required_interface=row["iface"] or "",
+                interface=row["iface"] or "",
+            )
+            for row in rows_to_dicts(slots)
+        ]
+
+        if bool(component_dict["is_subcomp"]) and (component_dict.get("iface") or ""):
+            subcomp_connectors.append(
+                SubcompConnectorDefinition(
+                    name="interface",
+                    role="interface",
+                    description="SubComponent interface connector",
+                    provided_interface=component_dict["iface"] or "",
+                    interface=component_dict["iface"] or "",
+                )
+            )
+
         properties = [
             PropertyDefinition(
                 name=row["name"],
@@ -262,7 +296,83 @@ class SSTPlugin:
         return ItemDetails(
             palette_item=palette_item,
             connectors=connectors,
+            subcomp_connectors=subcomp_connectors,
             properties=properties,
+        )
+
+    def check_link_compatibility(
+            self,
+            source: LinkEndpoint,
+            target: LinkEndpoint,
+    ) -> LinkCompatibilityResult:
+        """
+        Return compatibility for ordinary SST Link.connect() port links.
+
+        SST Link.connect() connects named ports. Many normal component ports do not
+        expose enough interface metadata in sst-info to prove semantic compatibility.
+        Interface checking belongs to SubComponent Slot assignment, where SST
+        provides explicit interface metadata.
+        """
+        return LinkCompatibilityResult()
+
+    def check_subcomponent_slot_compatibility(
+            self,
+            slot_metadata: dict,
+            subcomponent_metadata: dict,
+    ) -> LinkCompatibilityResult:
+        """
+        Check SST SubComponent Slot assignment compatibility.
+
+        This is where SST interface matching belongs. Ordinary SST Link.connect()
+        port links should not use this rule.
+        """
+        slot_iface = (
+                slot_metadata.get("required_interface", "")
+                or slot_metadata.get("iface", "")
+                or slot_metadata.get("interface", "")
+                or ""
+        ).strip()
+
+        subcomponent_iface = (
+                subcomponent_metadata.get("provided_interface", "")
+                or subcomponent_metadata.get("iface", "")
+                or subcomponent_metadata.get("interface", "")
+                or ""
+        ).strip()
+
+        if not slot_iface or not subcomponent_iface:
+            return LinkCompatibilityResult(
+                can_create=True,
+                severity="warning",
+                title="Unknown SubComponent Interface",
+                code="sst.subcomponent_slot_unknown_interface",
+                visual_indicator="warning",
+                message=(
+                    "The interface type for at least one of these endpoints is unknown. "
+                    "Compatibility cannot be determined!\n\n"
+                    f"Slot interface: {slot_iface or '(unknown)'}\n"
+                    f"SubComponent interface: {subcomponent_iface or '(unknown)'}\n\n"
+                    "FUSE can create this SubComponent assignment, but the exported SST "
+                    "model may not run correctly if the slot and SubComponent are not "
+                    "actually compatible."
+                ),
+            )
+
+        if slot_iface == subcomponent_iface:
+            return LinkCompatibilityResult()
+
+        return LinkCompatibilityResult(
+            can_create=False,
+            severity="error",
+            title="SST SubComponent Interface Mismatch",
+            code="sst.subcomponent_slot_interface_mismatch",
+            visual_indicator="error",
+            message=(
+                "The selected SST SubComponent does not implement the interface "
+                "required by this slot.\n\n"
+                f"Slot requires: {slot_iface}\n"
+                f"SubComponent provides: {subcomponent_iface}"
+            ),
         )
 
     def validate_toolchain(self, plugin_settings) -> tuple[bool, str]:

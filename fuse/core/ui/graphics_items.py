@@ -20,6 +20,7 @@ from PySide6.QtGui import QBrush, QColor, QCursor, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import (
     QGraphicsEllipseItem,
     QGraphicsItem,
+    QGraphicsPolygonItem,
     QGraphicsPathItem,
     QGraphicsPixmapItem,
     QGraphicsRectItem,
@@ -84,7 +85,10 @@ class PortItem(QGraphicsEllipseItem):
         self.setPen(QPen(QColor("#1f4e79"), 1))
         self.setFlag(QGraphicsItem.ItemSendsScenePositionChanges, True)
         self.setAcceptHoverEvents(True)
-        self.setToolTip(f"Port: {name}")
+        tooltip = f"Port: {name}"
+        if self.interface:
+            tooltip += f"\nInterface: {self.interface}"
+        self.setToolTip(tooltip)
         self.setZValue(10)
 
         self.label = QGraphicsTextItem(name, node)
@@ -147,16 +151,37 @@ class PortItem(QGraphicsEllipseItem):
     def update_connection_state(self):
         if self.is_connected():
             self.setBrush(QBrush(QColor("#6b7280")))
-            self.setToolTip(f"Port: {self.name}\nConnected")
+            self.setToolTip(f"⚠ Port Occupied\n{self.name}")
         else:
             self.setBrush(QBrush(QColor("#2f80ed")))
-            self.setToolTip(f"Port: {self.name}")
+            tooltip = f"Port: {self.name}"
+            if self.interface:
+                tooltip += f"\nInterface: {self.interface}"
+            self.setToolTip(tooltip)
 
     def mousePressEvent(self, event):
         scene = self.scene()
         if scene is not None and hasattr(scene, "port_clicked"):
             scene.port_clicked(self)
         event.accept()
+
+    def set_compatibility_highlight(self, state: str = ""):
+        if self.is_connected():
+            self.update_connection_state()
+            return
+
+        if state == "compatible":
+            self.setBrush(QBrush(QColor("#22c55e")))
+            self.setPen(QPen(QColor("#15803d"), 2))
+        elif state == "warning":
+            self.setBrush(QBrush(QColor("#f59e0b")))
+            self.setPen(QPen(QColor("#b45309"), 2))
+        elif state == "incompatible":
+            self.setBrush(QBrush(QColor("#ef4444")))
+            self.setPen(QPen(QColor("#b91c1c"), 2))
+        else:
+            self.setPen(QPen(QColor("#1f4e79"), 1))
+            self.update_connection_state()
 
 
 class ConnectionItem(QGraphicsPathItem):
@@ -176,6 +201,7 @@ class ConnectionItem(QGraphicsPathItem):
     ROUTE_CLEARANCE = 24
     EXIT_MARGIN = 12
     LANE_SPACING = 12
+    SELECTION_TOLERANCE = 10.0
 
     def __init__(self, link: ModelLink, source_port: PortItem, target_port: PortItem):
         super().__init__()
@@ -186,6 +212,8 @@ class ConnectionItem(QGraphicsPathItem):
 
         self.base_color = QColor("#38bdf8")
         self.highlight_color = QColor("#f59e0b")
+        self.warning_color = QColor("#f59e0b")
+        self.error_color = QColor("#ef4444")
 
         self.setPen(QPen(self.base_color, 2))
         self.setZValue(5)
@@ -206,8 +234,13 @@ class ConnectionItem(QGraphicsPathItem):
             f"{self.link.name}\n"
             f"{self.link.source_component_name}.{self.link.source_port} -> "
             f"{self.link.target_component_name}.{self.link.target_port}\n"
-            f"latency: {self.link.latency}"
+            f"source latency: {self.link.source_latency}\n"
+            f"target latency: {self.link.target_latency}"
         )
+
+        if getattr(self.link, "compatibility_severity", "ok") != "ok":
+            tooltip += f"\n\n⚠ {self.link.compatibility_message}"
+
         self.setToolTip(tooltip)
 
     def mousePressEvent(self, event):
@@ -350,6 +383,24 @@ class ConnectionItem(QGraphicsPathItem):
 
         return path
 
+    def shape(self) -> QPainterPath:
+        """
+        Return the actual clickable/selectable shape for this link.
+
+        QGraphicsPathItem can otherwise behave as if a large path area is
+        selectable, especially for orthogonal multi-segment routes. Use a stroked
+        version of the visible path so the link is only selectable when the pointer
+        is on or near the line.
+        """
+        stroker = QPainterPathStroker()
+        stroker.setWidth(max(self.pen().widthF(), self.SELECTION_TOLERANCE))
+        stroker.setCapStyle(Qt.RoundCap)
+        stroker.setJoinStyle(Qt.RoundJoin)
+        return stroker.createStroke(self.path())
+
+    def contains(self, point) -> bool:
+        return self.shape().contains(point)
+
     def update_position(self):
         points = self.routed_points()
         self.route_points = points
@@ -397,12 +448,19 @@ class ConnectionItem(QGraphicsPathItem):
     def is_connected_to_node(self, node: "ComponentNodeItem") -> bool:
         return self.source_port.node is node or self.target_port.node is node
 
+    def link_base_color(self) -> QColor:
+        if getattr(self.link, "compatibility_severity", "ok") == "error":
+            return self.error_color
+        if getattr(self.link, "compatibility_severity", "ok") == "warning":
+            return self.warning_color
+        return self.base_color
+
     def set_highlighted(self, highlighted: bool):
         if highlighted:
             self.setPen(QPen(self.highlight_color, 4))
             self.setZValue(20)
         else:
-            self.setPen(QPen(self.base_color, 2))
+            self.setPen(QPen(self.link_base_color(), 2))
             self.setZValue(5)
 
     def segment_intersects_rect(self, a: QPointF, b: QPointF, rect) -> bool:
@@ -449,8 +507,17 @@ class AddPortsButtonItem(QGraphicsTextItem):
 
 
 class ComponentNodeItem(QGraphicsRectItem):
-    WIDTH = 210
-    HEIGHT = 110
+    WIDTH = 180
+    HEIGHT = 170
+
+    TITLE_Y = 8
+    TITLE_HEIGHT = 28
+    ICON_SIZE = 175
+    ICON_Y = 15
+
+    MAX_VERTICAL_PORTS_PER_SIDE = 8
+    MAX_HORIZONTAL_PORTS_PER_SIDE = 6
+    MIN_PORT_SPACING = 18.0
 
     MAX_VERTICAL_PORTS_PER_SIDE = 8
     MAX_HORIZONTAL_PORTS_PER_SIDE = 6
@@ -492,7 +559,7 @@ class ComponentNodeItem(QGraphicsRectItem):
         self.icon_path = component.icon_path or ""
 
         self.setBrush(QBrush(QColor("#ffffff")))
-        self.normal_pen = QPen(QColor("#333333"), 1.5)
+        self.normal_pen = QPen(QColor("#cbd5e1"), 1.25)
         self.validation_pen = QPen(QColor("#dc2626"), 2.5)
         self.setPen(self.normal_pen)
         self.validation_messages: list[str] = []
@@ -504,13 +571,15 @@ class ComponentNodeItem(QGraphicsRectItem):
 
         self.title_item = QGraphicsTextItem(self.instance_name, self)
         self.title_item.setDefaultTextColor(QColor("#111111"))
-        self.title_item.setPos(10, 8)
+        self.title_item.setTextWidth(self.WIDTH)
+        self.title_item.setDefaultTextColor(QColor("#111111"))
+        self.title_item.setPos(0, self.TITLE_Y)
 
-        subtitle_text = "SubComponent" if component.is_subcomp else "Component"
-        subtitle = QGraphicsTextItem(f"{component.element} · {subtitle_text}", self)
-        subtitle.setDefaultTextColor(QColor("#555555"))
-        subtitle.setScale(0.85)
-        subtitle.setPos(10, 32)
+        title_document = self.title_item.document()
+        title_document.setDefaultTextOption(title_document.defaultTextOption())
+        self.title_item.setHtml(
+            f"<div align='center'><b>{self.instance_name}</b></div>"
+        )
 
         self.validation_warning_item = QGraphicsTextItem("⚠", self)
         self.validation_warning_item.setDefaultTextColor(QColor("#f59e0b"))
@@ -527,6 +596,7 @@ class ComponentNodeItem(QGraphicsRectItem):
             iface.setPos(10, 54)
 
         self.add_ports_from_database_or_defaults()
+        self.add_subcomp_connectors_from_metadata()
 
         self.icon_item = None
         self.add_icon()
@@ -537,7 +607,9 @@ class ComponentNodeItem(QGraphicsRectItem):
 
     def set_instance_name(self, new_name: str):
         self.instance_name_value = new_name
-        self.title_item.setPlainText(new_name)
+        self.title_item.setHtml(
+            f"<div align='center'><b>{new_name}</b></div>"
+        )
 
         for port in self.ports:
             for connection in port.connections:
@@ -1008,14 +1080,18 @@ class ComponentNodeItem(QGraphicsRectItem):
             return
 
         pixmap = pixmap.scaled(
-            52,
-            52,
+            self.ICON_SIZE,
+            self.ICON_SIZE,
             Qt.KeepAspectRatio,
             Qt.SmoothTransformation,
         )
 
         self.icon_item = QGraphicsPixmapItem(pixmap, self)
-        self.icon_item.setPos(10, 50)
+
+        icon_x = (self.WIDTH - pixmap.width()) / 2.0
+        icon_y = self.ICON_Y
+
+        self.icon_item.setPos(icon_x, icon_y)
         self.icon_item.setZValue(2)
 
     def set_icon_path(self, icon_path: str):
@@ -1028,3 +1104,21 @@ class ComponentNodeItem(QGraphicsRectItem):
             self.icon_item = None
 
         self.add_icon()
+
+    def metadata_for_expanded_port(self, port_name: str) -> dict:
+        for template in self.port_templates:
+            if not bool(template.get("is_variable")):
+                if template.get("name") == port_name:
+                    return dict(template)
+                continue
+
+            base_name = template.get("base_name", "") or template.get("name", "")
+
+            if port_name.startswith(base_name):
+                suffix = port_name[len(base_name):]
+                if suffix.isdigit():
+                    metadata = dict(template)
+                    metadata["expanded_name"] = port_name
+                    return metadata
+
+        return {}
