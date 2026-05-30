@@ -323,37 +323,38 @@ class SSTPlugin:
         """
         Check SST SubComponent Slot assignment compatibility.
 
-        This is where SST interface matching belongs. Example:
-
-            slot interface:         SST::Miranda::RequestGenerator
-            subcomponent interface: SST::Miranda::RequestGenerator
-
-        Ordinary Link.connect() port links should not use this rule.
+        This is where SST interface matching belongs. Ordinary SST Link.connect()
+        port links should not use this rule.
         """
         slot_iface = (
-            slot_metadata.get("required_interface", "")
-            or slot_metadata.get("iface", "")
-            or slot_metadata.get("interface", "")
-            or ""
-        )
+                slot_metadata.get("required_interface", "")
+                or slot_metadata.get("iface", "")
+                or slot_metadata.get("interface", "")
+                or ""
+        ).strip()
+
         subcomponent_iface = (
-            subcomponent_metadata.get("provided_interface", "")
-            or subcomponent_metadata.get("iface", "")
-            or subcomponent_metadata.get("interface", "")
-            or ""
-        )
+                subcomponent_metadata.get("provided_interface", "")
+                or subcomponent_metadata.get("iface", "")
+                or subcomponent_metadata.get("interface", "")
+                or ""
+        ).strip()
 
         if not slot_iface or not subcomponent_iface:
             return LinkCompatibilityResult(
                 can_create=True,
                 severity="warning",
-                title="Unknown SST SubComponent Compatibility",
+                title="Unknown SubComponent Interface",
                 code="sst.subcomponent_slot_unknown_interface",
                 visual_indicator="warning",
                 message=(
-                    "FUSE cannot prove whether this SST SubComponent is compatible "
-                    "with the selected slot because one side is missing interface "
-                    "metadata."
+                    "The interface type for at least one of these endpoints is unknown. "
+                    "Compatibility cannot be determined!\n\n"
+                    f"Slot interface: {slot_iface or '(unknown)'}\n"
+                    f"SubComponent interface: {subcomponent_iface or '(unknown)'}\n\n"
+                    "FUSE can create this SubComponent assignment, but the exported SST "
+                    "model may not run correctly if the slot and SubComponent are not "
+                    "actually compatible."
                 ),
             )
 

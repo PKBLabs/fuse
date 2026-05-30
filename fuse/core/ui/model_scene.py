@@ -18,6 +18,7 @@ from typing import Optional
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QPen, QColor
 from PySide6.QtWidgets import (
+    QCheckBox,
     QGraphicsLineItem,
     QGraphicsScene,
     QMessageBox,
@@ -58,6 +59,8 @@ class ModelScene(QGraphicsScene):
         self.active_plugin_id: str | None = None
         self.selected_connection: Optional[ConnectionItem] = None
         self.selected_subcomp_attachment: Optional[SubcompAttachmentItem] = None
+        self.suppress_mixed_endpoint_warning = False
+        self.suppress_port_occupied_warning = False
 
         # Link routing is relatively expensive. A component drag can generate
         # hundreds of ItemPositionHasChanged events per second. During drag we
@@ -473,6 +476,8 @@ class ModelScene(QGraphicsScene):
             return
 
         if port.is_connected():
+            self.warn_port_already_connected()
+            self.cancel_pending_connection()
             return
 
         if self.pending_source_port is None:
@@ -495,6 +500,7 @@ class ModelScene(QGraphicsScene):
             return
 
         if target_port.is_connected():
+            self.warn_port_already_connected()
             self.cancel_pending_connection()
             return
 
@@ -567,15 +573,50 @@ class ModelScene(QGraphicsScene):
         return False
 
     def warn_mixed_endpoint_types(self):
-        QMessageBox.warning(
-            None,
-            "Invalid Connection Type",
-            (
-                "SubComponent Slots can only be connected to SubComponent Connectors.\n\n"
-                "Use normal component ports for SST links, and use purple "
-                "subcomp_connector endpoints for SubComponent slot assignments."
-            ),
+        if self.suppress_mixed_endpoint_warning:
+            return
+
+        message_box = QMessageBox()
+        message_box.setIcon(QMessageBox.Warning)
+        message_box.setWindowTitle("Invalid Connection Type")
+        message_box.setText(
+            "SubComponent Slots can only be connected to SubComponent Connectors."
         )
+        message_box.setInformativeText(
+            "Use normal component ports for SST links. Use purple "
+            "subcomp_connector endpoints for SubComponent slot assignments."
+        )
+        message_box.setStandardButtons(QMessageBox.Ok)
+
+        checkbox = QCheckBox("Do not show this warning again")
+        message_box.setCheckBox(checkbox)
+
+        message_box.exec()
+
+        if checkbox.isChecked():
+            self.suppress_mixed_endpoint_warning = True
+
+    def warn_port_already_connected(self):
+        if self.suppress_port_occupied_warning:
+            return
+
+        message_box = QMessageBox()
+        message_box.setIcon(QMessageBox.Critical)
+        message_box.setWindowTitle("Port Already Connected")
+        message_box.setText("Port already connected!")
+        message_box.setInformativeText(
+            "Each port can only be connected to one link. Delete the existing link "
+            "or choose a different unoccupied port."
+        )
+        message_box.setStandardButtons(QMessageBox.Ok)
+
+        checkbox = QCheckBox("Do not show this warning again")
+        message_box.setCheckBox(checkbox)
+
+        message_box.exec()
+
+        if checkbox.isChecked():
+            self.suppress_port_occupied_warning = True
 
     def clear_subcomp_connector_compatibility_highlights(self):
         for node in self.component_items():
@@ -882,12 +923,35 @@ class ModelScene(QGraphicsScene):
             for item in clicked_items
         )
 
-        # Clicking empty canvas, or the wrong endpoint kind, cancels pending
-        # creation state.
-        if self.pending_source_port is not None and not clicked_a_port:
+        # If the user mixes endpoint kinds, explain why the connection is not allowed.
+        # Do this here because the scene may otherwise cancel the pending state before
+        # the clicked item receives its own mouse event.
+        if self.pending_source_port is not None and clicked_a_subcomp_connector:
+            self.warn_mixed_endpoint_types()
+            self.cancel_pending_connection()
+            event.accept()
+            return
+
+        if self.pending_subcomp_connector is not None and clicked_a_port:
+            self.warn_mixed_endpoint_types()
+            self.cancel_pending_subcomp_attachment()
+            event.accept()
+            return
+
+        # Clicking empty canvas, or anything unrelated to the pending endpoint kind,
+        # cancels pending creation state.
+        if (
+                self.pending_source_port is not None
+                and not clicked_a_port
+                and not clicked_a_subcomp_connector
+        ):
             self.cancel_pending_connection()
 
-        if self.pending_subcomp_connector is not None and not clicked_a_subcomp_connector:
+        if (
+                self.pending_subcomp_connector is not None
+                and not clicked_a_subcomp_connector
+                and not clicked_a_port
+        ):
             self.cancel_pending_subcomp_attachment()
 
         if (

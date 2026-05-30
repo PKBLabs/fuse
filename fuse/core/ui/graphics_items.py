@@ -16,7 +16,16 @@ from __future__ import annotations
 from typing import Optional
 
 from PySide6.QtCore import Qt, QPointF
-from PySide6.QtGui import QBrush, QColor, QCursor, QPainterPath, QPen, QPixmap, QPolygonF
+from PySide6.QtGui import (
+    QBrush,
+    QColor,
+    QCursor,
+    QPainterPath,
+    QPainterPathStroker,
+    QPen,
+    QPixmap,
+    QPolygonF,
+)
 from PySide6.QtWidgets import (
     QGraphicsEllipseItem,
     QGraphicsItem,
@@ -209,6 +218,7 @@ class ConnectionItem(QGraphicsPathItem):
     ROUTE_CLEARANCE = 24
     EXIT_MARGIN = 12
     LANE_SPACING = 12
+    SELECTION_TOLERANCE = 10.0
 
     def __init__(self, link: ModelLink, source_port: PortItem, target_port: PortItem):
         super().__init__()
@@ -389,6 +399,24 @@ class ConnectionItem(QGraphicsPathItem):
             path.lineTo(point)
 
         return path
+
+    def shape(self) -> QPainterPath:
+        """
+        Return the actual clickable/selectable shape for this link.
+
+        QGraphicsPathItem can otherwise behave as if a large path area is
+        selectable, especially for orthogonal multi-segment routes. Use a stroked
+        version of the visible path so the link is only selectable when the pointer
+        is on or near the line.
+        """
+        stroker = QPainterPathStroker()
+        stroker.setWidth(max(self.pen().widthF(), self.SELECTION_TOLERANCE))
+        stroker.setCapStyle(Qt.RoundCap)
+        stroker.setJoinStyle(Qt.RoundJoin)
+        return stroker.createStroke(self.path())
+
+    def contains(self, point) -> bool:
+        return self.shape().contains(point)
 
     def update_position(self):
         points = self.routed_points()
