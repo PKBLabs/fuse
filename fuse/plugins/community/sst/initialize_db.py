@@ -17,6 +17,40 @@ from fuse.core.persistence.database import (
 )
 
 
+def ensure_column(conn, table_name: str, column_name: str, ddl: str) -> None:
+    columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table_name})")}
+
+    if column_name not in columns:
+        conn.execute(f"ALTER TABLE {table_name} ADD COLUMN {ddl}")
+
+
+def ensure_sst_port_variable_columns(conn) -> None:
+    ensure_column(
+        conn,
+        "sst_ports",
+        "is_variable",
+        "is_variable INTEGER NOT NULL DEFAULT 0 CHECK (is_variable IN (0, 1))",
+    )
+    ensure_column(
+        conn,
+        "sst_ports",
+        "base_name",
+        "base_name TEXT NOT NULL DEFAULT ''",
+    )
+    ensure_column(
+        conn,
+        "sst_ports",
+        "count_parameter",
+        "count_parameter TEXT NOT NULL DEFAULT ''",
+    )
+    ensure_column(
+        conn,
+        "sst_ports",
+        "default_count",
+        "default_count INTEGER NOT NULL DEFAULT 1",
+    )
+
+
 def initialize_sst_schema(conn) -> None:
     conn.execute("""
         CREATE TABLE IF NOT EXISTS sst_framework_versions (
@@ -159,6 +193,10 @@ def initialize_sst_schema(conn) -> None:
             description TEXT DEFAULT '',
             iface TEXT NOT NULL DEFAULT '',
             parent_id INTEGER NOT NULL,
+            is_variable INTEGER NOT NULL DEFAULT 0 CHECK (is_variable IN (0, 1)),
+            base_name TEXT NOT NULL DEFAULT '',
+            count_parameter TEXT NOT NULL DEFAULT '',
+            default_count INTEGER NOT NULL DEFAULT 1,
 
             FOREIGN KEY (framework_version_id)
                 REFERENCES sst_framework_versions(id)
@@ -169,6 +207,8 @@ def initialize_sst_schema(conn) -> None:
                 ON DELETE CASCADE
         )
     """)
+
+    ensure_sst_port_variable_columns(conn)
 
 
 def initialize_database() -> None:

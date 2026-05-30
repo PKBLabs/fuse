@@ -88,13 +88,33 @@ def load_component_definitions(
     return definitions
 
 
+def load_port_metadata_for_component(
+    plugin_id: str,
+    component_id: str,
+    target_id: str | None = None,
+) -> list[dict]:
+    details = load_item_details(plugin_id, component_id, target_id=target_id)
+
+    return [
+        {
+            "name": connector.name,
+            "description": connector.description,
+            "iface": connector.interface,
+            "is_variable": bool(getattr(connector, "is_variable", False)),
+            "base_name": getattr(connector, "base_name", "") or connector.name,
+            "count_parameter": getattr(connector, "count_parameter", "") or "",
+            "default_count": int(getattr(connector, "default_count", 1) or 1),
+        }
+        for connector in details.connectors
+    ]
+
+
 def load_port_names_for_component(
     plugin_id: str,
     component_id: str,
     target_id: str | None = None,
 ) -> list[str]:
-    details = load_item_details(plugin_id, component_id, target_id=target_id)
-    return [connector.name for connector in details.connectors]
+    return [port["name"] for port in load_port_metadata_for_component(plugin_id, component_id, target_id)]
 
 
 def get_component_details(
@@ -128,6 +148,10 @@ def get_component_details(
                 "name": conn.name,
                 "description": conn.description,
                 "iface": conn.interface,
+                "is_variable": bool(getattr(conn, "is_variable", False)),
+                "base_name": getattr(conn, "base_name", "") or conn.name,
+                "count_parameter": getattr(conn, "count_parameter", "") or "",
+                "default_count": int(getattr(conn, "default_count", 1) or 1),
             }
             for conn in details.connectors
         ],
