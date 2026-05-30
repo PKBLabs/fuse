@@ -17,6 +17,7 @@ from PySide6.QtGui import QColor, QBrush
 from PySide6.QtWidgets import (
     QLabel,
     QMessageBox,
+    QPushButton,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
@@ -24,7 +25,7 @@ from PySide6.QtWidgets import (
 )
 
 from fuse.core.persistence.db_access import get_component_details
-from fuse.core.ui.graphics_items import ComponentNodeItem, ConnectionItem
+from fuse.core.ui.graphics_items import ComponentNodeItem, ConnectionItem, SubcompAttachmentItem
 
 
 class PropertiesPanel(QWidget):
@@ -33,6 +34,7 @@ class PropertiesPanel(QWidget):
         self.validation_issues_by_node: dict[int, dict[str, list[str]]] = {}
         self.current_node: Optional[ComponentNodeItem] = None
         self.current_link: Optional[ConnectionItem] = None
+        self.current_subcomp_attachment: Optional[SubcompAttachmentItem] = None
         self.property_changed_callback = None
         self._loading = False
 
@@ -48,13 +50,21 @@ class PropertiesPanel(QWidget):
         self.tree.itemChanged.connect(self.on_item_changed)
         layout.addWidget(self.tree)
 
+        self.delete_link_button = QPushButton("Delete Selected Link")
+        self.delete_link_button.clicked.connect(self.delete_current_link)
+        self.delete_link_button.setText("Delete Selected Link")
+        self.delete_link_button.setVisible(False)
+        layout.addWidget(self.delete_link_button)
+
     def show_empty(self):
         self._loading = True
         self.current_node = None
         self.current_link = None
+        self.current_subcomp_attachment = None
         self.title.setText("Nothing selected")
         self.tree.clear()
         self._loading = False
+        self.delete_link_button.setVisible(False)
 
     def add_category(self, name: str) -> QTreeWidgetItem:
         item = QTreeWidgetItem([name, ""])
@@ -92,8 +102,10 @@ class PropertiesPanel(QWidget):
         self._loading = True
         self.current_node = node
         self.current_link = None
+        self.current_subcomp_attachment = None
         self.title.setText("Component Instance")
         self.tree.clear()
+        self.delete_link_button.setVisible(False)
 
         component = node.component
 
@@ -207,14 +219,17 @@ class PropertiesPanel(QWidget):
         self._loading = True
         self.current_node = None
         self.current_link = connection
+        self.current_subcomp_attachment = None
         self.title.setText("Point-to-Point Link")
         self.tree.clear()
+        self.delete_link_button.setVisible(True)
 
         link = connection.link
 
         object_group = self.add_category("Object")
         self.add_property(object_group, "Name", link.name, "link.name", editable=True)
         self.add_property(object_group, "Type", link.link_type, "link.type", editable=False)
+
         self.add_property(
             object_group,
             "Source",
@@ -230,15 +245,45 @@ class PropertiesPanel(QWidget):
             editable=False,
         )
 
-        parameters_group = self.add_category("Parameters")
+        if getattr(link, "compatibility_severity", "ok") != "ok":
+            compatibility_group = self.add_category("Compatibility")
+            item = self.add_property(
+                compatibility_group,
+                "Status",
+                link.compatibility_severity,
+                "link.compatibility.status",
+                editable=False,
+            )
+            item.setToolTip(1, link.compatibility_message or "")
+            self.add_property(
+                compatibility_group,
+                "Message",
+                link.compatibility_message or "",
+                "link.compatibility.message",
+                editable=False,
+            )
+
+        latency_group = self.add_category("Endpoint Latencies")
         self.add_property(
-            parameters_group,
-            "latency",
-            link.latency,
-            "link.parameter.latency",
+            latency_group,
+            "Source latency",
+            link.source_latency,
+            "link.parameter.source_latency",
             editable=True,
             metadata={
-                "name": "latency",
+                "name": "source_latency",
+                "required": True,
+                "type": "latency",
+            },
+        )
+        self.add_property(
+            latency_group,
+            "Target latency",
+            link.target_latency,
+            "link.parameter.target_latency",
+            editable=True,
+            metadata={
+                "name": "target_latency",
                 "required": True,
                 "type": "latency",
             },
@@ -247,6 +292,86 @@ class PropertiesPanel(QWidget):
         self.tree.expandAll()
         self.tree.resizeColumnToContents(0)
         self._loading = False
+
+    def show_subcomp_attachment(self, attachment_item: SubcompAttachmentItem):
+        self._loading = True
+        self.current_node = None
+        self.current_link = None
+        self.current_subcomp_attachment = attachment_item
+        self.title.setText("SubComponent Attachment")
+        self.tree.clear()
+        self.delete_link_button.setText("Delete Selected Attachment")
+        self.delete_link_button.setVisible(True)
+
+        attachment = attachment_item.attachment
+
+        object_group = self.add_category("Object")
+        self.add_property(object_group, "Name", attachment.name, "subcomp_attachment.name", editable=False)
+        self.add_property(
+            object_group,
+            "Parent Slot",
+            f"{attachment.parent_component_name}.{attachment.slot_name}",
+            "subcomp_attachment.parent_slot",
+            editable=False,
+        )
+        self.add_property(
+            object_group,
+            "SubComponent",
+            attachment.child_component_name,
+            "subcomp_attachment.child",
+            editable=False,
+        )
+
+        interface_group = self.add_category("Interfaces")
+        self.add_property(
+            interface_group,
+            "Required Interface",
+            attachment.required_interface or "",
+            "subcomp_attachment.required_interface",
+            editable=False,
+        )
+        self.add_property(
+            interface_group,
+            "Provided Interface",
+            attachment.provided_interface or "",
+            "subcomp_attachment.provided_interface",
+            editable=False,
+        )
+
+        if attachment.compatibility_severity != "ok":
+            compatibility_group = self.add_category("Compatibility")
+            self.add_property(
+                compatibility_group,
+                "Status",
+                attachment.compatibility_severity,
+                "subcomp_attachment.compatibility.status",
+                editable=False,
+            )
+            self.add_property(
+                compatibility_group,
+                "Message",
+                attachment.compatibility_message or "",
+                "subcomp_attachment.compatibility.message",
+                editable=False,
+            )
+
+        self.tree.expandAll()
+        self.tree.resizeColumnToContents(0)
+        self._loading = False
+
+    def delete_current_link(self):
+        if self.current_link is not None:
+            scene = self.current_link.scene()
+
+            if scene is not None and hasattr(scene, "delete_link"):
+                scene.delete_link(self.current_link)
+            return
+
+        if self.current_subcomp_attachment is not None:
+            scene = self.current_subcomp_attachment.scene()
+
+            if scene is not None and hasattr(scene, "delete_subcomp_attachment"):
+                scene.delete_subcomp_attachment(self.current_subcomp_attachment)
 
     def load_component_parameters(self, node: ComponentNodeItem) -> list[dict]:
         component_id = node.component.component_id
@@ -297,7 +422,14 @@ class PropertiesPanel(QWidget):
             self.current_link.link.name = new_value
             self.current_link.update_tooltip()
 
+        elif key == "link.parameter.source_latency" and self.current_link is not None:
+            self.current_link.link.source_latency = new_value
+            self.current_link.update_tooltip()
+        elif key == "link.parameter.target_latency" and self.current_link is not None:
+            self.current_link.link.target_latency = new_value
+            self.current_link.update_tooltip()
         elif key == "link.parameter.latency" and self.current_link is not None:
+            # Backward-compatible legacy property key.
             self.current_link.link.latency = new_value
             self.current_link.update_tooltip()
 

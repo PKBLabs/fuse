@@ -13,9 +13,8 @@
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 from dataclasses import dataclass
 from typing import Optional
-
 from fuse.core.persistence.db_access import get_component_details
-
+from fuse.core.plugin_runtime.manager import get_plugin_by_id
 
 @dataclass
 class ValidationIssue:
@@ -162,23 +161,124 @@ def validate_links(scene) -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
 
     for link in scene.links:
-        if not link.latency.strip():
+        if not getattr(link, "source_latency", link.latency).strip():
             issues.append(
                 ValidationIssue(
                     issue_type="link_parameter",
                     object_name=link.name,
                     link_id=link.link_id,
-                    parameter_name="latency",
-                    message="Link latency is required.",
+                    parameter_name="source_latency",
+                    message="Source endpoint latency is required.",
+                )
+            )
+
+        if not getattr(link, "target_latency", link.latency).strip():
+            issues.append(
+                ValidationIssue(
+                    issue_type="link_parameter",
+                    object_name=link.name,
+                    link_id=link.link_id,
+                    parameter_name="target_latency",
+                    message="Target endpoint latency is required.",
                 )
             )
 
     return issues
 
+def validate_subcomp_attachments(scene) -> list[ValidationIssue]:
+    issues: list[ValidationIssue] = []
+    seen_slots: dict[tuple[int, str], str] = {}
+    seen_children: dict[int, str] = {}
+    node_ids = {node.node_id for node in scene.component_items()}
+
+    for attachment in getattr(scene, "subcomp_attachments", []):
+        if attachment.parent_node_id not in node_ids:
+            issues.append(
+                ValidationIssue(
+                    issue_type="subcomp_attachment",
+                    object_name=attachment.name,
+                    message="SubComponent attachment parent node does not exist.",
+                )
+            )
+
+        if attachment.child_node_id not in node_ids:
+            issues.append(
+                ValidationIssue(
+                    issue_type="subcomp_attachment",
+                    object_name=attachment.name,
+                    message="SubComponent attachment child node does not exist.",
+                )
+            )
+
+        slot_key = (attachment.parent_node_id, attachment.slot_name)
+        if slot_key in seen_slots:
+            issues.append(
+                ValidationIssue(
+                    issue_type="subcomp_attachment",
+                    object_name=attachment.name,
+                    node_id=attachment.parent_node_id,
+                    parameter_name=attachment.slot_name,
+                    message=(
+                        f"SubComponent slot '{attachment.slot_name}' is assigned more "
+                        "than once."
+                    ),
+                )
+            )
+        else:
+            seen_slots[slot_key] = attachment.name
+
+        if attachment.child_node_id in seen_children:
+            issues.append(
+                ValidationIssue(
+                    issue_type="subcomp_attachment",
+                    object_name=attachment.name,
+                    node_id=attachment.child_node_id,
+                    message="This SubComponent is assigned to more than one parent slot.",
+                )
+            )
+        else:
+            seen_children[attachment.child_node_id] = attachment.name
+
+        if attachment.required_interface and attachment.provided_interface:
+            if attachment.required_interface != attachment.provided_interface:
+                issues.append(
+                    ValidationIssue(
+                        issue_type="subcomp_attachment",
+                        object_name=attachment.name,
+                        node_id=attachment.parent_node_id,
+                        parameter_name=attachment.slot_name,
+                        message=(
+                            "SubComponent interface mismatch: slot requires "
+                            f"{attachment.required_interface}, but subcomponent provides "
+                            f"{attachment.provided_interface}."
+                        ),
+                    )
+                )
+
+    return issues
+
+
+def validate_plugin_links(scene) -> list[ValidationIssue]:
+    plugin_id = getattr(scene, "active_plugin_id", "") or ""
+
+    if not plugin_id:
+        return []
+
+    try:
+        plugin = get_plugin_by_id(plugin_id)
+    except Exception:
+        return []
+
+    if not hasattr(plugin, "validate_links"):
+        return []
+
+    return plugin.validate_links(scene)
 
 def validate_model(scene) -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
     issues.extend(validate_unique_names(scene))
     issues.extend(validate_required_component_parameters(scene))
     issues.extend(validate_links(scene))
+    issues.extend(validate_subcomp_attachments(scene))
+    issues.extend(validate_plugin_links(scene))
     return issues
