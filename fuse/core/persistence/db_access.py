@@ -117,6 +117,25 @@ def load_port_names_for_component(
 ) -> list[str]:
     return [port["name"] for port in load_port_metadata_for_component(plugin_id, component_id, target_id)]
 
+def load_subcomp_connector_metadata_for_component(
+    plugin_id: str,
+    component_id: str,
+    target_id: str | None = None,
+) -> list[dict]:
+    details = load_item_details(plugin_id, component_id, target_id=target_id)
+
+    return [
+        {
+            "name": connector.name,
+            "role": getattr(connector, "role", ""),
+            "description": getattr(connector, "description", ""),
+            "required_interface": getattr(connector, "required_interface", ""),
+            "provided_interface": getattr(connector, "provided_interface", ""),
+            "interface": getattr(connector, "interface", ""),
+            "iface": getattr(connector, "interface", ""),
+        }
+        for connector in getattr(details, "subcomp_connectors", [])
+    ]
 
 def get_component_details(
     plugin_id: str,
