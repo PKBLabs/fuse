@@ -55,6 +55,8 @@ class ModelScene(QGraphicsScene):
 
         self.model_changed_callback = None
         self.component_added_callback = None
+        self.component_used_callback = None
+        self.component_favorite_requested_callback = None
         self.selection_changed_callback = None
 
         self.active_plugin_id: str | None = None
@@ -128,6 +130,10 @@ class ModelScene(QGraphicsScene):
         )
         node.setPos(scene_pos)
         self.addItem(node)
+
+        if self.component_used_callback is not None:
+            self.component_used_callback(component)
+
         self.notify_component_added(node)
         return node
 

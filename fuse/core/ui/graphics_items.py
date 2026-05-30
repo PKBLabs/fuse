@@ -842,6 +842,20 @@ class ComponentNodeItem(QGraphicsRectItem):
                     attachment.child_component_name = new_name
                 attachment_item.update_tooltip()
 
+    def contextMenuEvent(self, event):
+        scene = self.scene()
+
+        menu = QMenu()
+        add_action = menu.addAction("Add to Frequently Used")
+
+        action = menu.exec(event.screenPos())
+
+        if action == add_action:
+            if scene is not None and hasattr(scene, "component_favorite_requested_callback"):
+                scene.component_favorite_requested_callback(self.component)
+
+        event.accept()
+
     def should_add_fallback_ports(self) -> bool:
         plugin_id = getattr(self.component, "plugin_id", "") or ""
 
