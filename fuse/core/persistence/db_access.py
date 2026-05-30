@@ -80,6 +80,8 @@ def load_component_definitions(
                 name=item.type_name,
                 is_subcomp=1 if getattr(item, "raw_kind", "") == "SubComponent" else 0,
                 category=item.category,
+                functionality=getattr(item, "functionality", "") or "",
+                description=getattr(item, "description", "") or "",
                 iface=getattr(item, "iface", "") or "",
                 icon_path=item.icon_path,
                 display_name_override=item.display_name,

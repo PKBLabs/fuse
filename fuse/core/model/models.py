@@ -30,6 +30,8 @@ class ComponentDefinition:
     framework_version: str = ""
     is_subcomp: int = 0
     category: str = ""
+    functionality: str = ""
+    description: str = ""
     iface: str = ""
     icon_path: str = ""
     display_name_override: str = ""
@@ -59,6 +61,8 @@ class ComponentDefinition:
                 "is_subcomp": int(self.is_subcomp or 0),
                 "category": self.category or "",
                 "iface": self.iface or "",
+                "functionality": self.functionality or "",
+                "description": self.description or "",
                 "icon_path": self.icon_path or "",
                 "display_name_override": self.display_name_override or "",
             }
@@ -81,6 +85,8 @@ class ComponentDefinition:
                 name=data.get("name") or "",
                 is_subcomp=int(data.get("is_subcomp") or 0),
                 category=data.get("category") or "",
+                functionality=data.get("functionality") or "",
+                description=data.get("description") or "",
                 iface=data.get("iface") or "",
                 icon_path=data.get("icon_path") or "",
                 display_name_override=data.get("display_name_override") or "",

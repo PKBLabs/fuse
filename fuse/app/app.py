@@ -81,6 +81,7 @@ class MainWindow(QMainWindow):
         self.scene.properties_panel = self.properties_panel
         self.scene.model_changed_callback = self.mark_dirty
         self.scene.component_added_callback = self.on_component_added
+        self.scene.selection_changed_callback = self.on_scene_selection_changed
         self.properties_panel.property_changed_callback = self.on_property_changed
 
         self.setup_menu_bar()
@@ -316,6 +317,12 @@ class MainWindow(QMainWindow):
 
     def on_component_added(self, node):
         self.update_model_outline()
+
+    def on_scene_selection_changed(self, node):
+        if node is None:
+            self.palette.clear_compatibility_context()
+        else:
+            self.palette.set_compatibility_context(node)
 
     def on_property_changed(self):
         self.update_model_outline()
