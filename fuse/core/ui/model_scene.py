@@ -55,6 +55,9 @@ class ModelScene(QGraphicsScene):
 
         self.model_changed_callback = None
         self.component_added_callback = None
+        self.component_used_callback = None
+        self.component_favorite_requested_callback = None
+        self.selection_changed_callback = None
 
         self.active_plugin_id: str | None = None
         self.selected_connection: Optional[ConnectionItem] = None
@@ -127,6 +130,10 @@ class ModelScene(QGraphicsScene):
         )
         node.setPos(scene_pos)
         self.addItem(node)
+
+        if self.component_used_callback is not None:
+            self.component_used_callback(component)
+
         self.notify_component_added(node)
         return node
 
@@ -195,6 +202,9 @@ class ModelScene(QGraphicsScene):
         if self.properties_panel is not None:
             self.properties_panel.show_component(node)
 
+        if self.selection_changed_callback is not None:
+            self.selection_changed_callback(node)
+
     def select_link(self, connection: ConnectionItem):
         self.clear_all_selection_highlights()
         self.selected_connection = connection
@@ -203,6 +213,9 @@ class ModelScene(QGraphicsScene):
         if self.properties_panel is not None:
             self.properties_panel.show_link(connection)
 
+        if self.selection_changed_callback is not None:
+            self.selection_changed_callback(None)
+
     def select_subcomp_attachment(self, attachment: SubcompAttachmentItem):
         self.clear_all_selection_highlights()
         self.selected_subcomp_attachment = attachment
@@ -210,6 +223,9 @@ class ModelScene(QGraphicsScene):
 
         if self.properties_panel is not None:
             self.properties_panel.show_subcomp_attachment(attachment)
+
+        if self.selection_changed_callback is not None:
+            self.selection_changed_callback(None)
 
     def begin_node_drag(self):
         self._dragging_node = True
@@ -965,5 +981,8 @@ class ModelScene(QGraphicsScene):
 
             if self.properties_panel is not None:
                 self.properties_panel.show_empty()
+
+            if self.selection_changed_callback is not None:
+                self.selection_changed_callback(None)
 
         super().mousePressEvent(event)

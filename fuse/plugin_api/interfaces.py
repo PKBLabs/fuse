@@ -33,6 +33,7 @@ class PaletteItem:
     type_name: str
     element_name: str = ""
     category: str = ""
+    functionality: str = ""
     description: str = ""
     icon_path: str = ""
     raw_kind: str = ""

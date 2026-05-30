@@ -128,6 +128,7 @@ class SSTPlugin:
                     c.name AS component_name,
                     c.description,
                     c.category,
+                    c.functionality,
                     c.iface,
                     c.is_subcomp,
                     c.icon_path
@@ -153,6 +154,7 @@ class SSTPlugin:
                     type_name=row["component_name"],
                     element_name=row["element_name"] or "",
                     category=row["category"] or "",
+                    functionality=row["functionality"] or "",
                     description=row["description"] or "",
                     icon_path=row["icon_path"] or "",
                     raw_kind=kind,
@@ -185,6 +187,7 @@ class SSTPlugin:
                     c.name AS component_name,
                     c.description,
                     c.category,
+                    c.functionality,
                     c.iface,
                     c.is_subcomp,
                     c.icon_path
@@ -240,12 +243,14 @@ class SSTPlugin:
             type_name=component_dict["component_name"],
             element_name=component_dict["element_name"] or "",
             category=component_dict["category"] or "",
+            functionality=component_dict["functionality"] or "",
             description=component_dict["description"] or "",
             icon_path=component_dict["icon_path"] or "",
             raw_kind="SubComponent" if component_dict["is_subcomp"] else "Component",
             target_id=str(component_dict["framework_version_id"]),
             target_label=component_dict["target_label"] or f"SST {component_dict['framework_version']}",
             framework_version=component_dict["framework_version"] or "",
+            iface=component_dict["iface"] or "",
         )
 
         connectors = [

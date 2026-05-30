@@ -81,6 +81,9 @@ class MainWindow(QMainWindow):
         self.scene.properties_panel = self.properties_panel
         self.scene.model_changed_callback = self.mark_dirty
         self.scene.component_added_callback = self.on_component_added
+        self.scene.component_used_callback = self.on_component_used
+        self.scene.component_favorite_requested_callback = self.on_component_favorite_requested
+        self.scene.selection_changed_callback = self.on_scene_selection_changed
         self.properties_panel.property_changed_callback = self.on_property_changed
 
         self.setup_menu_bar()
@@ -90,6 +93,9 @@ class MainWindow(QMainWindow):
 
         ensure_database_ready()
         self.load_framework_targets()
+
+    def on_component_favorite_requested(self, component):
+        self.palette.add_to_frequently_used(component)
 
     def setup_menu_bar(self):
         menu_bar = QMenuBar(self)
@@ -316,6 +322,12 @@ class MainWindow(QMainWindow):
 
     def on_component_added(self, node):
         self.update_model_outline()
+
+    def on_scene_selection_changed(self, node):
+        if node is None:
+            self.palette.clear_compatibility_context()
+        else:
+            self.palette.set_compatibility_context(node)
 
     def on_property_changed(self):
         self.update_model_outline()
@@ -586,6 +598,9 @@ class MainWindow(QMainWindow):
         )
 
         return False
+
+    def on_component_used(self, component):
+        self.palette.record_component_used(component)
 
 
 def main():
