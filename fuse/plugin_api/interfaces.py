@@ -54,6 +54,23 @@ class ConnectorDefinition:
 
 
 @dataclass
+class SubcompConnectorDefinition:
+    """
+    Plugin-defined endpoint used to attach SubComponents to parent slots.
+
+    These connectors are not normal link ports and must not export as
+    Link.connect() endpoints.
+    """
+
+    name: str
+    role: str  # slot or interface
+    description: str = ""
+    required_interface: str = ""
+    provided_interface: str = ""
+    interface: str = ""
+
+
+@dataclass
 class PropertyDefinition:
     name: str
     description: str = ""
