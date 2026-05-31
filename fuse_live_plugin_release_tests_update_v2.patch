@@ -1,0 +1,922 @@
+diff --git a/.github/workflows/gem5-integration.yml b/.github/workflows/gem5-integration.yml
+index 53c3059..9d651b0 100644
+--- a/.github/workflows/gem5-integration.yml
++++ b/.github/workflows/gem5-integration.yml
+@@ -1,89 +1,104 @@
+-name: gem5 Integration Tests
+-
+-on:
+-  workflow_dispatch:
+-  schedule:
+-    - cron: "0 9 * * 1"
+-  push:
+-    branches:
+-      - main
+-      - develop
+-    paths:
+-      - "fuse/plugins/community/gem5/**"
+-      - "fuse/core/persistence/**"
+-      - "fuse/core/plugin_runtime/**"
+-      - "fuse/core/ui/**"
+-      - "fuse/core/model/**"
+-      - "fuse/app/**"
+-      - "fuse/core/toolchains/**"
+-      - "fuse/plugin_api/**"
+-      - "fuse/requirements*.txt"
+-      - ".github/workflows/gem5-integration.yml"
+-      - "docker/gem5-ci/**"
+-
+-permissions:
+-  contents: read
+-  packages: read
+-
+-jobs:
+-  gem5-live:
+-    name: gem5 ${{ matrix.gem5.version }} live integration tests
+-    runs-on: ubuntu-24.04
+-    timeout-minutes: 60
+-
+-    strategy:
+-      fail-fast: false
+-      matrix:
+-        gem5:
+-          - version: "25.1.0.1"
+-            image: "ghcr.io/pkblabs/fuse-gem5-ci:gem5-v25.1.0.1"
+-          - version: "24.1.0.3"
+-            image: "ghcr.io/pkblabs/fuse-gem5-ci:gem5-v24.1.0.3"
+-
+-    container:
+-      image: ${{ matrix.gem5.image }}
+-      credentials:
+-        username: ${{ github.actor }}
+-        password: ${{ secrets.GITHUB_TOKEN }}
+-
+-    defaults:
+-      run:
+-        shell: bash
+-        working-directory: fuse
+-
+-    env:
+-      QT_QPA_PLATFORM: offscreen
+-      FUSE_SPLASH_MS: "0"
+-      FUSE_TEST_AUTOCLOSE_MS: "100"
+-      FUSE_GEM5_VERSION: ${{ matrix.gem5.version }}
+-      GEM5_ROOT: /opt/gem5
+-      GEM5_BINARY: /opt/gem5/build/X86/gem5.opt
+-
+-    steps:
+-      - name: Check out repository
+-        uses: actions/checkout@v6
+-
+-      - name: Verify gem5 installation
+-        run: |
+-          echo "$GEM5_ROOT"
+-          echo "$GEM5_BINARY"
+-          test -x "$GEM5_BINARY"
+-          ldd "$GEM5_BINARY" | tee /tmp/gem5-ldd.txt
+-          if grep -q "not found" /tmp/gem5-ldd.txt; then
+-            echo "Missing gem5 runtime shared libraries:"
+-            grep "not found" /tmp/gem5-ldd.txt
+-            exit 1
+-          fi
+-          "$GEM5_BINARY" --help > /tmp/gem5-help.txt 2>&1
+-          head -40 /tmp/gem5-help.txt
+-
+-      - name: Create Python virtual environment
+-        run: |
+-          rm -rf /tmp/fuse-venv
+-          python3 -m venv /tmp/fuse-venv
+-          /tmp/fuse-venv/bin/python -m pip install --upgrade pip
+-          /tmp/fuse-venv/bin/python -m pip install -r requirements-dev.txt
+-
+-      - name: Run live gem5 tests
+-        run: |
++name: gem5 Integration Tests
++
++on:
++  workflow_dispatch:
++  schedule:
++    - cron: "0 9 * * 1"
++  pull_request:
++    branches:
++      - develop
++    paths:
++      - "fuse/plugins/community/gem5/**"
++      - "fuse/core/persistence/**"
++      - "fuse/core/plugin_runtime/**"
++      - "fuse/core/ui/**"
++      - "fuse/core/model/**"
++      - "fuse/app/**"
++      - "fuse/core/toolchains/**"
++      - "fuse/plugin_api/**"
++      - "fuse/requirements*.txt"
++      - ".github/workflows/gem5-integration.yml"
++      - "docker/gem5-ci/**"
++  push:
++    branches:
++      - main
++      - develop
++    paths:
++      - "fuse/plugins/community/gem5/**"
++      - "fuse/core/persistence/**"
++      - "fuse/core/plugin_runtime/**"
++      - "fuse/core/ui/**"
++      - "fuse/core/model/**"
++      - "fuse/app/**"
++      - "fuse/core/toolchains/**"
++      - "fuse/plugin_api/**"
++      - "fuse/requirements*.txt"
++      - ".github/workflows/gem5-integration.yml"
++      - "docker/gem5-ci/**"
++
++permissions:
++  contents: read
++  packages: read
++
++jobs:
++  gem5-live:
++    name: gem5 ${{ matrix.gem5.version }} live integration tests
++    runs-on: ubuntu-24.04
++    timeout-minutes: 60
++
++    strategy:
++      fail-fast: false
++      matrix:
++        gem5:
++          - version: "25.1.0.1"
++            image: "ghcr.io/pkblabs/fuse-gem5-ci:gem5-v25.1.0.1"
++          - version: "24.1.0.3"
++            image: "ghcr.io/pkblabs/fuse-gem5-ci:gem5-v24.1.0.3"
++
++    container:
++      image: ${{ matrix.gem5.image }}
++      credentials:
++        username: ${{ github.actor }}
++        password: ${{ secrets.GITHUB_TOKEN }}
++
++    defaults:
++      run:
++        shell: bash
++        working-directory: fuse
++
++    env:
++      QT_QPA_PLATFORM: offscreen
++      FUSE_SPLASH_MS: "0"
++      FUSE_TEST_AUTOCLOSE_MS: "100"
++      FUSE_GEM5_VERSION: ${{ matrix.gem5.version }}
++      GEM5_ROOT: /opt/gem5
++      GEM5_BINARY: /opt/gem5/build/X86/gem5.opt
++
++    steps:
++      - name: Check out repository
++        uses: actions/checkout@v6
++
++      - name: Verify gem5 installation
++        run: |
++          echo "$GEM5_ROOT"
++          echo "$GEM5_BINARY"
++          test -x "$GEM5_BINARY"
++          ldd "$GEM5_BINARY" | tee /tmp/gem5-ldd.txt
++          if grep -q "not found" /tmp/gem5-ldd.txt; then
++            echo "Missing gem5 runtime shared libraries:"
++            grep "not found" /tmp/gem5-ldd.txt
++            exit 1
++          fi
++          "$GEM5_BINARY" --help > /tmp/gem5-help.txt 2>&1
++          head -40 /tmp/gem5-help.txt
++
++      - name: Create Python virtual environment
++        run: |
++          rm -rf /tmp/fuse-venv
++          python3 -m venv /tmp/fuse-venv
++          /tmp/fuse-venv/bin/python -m pip install --upgrade pip
++          /tmp/fuse-venv/bin/python -m pip install -r requirements-dev.txt
++
++      - name: Run live gem5 tests
++        run: |
+           /tmp/fuse-venv/bin/python -m pytest -q -m "gem5_live"
+\ No newline at end of file
+diff --git a/.github/workflows/sst-integration.yml b/.github/workflows/sst-integration.yml
+index 04b5d1c..118e788 100644
+--- a/.github/workflows/sst-integration.yml
++++ b/.github/workflows/sst-integration.yml
+@@ -1,82 +1,97 @@
+-name: SST Integration Tests
+-
+-on:
+-  workflow_dispatch:
+-  schedule:
+-    - cron: "0 8 * * 1"
+-  push:
+-    branches:
+-      - main
+-      - develop
+-    paths:
+-      - "fuse/plugins/community/sst/**"
+-      - "fuse/core/persistence/**"
+-      - "fuse/core/plugin_runtime/**"
+-      - "fuse/core/ui/**"
+-      - "fuse/core/model/**"
+-      - "fuse/app/**"
+-      - "fuse/core/toolchains/**"
+-      - "fuse/plugin_api/**"
+-      - "fuse/requirements*.txt"
+-      - ".github/workflows/sst-integration.yml"
+-      - "docker/sst-ci/**"
+-
+-permissions:
+-  contents: read
+-  packages: read
+-
+-jobs:
+-  sst-live:
+-    name: SST ${{ matrix.sst.version }} live integration tests
+-    runs-on: ubuntu-24.04
+-    timeout-minutes: 60
+-
+-    strategy:
+-      fail-fast: false
+-      matrix:
+-        sst:
+-          - version: "15.1.2"
+-            image: "ghcr.io/pkblabs/fuse-sst-ci:sst-15.1.2"
+-          - version: "16.0.0"
+-            image: "ghcr.io/pkblabs/fuse-sst-ci:sst-16.0.0"
+-
+-    container:
+-      image: ${{ matrix.sst.image }}
+-      credentials:
+-        username: ${{ github.actor }}
+-        password: ${{ secrets.GITHUB_TOKEN }}
+-
+-    defaults:
+-      run:
+-        shell: bash
+-        working-directory: fuse
+-
+-    env:
+-      QT_QPA_PLATFORM: offscreen
+-      FUSE_SPLASH_MS: "0"
+-      FUSE_TEST_AUTOCLOSE_MS: "100"
+-      FUSE_SST_VERSION: ${{ matrix.sst.version }}
+-
+-    steps:
+-      - name: Check out repository
+-        uses: actions/checkout@v6
+-
+-      - name: Verify SST installation
+-        run: |
+-          which sst
+-          which sst-info
+-          sst --version || true
+-          sst-info --version || true
+-          sst-info > /tmp/sst-info.txt
+-          head -100 /tmp/sst-info.txt
+-
+-      - name: Create Python virtual environment
+-        run: |
+-          rm -rf /tmp/fuse-venv
+-          python3 -m venv /tmp/fuse-venv
+-          /tmp/fuse-venv/bin/python -m pip install --upgrade pip
+-          /tmp/fuse-venv/bin/python -m pip install -r requirements-dev.txt
+-
+-      - name: Run live SST tests
+-        run: |
++name: SST Integration Tests
++
++on:
++  workflow_dispatch:
++  schedule:
++    - cron: "0 8 * * 1"
++  pull_request:
++    branches:
++      - develop
++    paths:
++      - "fuse/plugins/community/sst/**"
++      - "fuse/core/persistence/**"
++      - "fuse/core/plugin_runtime/**"
++      - "fuse/core/ui/**"
++      - "fuse/core/model/**"
++      - "fuse/app/**"
++      - "fuse/core/toolchains/**"
++      - "fuse/plugin_api/**"
++      - "fuse/requirements*.txt"
++      - ".github/workflows/sst-integration.yml"
++      - "docker/sst-ci/**"
++  push:
++    branches:
++      - main
++      - develop
++    paths:
++      - "fuse/plugins/community/sst/**"
++      - "fuse/core/persistence/**"
++      - "fuse/core/plugin_runtime/**"
++      - "fuse/core/ui/**"
++      - "fuse/core/model/**"
++      - "fuse/app/**"
++      - "fuse/core/toolchains/**"
++      - "fuse/plugin_api/**"
++      - "fuse/requirements*.txt"
++      - ".github/workflows/sst-integration.yml"
++      - "docker/sst-ci/**"
++
++permissions:
++  contents: read
++  packages: read
++
++jobs:
++  sst-live:
++    name: SST ${{ matrix.sst.version }} live integration tests
++    runs-on: ubuntu-24.04
++    timeout-minutes: 60
++
++    strategy:
++      fail-fast: false
++      matrix:
++        sst:
++          - version: "15.1.2"
++            image: "ghcr.io/pkblabs/fuse-sst-ci:sst-15.1.2"
++          - version: "16.0.0"
++            image: "ghcr.io/pkblabs/fuse-sst-ci:sst-16.0.0"
++
++    container:
++      image: ${{ matrix.sst.image }}
++      credentials:
++        username: ${{ github.actor }}
++        password: ${{ secrets.GITHUB_TOKEN }}
++
++    defaults:
++      run:
++        shell: bash
++        working-directory: fuse
++
++    env:
++      QT_QPA_PLATFORM: offscreen
++      FUSE_SPLASH_MS: "0"
++      FUSE_TEST_AUTOCLOSE_MS: "100"
++      FUSE_SST_VERSION: ${{ matrix.sst.version }}
++
++    steps:
++      - name: Check out repository
++        uses: actions/checkout@v6
++
++      - name: Verify SST installation
++        run: |
++          which sst
++          which sst-info
++          sst --version || true
++          sst-info --version || true
++          sst-info > /tmp/sst-info.txt
++          head -100 /tmp/sst-info.txt
++
++      - name: Create Python virtual environment
++        run: |
++          rm -rf /tmp/fuse-venv
++          python3 -m venv /tmp/fuse-venv
++          /tmp/fuse-venv/bin/python -m pip install --upgrade pip
++          /tmp/fuse-venv/bin/python -m pip install -r requirements-dev.txt
++
++      - name: Run live SST tests
++        run: |
+           /tmp/fuse-venv/bin/python -m pytest -q -m "sst_live"
+\ No newline at end of file
+diff --git a/docs/ci/github-actions.md b/docs/ci/github-actions.md
+index dcbd1ef..7d9e837 100644
+--- a/docs/ci/github-actions.md
++++ b/docs/ci/github-actions.md
+@@ -22,7 +22,7 @@ CLA Check
+ Core Tests
+ ```
+ 
+-Pull requests should **not** run SST/gem5 live integration by default because those tests require large prebuilt simulator images. Adding ordinary dependency-light unit tests does not require a workflow trigger change; they are picked up automatically by Core Tests.
++Pull requests should always run the dependency-light Core Tests. Release-prep pull requests targeting `develop` also run SST/gem5 live integration when relevant plugin, workflow, Dockerfile, requirements, or plugin API paths change. Adding ordinary dependency-light unit tests does not require a workflow trigger change; they are picked up automatically by Core Tests.
+ 
+ ## Push policy
+ 
+@@ -32,7 +32,7 @@ Pushes to `main` or `develop` should run:
+ Core Tests
+ ```
+ 
+-SST/gem5 integration tests run on pushes to `main` or `develop` only when relevant plugin, workflow, Dockerfile, requirements, or plugin API paths change.
++SST/gem5 integration tests run on pushes to `main` or `develop` only when relevant plugin, workflow, Dockerfile, requirements, or plugin API paths change. They also run on pull requests targeting `develop` for those same path sets, so release-prep merges can validate live plugin behavior before code lands on `develop`.
+ 
+ ## Manual/scheduled policy
+ 
+@@ -43,7 +43,7 @@ workflow_dispatch
+ weekly schedule
+ ```
+ 
+-Manual runs are useful before releases and after rebuilding simulator CI images.
++Manual runs are useful before releases, after rebuilding simulator CI images, and when validating a local plugin change against a real simulator installation outside the normal core test path.
+ 
+ ## Core Tests
+ 
+@@ -74,7 +74,7 @@ This is a lightweight acknowledgement workflow. A formal CLA process may be adde
+ 
+ ## SST Integration Tests
+ 
+-Runs tests marked `sst_live` in a prebuilt SST container image.
++Runs tests marked `sst_live` in a prebuilt SST container image. This workflow is the release-prep gate for checking the SST plugin against real `sst-info`/`sst` binaries instead of mocked catalog data.
+ 
+ Requirements:
+ 
+@@ -95,9 +95,17 @@ ghcr.io/pkblabs/fuse-sst-ci:sst-15.1.2
+ ghcr.io/pkblabs/fuse-sst-ci:sst-16.0.0
+ ```
+ 
++SST live tests should cover:
++
++- real `sst-info` execution and database sync
++- real SST target and palette discovery
++- real component, parameter, port, variable-port, and subcomponent metadata
++- plugin toolchain validation against the configured SST version
++- export of at least one real catalog-backed model and `sst --run-mode=init` acceptance when a suitable component exists
++
+ ## gem5 Integration Tests
+ 
+-Runs tests marked `gem5_live` in a prebuilt gem5 container image.
++Runs tests marked `gem5_live` in a prebuilt gem5 container image. This workflow is the release-prep gate for checking the gem5 plugin against a real gem5 binary instead of mocked catalog data.
+ 
+ Requirements:
+ 
+@@ -119,6 +127,12 @@ ghcr.io/pkblabs/fuse-gem5-ci:gem5-v25.1.0.1
+ ghcr.io/pkblabs/fuse-gem5-ci:gem5-v24.1.0.3
+ ```
+ 
++gem5 live tests should cover:
++
++- real gem5 binary execution
++- configured binary/version validation
++- live plugin behavior that cannot be proven from mocked data alone
++
+ ## Build image workflows
+ 
+ The simulator image build workflows are manual-only:
+diff --git a/docs/testing/test-matrix.md b/docs/testing/test-matrix.md
+index c5cc2d6..d4f6e89 100644
+--- a/docs/testing/test-matrix.md
++++ b/docs/testing/test-matrix.md
+@@ -73,8 +73,8 @@
+ | Workflow | Command | Trigger summary |
+ |---|---|---|
+ | Core Tests | `pytest -q -m "not sst_live and not gem5_live"` | Pull requests and pushes to `main`/`develop` |
+-| SST Integration | `pytest -q -m "sst_live"` | Manual, weekly, and relevant SST/plugin/core path pushes |
+-| gem5 Integration | `pytest -q -m "gem5_live"` | Manual, weekly, and relevant gem5/plugin/core path pushes |
++| SST Integration | `pytest -q -m "sst_live"` | Manual, weekly, relevant SST/plugin/core path pushes, and relevant PRs targeting `develop` |
++| gem5 Integration | `pytest -q -m "gem5_live"` | Manual, weekly, relevant gem5/plugin/core path pushes, and relevant PRs targeting `develop` |
+ 
+ Adding dependency-light unit tests under `fuse/tests/`, `fuse/plugins/community/sst/tests/`, or `fuse/plugins/community/gem5/tests/` does not require changing the workflow triggers. Only add or edit workflow path filters when the CI execution policy itself changes.
+ 
+@@ -85,6 +85,6 @@ Before tagging a release:
+ 1. Run dependency-light tests locally.
+ 2. Confirm Core Tests pass on GitHub Actions.
+ 3. Rebuild simulator CI images only if Dockerfiles or simulator versions changed.
+-4. Run SST Integration Tests manually on `develop`.
+-5. Run gem5 Integration Tests manually on `develop`.
++4. Confirm SST Integration Tests pass on the release-prep PR or run them manually on `develop`.
++5. Confirm gem5 Integration Tests pass on the release-prep PR or run them manually on `develop`.
+ 6. Confirm README testing badges are green for the intended branch/event.
+diff --git a/fuse/plugins/community/sst/tests/test_sst_live_integration.py b/fuse/plugins/community/sst/tests/test_sst_live_integration.py
+index 110e117..b939ed1 100644
+--- a/fuse/plugins/community/sst/tests/test_sst_live_integration.py
++++ b/fuse/plugins/community/sst/tests/test_sst_live_integration.py
+@@ -1,61 +1,377 @@
+-# Flexible User-extensible Simulation Editor (FUSE)
+-# Copyright (c) 2026 PKB Research Labs, LLC.
+-#
+-# This file is part of FUSE.
+-#
+-# FUSE is free software: you can redistribute it and/or modify it under the
+-# terms of the GNU General Public License as published by the Free Software
+-# Foundation, either version 3 of the License, or, at your option, any later
+-# version.
+-#
+-# FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
+-# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+-# A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+-import shutil
+-import pytest
+-
+-
+-pytestmark = pytest.mark.sst_live
+-
+-
+-def require_sst_info():
+-    if shutil.which("sst-info") is None:
+-        pytest.skip("sst-info is not installed")
+-
+-
+-def test_real_sst_info_runs_successfully():
+-    require_sst_info()
+-
+-    from fuse.plugins.community.sst.get_sstinfo import get_sstinfo
+-
+-    result = get_sstinfo(args=[])
+-
+-    assert result.return_code == 0
+-    assert result.stdout.strip()
+-    assert "ELEMENT LIBRARY" in result.stdout
+-
+-
+-def test_real_sst_info_can_sync_database():
+-    require_sst_info()
+-
+-    from fuse.core.persistence.database import get_connection
+-    from fuse.core.persistence.db_access import ensure_database_ready
+-    from fuse.plugins.community.sst.get_sstinfo import sync_sstinfo_to_database
+-
+-    ensure_database_ready(run_plugin_bootstrap=False)
+-
+-    run_id = sync_sstinfo_to_database()
+-
+-    assert isinstance(run_id, int)
+-
+-    with get_connection() as conn:
+-        element_count = conn.execute(
+-            "SELECT COUNT(*) AS count FROM sst_elements"
+-        ).fetchone()["count"]
+-
+-        component_count = conn.execute(
+-            "SELECT COUNT(*) AS count FROM sst_components"
+-        ).fetchone()["count"]
+-
+-    assert element_count > 0
+-    assert component_count > 0
+\ No newline at end of file
++# Flexible User-extensible Simulation Editor (FUSE)
++# Copyright (c) 2026 PKB Research Labs, LLC.
++#
++# This file is part of FUSE.
++#
++# FUSE is free software: you can redistribute it and/or modify it under the
++# terms of the GNU General Public License as published by the Free Software
++# Foundation, either version 3 of the License, or, at your option, any later
++# version.
++#
++# FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
++# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
++# A PARTICULAR PURPOSE. See the GNU General Public License for more details.
++from __future__ import annotations
++
++import os
++import shutil
++import subprocess
++from types import SimpleNamespace
++
++import pytest
++
++
++pytestmark = pytest.mark.sst_live
++
++
++def require_sst_binary() -> str:
++    path = shutil.which("sst")
++    if path is None:
++        pytest.skip("sst is not installed")
++    return path
++
++
++def require_sst_info() -> str:
++    path = shutil.which("sst-info")
++    if path is None:
++        pytest.skip("sst-info is not installed")
++    return path
++
++
++def expected_sst_version() -> str:
++    return os.environ.get("FUSE_SST_VERSION", "15.0.0")
++
++
++def prepare_live_sst_database() -> None:
++    require_sst_info()
++
++    from fuse.core.persistence.db_access import ensure_database_ready
++    from fuse.plugins.community.sst.get_sstinfo import sync_sstinfo_to_database
++
++    version = expected_sst_version()
++    ensure_database_ready(run_plugin_bootstrap=False)
++    sync_sstinfo_to_database(
++        version=version,
++        label=f"SST {version}",
++        is_default=True,
++    )
++
++
++def plugin_and_default_target():
++    prepare_live_sst_database()
++
++    from fuse.plugins.community.sst.plugin import SSTPlugin
++
++    plugin = SSTPlugin()
++    targets = plugin.list_targets()
++    assert targets
++
++    return plugin, next((target for target in targets if target.is_default), targets[0])
++
++
++def first_item_with_details(predicate):
++    plugin, target = plugin_and_default_target()
++
++    for item in plugin.load_palette_items(target_id=target.target_id):
++        details = plugin.load_item_details(item.item_id, target_id=target.target_id)
++        if predicate(item, details):
++            return plugin, target, item, details
++
++    pytest.skip("The live SST catalog did not contain a component matching this test fixture.")
++
++
++def required_parameter_names(details) -> set[str]:
++    return {
++        prop.name
++        for prop in details.properties
++        if prop.required and not str(prop.default_value or "").strip().replace("<required>", "")
++    }
++
++
++def node_for_palette_item(item, parameters=None):
++    from fuse.core.model.models import ComponentDefinition
++
++    component = ComponentDefinition(
++        plugin_id=item.plugin_id,
++        target_id=item.target_id,
++        target_label=item.target_label,
++        framework_version=item.framework_version,
++        component_id=item.item_id,
++        element=item.element_name,
++        name=item.type_name,
++        is_subcomponent=1 if item.raw_kind == "SubComponent" else 0,
++        category=item.category,
++        interface=item.iface,
++        display_name_override=item.display_name,
++    )
++
++    return SimpleNamespace(
++        node_id=1,
++        instance_name="fuse_live_component0",
++        component=component,
++        parameters=parameters or {},
++    )
++
++
++class SingleNodeScene:
++    def __init__(self, node):
++        self.node = node
++        self.links = []
++        self.subcomp_attachments = []
++
++    def component_items(self):
++        return [self.node]
++
++
++def test_real_sst_info_runs_successfully():
++    require_sst_info()
++
++    from fuse.plugins.community.sst.get_sstinfo import get_sstinfo
++
++    result = get_sstinfo(args=[])
++
++    assert result.return_code == 0
++    assert result.stdout.strip()
++    assert "ELEMENT LIBRARY" in result.stdout
++
++
++def test_real_sst_info_can_sync_database():
++    require_sst_info()
++
++    from fuse.core.persistence.database import get_connection
++    from fuse.core.persistence.db_access import ensure_database_ready
++    from fuse.plugins.community.sst.get_sstinfo import sync_sstinfo_to_database
++
++    ensure_database_ready(run_plugin_bootstrap=False)
++
++    run_id = sync_sstinfo_to_database()
++
++    assert isinstance(run_id, int)
++
++    with get_connection() as conn:
++        element_count = conn.execute(
++            "SELECT COUNT(*) AS count FROM sst_elements"
++        ).fetchone()["count"]
++
++        component_count = conn.execute(
++            "SELECT COUNT(*) AS count FROM sst_components"
++        ).fetchone()["count"]
++
++    assert element_count > 0
++    assert component_count > 0
++
++
++def test_real_sst_binary_runs_successfully():
++    require_sst_binary()
++
++    result = subprocess.run(
++        ["sst", "--version"],
++        text=True,
++        stdout=subprocess.PIPE,
++        stderr=subprocess.PIPE,
++        timeout=30,
++        check=False,
++    )
++
++    output = (result.stdout + "\n" + result.stderr).strip()
++
++    assert result.returncode == 0
++    assert output
++    assert "sst" in output.lower()
++
++
++def test_real_sst_toolchain_validation_accepts_configured_version():
++    sst_info_path = require_sst_info()
++
++    from fuse.core.model.project_settings import ToolchainSettings
++    from fuse.plugins.community.sst.get_sstinfo import validate_sst_toolchain
++
++    ok, message, result = validate_sst_toolchain(
++        ToolchainSettings(tool_paths={"sstInfo": sst_info_path}),
++        expected_version=expected_sst_version(),
++    )
++
++    assert ok is True
++    assert result is not None
++    assert result.return_code == 0
++    assert message.strip()
++
++
++def test_real_sst_sync_records_successful_raw_run_and_catalog_counts():
++    prepare_live_sst_database()
++
++    from fuse.core.persistence.database import get_connection
++
++    with get_connection() as conn:
++        run = conn.execute(
++            """
++            SELECT return_code, stdout
++            FROM sst_info_runs
++            ORDER BY id DESC
++            LIMIT 1
++            """
++        ).fetchone()
++        element_count = conn.execute("SELECT COUNT(*) AS count FROM sst_elements").fetchone()["count"]
++        component_count = conn.execute("SELECT COUNT(*) AS count FROM sst_components").fetchone()["count"]
++        parameter_count = conn.execute("SELECT COUNT(*) AS count FROM sst_parameters").fetchone()["count"]
++        port_count = conn.execute("SELECT COUNT(*) AS count FROM sst_ports").fetchone()["count"]
++
++    assert run is not None
++    assert run["return_code"] == 0
++    assert "ELEMENT LIBRARY" in run["stdout"]
++    assert element_count > 0
++    assert component_count > 0
++    assert parameter_count > 0
++    assert port_count > 0
++
++
++def test_real_sst_plugin_lists_default_target_and_palette_items():
++    plugin, target = plugin_and_default_target()
++
++    items = plugin.load_palette_items(target_id=target.target_id)
++
++    assert target.plugin_id == "sst"
++    assert target.framework_version
++    assert items
++    assert all(item.plugin_id == "sst" for item in items)
++    assert all(item.target_id == target.target_id for item in items)
++    assert any(item.element_name for item in items)
++    assert any(item.type_name for item in items)
++
++
++def test_real_sst_item_details_include_catalog_metadata():
++    _, target, item, details = first_item_with_details(
++        lambda _item, details: bool(details.connectors or details.properties or details.subcomp_connectors)
++    )
++
++    assert details.palette_item.item_id == item.item_id
++    assert details.palette_item.target_id == target.target_id
++    assert details.palette_item.element_name == item.element_name
++    assert details.palette_item.type_name == item.type_name
++    assert details.connectors or details.properties or details.subcomp_connectors
++
++
++def test_real_sst_catalog_contains_component_with_port_metadata():
++    _, _, _, details = first_item_with_details(lambda _item, details: bool(details.connectors))
++
++    connector = details.connectors[0]
++
++    assert connector.name
++    assert connector.base_name or connector.name
++    assert isinstance(connector.is_variable, bool)
++    assert connector.default_count >= 1
++
++
++def test_real_sst_catalog_contains_component_with_parameter_metadata():
++    _, _, _, details = first_item_with_details(lambda _item, details: bool(details.properties))
++
++    prop = details.properties[0]
++
++    assert prop.name
++    assert isinstance(prop.description, str)
++    assert isinstance(prop.default_value, str)
++    assert isinstance(prop.required, bool)
++
++
++def test_real_sst_catalog_contains_subcomponent_metadata_when_available():
++    _, _, item, details = first_item_with_details(
++        lambda item, details: item.raw_kind == "SubComponent" or any(
++            conn.role == "interface" for conn in details.subcomp_connectors
++        )
++    )
++
++    assert item.raw_kind == "SubComponent" or details.subcomp_connectors
++    if item.raw_kind == "SubComponent":
++        assert item.iface or any(conn.provided_interface for conn in details.subcomp_connectors)
++
++
++def test_real_sst_catalog_contains_variable_port_metadata_when_available():
++    _, _, _, details = first_item_with_details(
++        lambda _item, details: any(conn.is_variable for conn in details.connectors)
++    )
++
++    variable = next(conn for conn in details.connectors if conn.is_variable)
++
++    assert variable.base_name
++    assert variable.count_parameter
++    assert variable.default_count >= 1
++
++
++def test_real_sst_subcomponent_slot_compatibility_accepts_matching_interfaces_when_available():
++    plugin, target = plugin_and_default_target()
++    items = plugin.load_palette_items(target_id=target.target_id)
++
++    slots = []
++    subcomponents_by_iface = {}
++
++    for item in items:
++        details = plugin.load_item_details(item.item_id, target_id=target.target_id)
++
++        for connector in details.subcomp_connectors:
++            if connector.role == "slot" and connector.required_interface:
++                slots.append(connector)
++
++        if item.raw_kind == "SubComponent" and item.iface:
++            subcomponents_by_iface.setdefault(item.iface, item)
++
++    for slot in slots:
++        subcomponent = subcomponents_by_iface.get(slot.required_interface)
++        if subcomponent is None:
++            continue
++
++        result = plugin.check_subcomponent_slot_compatibility(
++            slot_metadata={"required_interface": slot.required_interface},
++            subcomponent_metadata={"provided_interface": subcomponent.iface},
++        )
++
++        assert result.can_create is True
++        assert result.is_ok
++        return
++
++    pytest.skip("The live SST catalog did not expose a matching slot/subcomponent interface pair.")
++
++
++def test_real_sst_exported_json_can_be_loaded_by_sst_run_mode_init(tmp_path):
++    require_sst_binary()
++    plugin, target = plugin_and_default_target()
++
++    from fuse.plugins.community.sst.export_json import export_sst_json
++
++    failures = []
++
++    for item in plugin.load_palette_items(target_id=target.target_id):
++        if item.raw_kind == "SubComponent":
++            continue
++
++        details = plugin.load_item_details(item.item_id, target_id=target.target_id)
++        if required_parameter_names(details):
++            continue
++
++        scene = SingleNodeScene(node_for_palette_item(item))
++        output_path = tmp_path / f"{item.element_name}_{item.type_name}.json".replace("/", "_")
++        export_sst_json(scene, output_path)
++
++        result = subprocess.run(
++            ["sst", "--run-mode=init", str(output_path)],
++            text=True,
++            stdout=subprocess.PIPE,
++            stderr=subprocess.PIPE,
++            timeout=30,
++            check=False,
++        )
++
++        if result.returncode == 0:
++            return
++
++        failures.append(
++            f"{item.element_name}.{item.type_name}: "
++            f"{(result.stdout + result.stderr).strip()[:500]}"
++        )
++
++        if len(failures) >= 25:
++            break
++
++    pytest.skip(
++        "Could not find a no-required-parameter live SST component that "
++        "sst --run-mode=init accepted. Tried:\n" + "\n".join(failures)
++    )

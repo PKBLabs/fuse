@@ -22,7 +22,7 @@ CLA Check
 Core Tests
 ```
 
-Pull requests should **not** run SST/gem5 live integration by default because those tests require large prebuilt simulator images. Adding ordinary dependency-light unit tests does not require a workflow trigger change; they are picked up automatically by Core Tests.
+Pull requests should always run the dependency-light Core Tests. Release-prep pull requests targeting `develop` also run SST/gem5 live integration when relevant plugin, workflow, Dockerfile, requirements, or plugin API paths change. Adding ordinary dependency-light unit tests does not require a workflow trigger change; they are picked up automatically by Core Tests.
 
 ## Push policy
 
@@ -32,7 +32,7 @@ Pushes to `main` or `develop` should run:
 Core Tests
 ```
 
-SST/gem5 integration tests run on pushes to `main` or `develop` only when relevant plugin, workflow, Dockerfile, requirements, or plugin API paths change.
+SST/gem5 integration tests run on pushes to `main` or `develop` only when relevant plugin, workflow, Dockerfile, requirements, or plugin API paths change. They also run on pull requests targeting `develop` for those same path sets, so release-prep merges can validate live plugin behavior before code lands on `develop`.
 
 ## Manual/scheduled policy
 
@@ -43,7 +43,7 @@ workflow_dispatch
 weekly schedule
 ```
 
-Manual runs are useful before releases and after rebuilding simulator CI images.
+Manual runs are useful before releases, after rebuilding simulator CI images, and when validating a local plugin change against a real simulator installation outside the normal core test path.
 
 ## Core Tests
 
@@ -74,7 +74,7 @@ This is a lightweight acknowledgement workflow. A formal CLA process may be adde
 
 ## SST Integration Tests
 
-Runs tests marked `sst_live` in a prebuilt SST container image.
+Runs tests marked `sst_live` in a prebuilt SST container image. This workflow is the release-prep gate for checking the SST plugin against real `sst-info`/`sst` binaries instead of mocked catalog data.
 
 Requirements:
 
@@ -95,9 +95,17 @@ ghcr.io/pkblabs/fuse-sst-ci:sst-15.1.2
 ghcr.io/pkblabs/fuse-sst-ci:sst-16.0.0
 ```
 
+SST live tests should cover:
+
+- real `sst-info` execution and database sync
+- real SST target and palette discovery
+- real component, parameter, port, variable-port, and subcomponent metadata
+- plugin toolchain validation against the configured SST version
+- export of at least one real catalog-backed model and `sst --run-mode=init` acceptance when a suitable component exists
+
 ## gem5 Integration Tests
 
-Runs tests marked `gem5_live` in a prebuilt gem5 container image.
+Runs tests marked `gem5_live` in a prebuilt gem5 container image. This workflow is the release-prep gate for checking the gem5 plugin against a real gem5 binary instead of mocked catalog data.
 
 Requirements:
 
@@ -118,6 +126,12 @@ The gem5 workflow currently tests matrix images such as:
 ghcr.io/pkblabs/fuse-gem5-ci:gem5-v25.1.0.1
 ghcr.io/pkblabs/fuse-gem5-ci:gem5-v24.1.0.3
 ```
+
+gem5 live tests should cover:
+
+- real gem5 binary execution
+- configured binary/version validation
+- live plugin behavior that cannot be proven from mocked data alone
 
 ## Build image workflows
 

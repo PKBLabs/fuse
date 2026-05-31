@@ -73,8 +73,8 @@
 | Workflow | Command | Trigger summary |
 |---|---|---|
 | Core Tests | `pytest -q -m "not sst_live and not gem5_live"` | Pull requests and pushes to `main`/`develop` |
-| SST Integration | `pytest -q -m "sst_live"` | Manual, weekly, and relevant SST/plugin/core path pushes |
-| gem5 Integration | `pytest -q -m "gem5_live"` | Manual, weekly, and relevant gem5/plugin/core path pushes |
+| SST Integration | `pytest -q -m "sst_live"` | Manual, weekly, relevant SST/plugin/core path pushes, and relevant PRs targeting `develop` |
+| gem5 Integration | `pytest -q -m "gem5_live"` | Manual, weekly, relevant gem5/plugin/core path pushes, and relevant PRs targeting `develop` |
 
 Adding dependency-light unit tests under `fuse/tests/`, `fuse/plugins/community/sst/tests/`, or `fuse/plugins/community/gem5/tests/` does not require changing the workflow triggers. Only add or edit workflow path filters when the CI execution policy itself changes.
 
@@ -85,6 +85,6 @@ Before tagging a release:
 1. Run dependency-light tests locally.
 2. Confirm Core Tests pass on GitHub Actions.
 3. Rebuild simulator CI images only if Dockerfiles or simulator versions changed.
-4. Run SST Integration Tests manually on `develop`.
-5. Run gem5 Integration Tests manually on `develop`.
+4. Confirm SST Integration Tests pass on the release-prep PR or run them manually on `develop`.
+5. Confirm gem5 Integration Tests pass on the release-prep PR or run them manually on `develop`.
 6. Confirm README testing badges are green for the intended branch/event.
