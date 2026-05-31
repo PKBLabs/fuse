@@ -36,11 +36,16 @@ def parse_version_text(text: str) -> ParsedVersion | None:
     if not text:
         return None
 
-    match = re.search(r"(\d+(?:\.\d+){0,3})", text)
+    matches = list(re.finditer(r"(\d+(?:\.\d+){0,3})", text))
 
-    if match is None:
+    if not matches:
         return None
 
+    # Prefer dotted version strings so product names such as "gem5" do not
+    # get mistaken for the toolchain version when later output contains
+    # "25.1.0.1". If no dotted version is present, fall back to the first
+    # numeric token to preserve support for major-only versions.
+    match = next((candidate for candidate in matches if "." in candidate.group(1)), matches[0])
     version_text = match.group(1)
     parts = tuple(int(part) for part in version_text.split("."))
 

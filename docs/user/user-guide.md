@@ -46,6 +46,31 @@ The SST plugin populates palette items by reading SST metadata from `sst-info`, 
 
 The gem5 plugin currently provides built-in metadata for supported gem5 objects such as `System`, `TimingSimpleCPU`, `SystemXBar`, and `DDR3_1600_8x8`.
 
+### Palette organization and sorting
+
+The palette can show the active catalog in several views:
+
+- **Element** groups components by simulator/framework element and then separates normal components from subcomponents.
+- **Function** groups components by inferred function, such as CPU, Memory, Network, Bus / Interconnect, I/O, Generator, and Statistics / Debug.
+- **Flat** shows all available entries in one list.
+- **Recent** shows recently used components and subcomponents.
+- **Compatible SubComponents** narrows the list to subcomponents that match the selected component's available subcomponent slots when that compatibility context is available.
+
+The **A-Z** checkbox controls catalog sorting. When it is enabled, groups and entries are sorted alphabetically. Component sorting uses the component element, whether the entry is a component or subcomponent, and the component name. When it is disabled, entries keep the order returned by the active plugin/catalog.
+
+Palette entries show tooltips when you hover over them. A component tooltip includes the display name, description, function, interface, and category when that metadata is available.
+
+### Frequently used and recent components
+
+The palette tracks component usage locally so frequently used and recently used items can be reached quickly.
+
+- Dragging/dropping a component records it as recently used and increments its usage count.
+- The **Frequently Used** quick section shows the highest-count entries first, with alphabetical ordering as a tie-breaker.
+- Right-click a component instance on the canvas or in the model outline and choose **Add to Frequently Used** to pin that component into the quick section.
+- Frequently used entries can also be hidden/removed from the quick section through the palette's component tile context menu.
+
+Usage state is stored in local user settings. It is a convenience feature and is not written to the `.fse` project file.
+
 ## Adding a component to the model
 
 1. Select a component in the palette.
@@ -59,6 +84,14 @@ A component instance appears as an architecture icon with ports. The exact ports
 ## Selecting a component
 
 Click a component instance on the canvas.
+
+Hovering over a component shows a tooltip with the instance name, component type, plugin/target metadata, and warning text when validation has marked the component. Hovering over a port shows the port name and whether the port is available or already occupied.
+
+Right-click a component instance to open its context menu. The component context menu currently includes:
+
+- **Add to Frequently Used**: pins or promotes that component type in the palette's Frequently Used section.
+- **Remove Component**: deletes the component instance from the model.
+- **Remove SubComponent**: shown instead of Remove Component for subcomponent instances.
 
 The properties panel updates to show:
 
@@ -100,6 +133,8 @@ Each point-to-point port can participate in at most one link. If a port is alrea
 
 Click a link line to select it.
 
+Hovering over a link shows a tooltip with the link name, source endpoint, target endpoint, source latency, and target latency. Right-click a link and choose **Remove Link** to delete it.
+
 The properties panel updates to show:
 
 - Link name.
@@ -113,6 +148,19 @@ The selected link is highlighted.
 ## Highlighting related links
 
 Click a component instance to highlight links attached to that component. This helps identify link ownership in dense models.
+
+## Deleting components, subcomponents, and links
+
+FUSE provides several equivalent deletion paths:
+
+- Select a component, subcomponent, link, or subcomponent attachment on the canvas and press **Delete** or **Backspace**.
+- Right-click a component on the canvas and choose **Remove Component** or **Remove SubComponent**.
+- Right-click a link on the canvas and choose **Remove Link**.
+- Select a link or attachment and use the delete button shown in the properties panel.
+- Right-click an item in the model outline and choose the remove action.
+- Select a component or link in the model outline and press **Delete** or **Backspace**.
+
+Deleting a component also deletes normal links attached to that component, subcomponent attachment edges involving that component, and recursively attached child subcomponents. Deleting a link removes it from both endpoint ports and makes those ports available again. All deletion operations mark the project dirty.
 
 ## Validating a model
 

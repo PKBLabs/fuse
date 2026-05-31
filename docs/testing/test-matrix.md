@@ -6,7 +6,7 @@
 |---|---|---|
 | App launch | launch/shutdown subprocess | `fuse/tests/test_app_launch.py` |
 | Main window | construct, show, close | `fuse/tests/test_main_window.py` |
-| Plugin discovery | SST/gem5 discovery, broken plugin handling | `fuse/tests/test_plugin_discovery.py` |
+| Plugin discovery/manager | SST/gem5 discovery, broken plugin handling, manifest loading, plugin filtering, item detail dispatch | `fuse/tests/test_plugin_discovery.py`, `fuse/tests/test_discovery_and_plugin_manager_extended.py` |
 | Plugin metadata validation | invalid manifests/metadata handling | `fuse/tests/test_plugin_metadata_validation.py` |
 | Database | core and plugin table initialization | `fuse/tests/test_database_initialization.py` |
 | Component palette | component catalog/list and palette population | `fuse/tests/test_component_palette.py` |
@@ -14,12 +14,15 @@
 | Model-view drop | drag/drop creation and drop coordinate conversion | `fuse/tests/test_model_view_component_drop.py` |
 | Component instances | unique default names, outline/callbacks, dirty state | `fuse/tests/test_component_instance_naming_outline_dirty.py` |
 | Properties panel | parameter display, input validation, write-back, dirty state | `fuse/tests/test_properties_panel_parameter_editing.py` |
-| Project I/O | `.fse` save/load and validation | `fuse/tests/test_project_io.py` |
+| Project I/O | `.fse` save/load, validation, endpoint latencies, plugin metadata, subcomponent attachments, legacy compatibility | `fuse/tests/test_project_io.py` |
 | Model roundtrip | save/load components and links | `fuse/tests/test_fuse_model_roundtrip.py` |
 | Resources | logo and icon path resolution | `fuse/tests/test_resource_paths.py` |
 | Routing | path simplification and route validity | `fuse/tests/test_routing.py` |
-| Validation | duplicate names, required params, link latency | `fuse/tests/test_validation.py` |
-| UI | splash/about/palette | `fuse/tests/` |
+| Validation | duplicate names, required params, link endpoint latencies, plugin validation delegation, subcomponent attachments | `fuse/tests/test_validation.py`, `fuse/tests/test_validation_core_extended.py` |
+| UI | splash/about/palette, variable ports, model outline, dirty state | `fuse/tests/` |
+| Project/plugin settings | project settings, plugin settings, toolchain settings, legacy field compatibility | `fuse/tests/test_project_settings.py` |
+| Toolchains | local/SSH command providers, executable discovery, version parsing and match policies | `fuse/tests/test_toolchain_utilities.py`, `fuse/tests/test_discovery_and_plugin_manager_extended.py` |
+| Plugin API models | compatibility result/report and migration plan helpers | `fuse/tests/test_plugin_api_models.py` |
 
 ## Requested behavior coverage
 
@@ -45,30 +48,35 @@
 | Area | Tests | Location |
 |---|---|---|
 | Schema | `sst_*` tables created | `fuse/plugins/community/sst/tests/test_sst_schema.py` |
-| Parser | sample `sst-info` parsing | `fuse/plugins/community/sst/tests/test_sst_parser.py` |
+| Parser | sample `sst-info` parsing, variable ports, slot interfaces, multiline metadata | `fuse/plugins/community/sst/tests/test_sst_parser.py` |
 | Parser edge cases | brackets, colons, missing units | `test_sst_parser_edge_cases.py` |
 | Import | sync parsed metadata to database | `test_sst_import.py` |
 | DB utils | plugin query helpers | `test_sst_db_utils.py` |
 | Negative DB cases | missing records | `test_sst_db_utils_negative.py` |
 | File import | `--from-file` behavior | `test_sst_file_import.py` |
 | Command sync | monkeypatched `sst-info` | `test_sst_sync_command.py` |
-| SST JSON export | SST JSON structure and live execution where applicable | `test_sst_json*.py` |
+| SST JSON export | SST JSON structure, endpoint latencies, nested subcomponents, validation errors, live execution where applicable | `test_sst_json*.py` |
+| Compatibility/migration | target compatibility reports, migration plans, scene mutation/rerouting | `test_sst_compatibility_and_migration.py` |
+| Plugin API behavior | target filtering, variable connector metadata, subcomponent connector metadata | `test_sst_plugin.py` |
 | Live SST | real `sst-info`/`sst` integration | `test_sst_live_integration.py` |
 
 ## gem5 plugin tests
 
 | Area | Tests | Location |
 |---|---|---|
-| Built-in metadata | gem5 targets/items/details | `fuse/plugins/community/gem5/tests/` |
+| Built-in metadata | gem5 targets/items/details, catalog integrity, connector/property mapping | `fuse/plugins/community/gem5/tests/` |
+| Toolchain validation | command selection, version checks, non-gem5 output, command failures | `test_gem5_plugin_unit.py` |
 | Live gem5 | real gem5 binary smoke test | `fuse/plugins/community/gem5/tests/test_gem5_live_integration.py` |
 
 ## CI mapping
 
-| Workflow | Command |
-|---|---|
-| Core Tests | `pytest -q -m "not sst_live and not gem5_live"` |
-| SST Integration | `pytest -q -m "sst_live"` |
-| gem5 Integration | `pytest -q -m "gem5_live"` |
+| Workflow | Command | Trigger summary |
+|---|---|---|
+| Core Tests | `pytest -q -m "not sst_live and not gem5_live"` | Pull requests and pushes to `main`/`develop` |
+| SST Integration | `pytest -q -m "sst_live"` | Manual, weekly, and relevant SST/plugin/core path pushes |
+| gem5 Integration | `pytest -q -m "gem5_live"` | Manual, weekly, and relevant gem5/plugin/core path pushes |
+
+Adding dependency-light unit tests under `fuse/tests/`, `fuse/plugins/community/sst/tests/`, or `fuse/plugins/community/gem5/tests/` does not require changing the workflow triggers. Only add or edit workflow path filters when the CI execution policy itself changes.
 
 ## Release-readiness recommendation
 

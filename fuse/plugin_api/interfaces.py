@@ -110,6 +110,59 @@ class LinkCompatibilityResult:
 
 
 @dataclass
+class CompatibilityIssue:
+    severity: str
+    object_name: str
+    message: str
+    node_id: int | None = None
+    link_id: int | None = None
+    parameter_name: str | None = None
+    fix_kind: str = ""
+    fix_data: dict = field(default_factory=dict)
+
+    @property
+    def is_warning(self) -> bool:
+        return self.severity == "warning"
+
+    @property
+    def is_error(self) -> bool:
+        return self.severity == "error"
+
+
+@dataclass
+class CompatibilityReport:
+    plugin_id: str
+    source_target_id: str = ""
+    destination_target_id: str = ""
+    issues: list[CompatibilityIssue] = field(default_factory=list)
+
+    @property
+    def has_errors(self) -> bool:
+        return any(issue.is_error for issue in self.issues)
+
+    @property
+    def has_warnings(self) -> bool:
+        return any(issue.is_warning for issue in self.issues)
+
+    @property
+    def can_apply(self) -> bool:
+        return not self.has_errors
+
+
+@dataclass
+class MigrationPlan:
+    plugin_id: str
+    source_target_id: str = ""
+    destination_target_id: str = ""
+    report: CompatibilityReport | None = None
+    node_updates: list[dict] = field(default_factory=list)
+
+    @property
+    def can_apply(self) -> bool:
+        return self.report is None or self.report.can_apply
+
+
+@dataclass
 class ItemDetails:
     palette_item: PaletteItem
     connectors: list[ConnectorDefinition] = field(default_factory=list)

@@ -106,6 +106,16 @@ Version validation is compatibility-oriented rather than exact-CI-tag-oriented. 
 
 The component palette should list components from the selected active plugin and target.
 
+Use the palette view selector to choose how the catalog is organized:
+
+- **Element** groups entries by simulator/framework element and separates components from subcomponents.
+- **Function** groups entries by inferred purpose, such as CPU, Memory, Network, Bus / Interconnect, I/O, Generator, and Statistics / Debug.
+- **Flat** lists all entries together.
+- **Recent** lists recently used entries.
+- **Compatible SubComponents** lists matching subcomponents for the currently selected component when slot metadata is available.
+
+Use the **A-Z** checkbox to control sorting. When enabled, catalog groups and component entries are sorted alphabetically. When disabled, the palette preserves plugin/catalog order. Hover over a palette entry to see metadata such as display name, description, function, interface, and category.
+
 For SST, metadata is imported from `sst-info` into the local database. If the palette is empty, check that:
 
 - SST Core and SST Elements are installed.
@@ -118,6 +128,8 @@ For gem5, the current community plugin provides built-in catalog metadata for su
 ## 5. Add components to the model
 
 Drag a component from the palette and drop it on the canvas.
+
+Each successful drop updates the palette's recent/frequent usage tracking. The Frequently Used quick section shows high-use and pinned entries. Right-click a component instance on the canvas or in the model outline and choose **Add to Frequently Used** to pin that component type for quick access.
 
 When a drop occurs, FUSE:
 
@@ -161,6 +173,16 @@ The saved `.fse` project stores the resulting scene position:
 When the project is reopened, FUSE restores the component to that model coordinate.
 
 ## 7. Select and inspect components
+
+Click a component instance on the canvas. Hover over the component to see its tooltip, including instance/type metadata and validation warnings when present. Hover over ports to see the port name and availability.
+
+Right-click a component on the canvas to open its context menu:
+
+- **Add to Frequently Used** pins or promotes the component type in the palette.
+- **Remove Component** deletes the component instance.
+- **Remove SubComponent** appears instead for subcomponent instances.
+
+The same component actions are available from the model outline context menu.
 
 Click a component instance on the canvas. The properties panel updates to show:
 
@@ -256,13 +278,16 @@ If either selected port is already connected, FUSE rejects the new connection an
 
 ## 11. Select and edit links
 
-Click a link line to inspect it. The properties panel shows:
+Click a link line to inspect it. Hover over a link to see its tooltip, including the link name, source endpoint, target endpoint, source latency, and target latency. Right-click a link and choose **Remove Link** to delete it.
+
+The properties panel shows:
 
 - Link name.
 - Link type.
 - Source endpoint.
 - Target endpoint.
-- Latency.
+- Source latency.
+- Target latency.
 
 Example:
 
@@ -274,15 +299,25 @@ Object
   Target  bus0.cpu_side_ports
 
 Parameters
-  latency 1ns
+  source_latency 1ns
+  target_latency 1ns
 ```
 
 Editable link fields include:
 
 - Link name.
-- Link latency.
+- Source latency.
+- Target latency.
 
-## 12. Validate the model
+Links can also be deleted from the model outline context menu, from the properties panel delete button, or by pressing **Delete**/**Backspace** while the link is selected.
+
+## 12. Delete model objects
+
+FUSE supports deletion from both the canvas and the model outline. Select a component, subcomponent, link, or subcomponent attachment and press **Delete** or **Backspace**, or use the relevant right-click/context-menu remove action. The properties panel also exposes a delete button for selected links and subcomponent attachments.
+
+When a component is deleted, FUSE also removes attached normal links, subcomponent attachment edges involving that component, and recursively attached child subcomponents. When a link is deleted, it is removed from both endpoint ports so those ports can be reused.
+
+## 13. Validate the model
 
 FUSE validates common model correctness rules before save/export operations.
 
@@ -301,7 +336,7 @@ When validation finds problems:
 
 Fix the listed issues, then validate/save again.
 
-## 13. Save the project
+## 14. Save the project
 
 Use:
 
@@ -332,7 +367,7 @@ A project file stores the model and project settings, including:
 
 Project files do **not** store entire plugin catalogs. Catalogs are regenerated from plugin metadata, imported toolchain data, or built-in plugin records.
 
-## 14. Export simulator-specific output
+## 15. Export simulator-specific output
 
 When a plugin supports export, use the appropriate export action from the application menu.
 

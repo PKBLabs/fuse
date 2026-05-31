@@ -22,7 +22,7 @@ CLA Check
 Core Tests
 ```
 
-Pull requests should **not** run SST/gem5 live integration by default because those tests require large prebuilt simulator images.
+Pull requests should **not** run SST/gem5 live integration by default because those tests require large prebuilt simulator images. Adding ordinary dependency-light unit tests does not require a workflow trigger change; they are picked up automatically by Core Tests.
 
 ## Push policy
 
@@ -53,7 +53,7 @@ Runs dependency-light tests:
 python -m pytest -q -m "not sst_live and not gem5_live"
 ```
 
-This workflow should not require real SST or gem5 installations.
+This workflow should not require real SST or gem5 installations. The fast suite includes core unit tests, headless Qt tests, project I/O tests, plugin API tests, toolchain utility tests, and dependency-light SST/gem5 plugin unit tests. Tests that need a real simulator must be marked `sst_live` or `gem5_live` so they stay out of this workflow.
 
 Recommended trigger:
 
@@ -213,3 +213,31 @@ Use branch-specific badges for core tests and event-specific badges for manual s
 [![SST Integration Tests](https://github.com/PKBLabs/fuse/actions/workflows/sst-integration.yml/badge.svg?branch=develop&event=workflow_dispatch)](https://github.com/PKBLabs/fuse/actions/workflows/sst-integration.yml)
 [![gem5 Integration Tests](https://github.com/PKBLabs/fuse/actions/workflows/gem5-integration.yml/badge.svg?branch=develop&event=workflow_dispatch)](https://github.com/PKBLabs/fuse/actions/workflows/gem5-integration.yml)
 ```
+
+## When to update CI triggers
+
+Do not update workflow triggers just because a new dependency-light test file was added. The Core Tests workflow discovers unmarked tests automatically.
+
+Update CI triggers only when one of these policies changes:
+
+- A new live-test marker or live simulator workflow is introduced.
+- A new path outside the current filters should start triggering SST or gem5 live integration.
+- Docker image build inputs or simulator container paths change.
+- Requirements files, plugin API paths, or plugin/core paths are reorganized.
+
+When adding a test that requires a real simulator binary, mark it with the appropriate live marker and place it in the plugin test directory:
+
+```python
+import pytest
+
+pytestmark = pytest.mark.sst_live
+```
+
+or:
+
+```python
+import pytest
+
+pytestmark = pytest.mark.gem5_live
+```
+

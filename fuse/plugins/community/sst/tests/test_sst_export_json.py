@@ -128,7 +128,8 @@ def test_build_sst_json_exports_links(qtbot, monkeypatch):
         target_node_id=cache_node.node_id,
         target_component_name="cache0",
         target_port="in",
-        latency="1ns",
+        source_latency="1ns",
+        target_latency="1ns",
     )
 
     scene.addItem(ConnectionItem(link, cpu_out, cache_in))

@@ -1,6 +1,6 @@
 # Testing Guide
 
-FUSE uses `pytest` and `pytest-qt`.
+FUSE uses `pytest` and `pytest-qt`. The fast suite is designed to run without installed SST or gem5 binaries; simulator-backed checks are isolated behind live-test markers.
 
 ## Test layout
 
@@ -14,28 +14,40 @@ SST-specific tests belong in the SST plugin. gem5-specific tests belong in the g
 
 ## Running tests
 
-Run all tests:
+Run the fast dependency-light suite from the FUSE package root, the directory that contains `pytest.ini` and `requirements-dev.txt`:
 
 ```bash
-.venv/bin/python -m pytest -q
+QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q -m "not sst_live and not gem5_live"
 ```
 
-Run dependency-light tests:
+This is the same marker expression used by the Core Tests GitHub Actions workflow. It includes core tests, Qt tests that can run headlessly, and dependency-light SST/gem5 unit tests. It intentionally excludes tests that require real simulator installations.
+
+Run all tests available in the current environment:
 
 ```bash
-.venv/bin/python -m pytest -q -m "not sst_live and not gem5_live"
+QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q
 ```
 
-Run SST live tests:
+Use this only when the local environment can satisfy every selected marker. A normal developer machine usually should not run the unfiltered suite unless SST and gem5 live-test requirements are also configured.
+
+Run SST live tests only:
 
 ```bash
 .venv/bin/python -m pytest -q -m "sst_live"
 ```
 
-Run gem5 live tests:
+Run gem5 live tests only:
 
 ```bash
 .venv/bin/python -m pytest -q -m "gem5_live"
+```
+
+Useful local debugging commands:
+
+```bash
+.venv/bin/python -m pytest -q -x
+.venv/bin/python -m pytest --maxfail=3 -vv
+.venv/bin/python -m pytest -q -k "project_settings or toolchain or compatibility"
 ```
 
 ## Markers
@@ -119,7 +131,26 @@ Plugin tests should cover:
 - Parser/import logic.
 - Plugin API behavior.
 - Plugin-specific database utilities.
+- Target/catalog selection and item details.
+- Toolchain command construction, version matching, and validation failure paths.
+- Compatibility and migration behavior for plugin-owned project targets.
+- Export behavior and plugin-specific serialization.
 - Live external tool integration, marked with plugin-specific live markers.
+
+## Current expanded regression coverage
+
+The dependency-light suite includes broad regression tests for the current project state. In addition to the older UI, database, project I/O, parser, and live-test coverage, it now includes:
+
+- Project/plugin/toolchain settings serialization and legacy compatibility.
+- Public plugin API dataclass helpers for link compatibility, target compatibility, and migration planning.
+- Local and SSH command-provider behavior, including timeout, permission, missing-executable, and environment-merging cases.
+- Toolchain version parsing and version-prefix policy matching.
+- Plugin discovery and plugin manager behavior for manifest loading, item details, target forwarding, and plugin filtering.
+- Core validation behavior for unique names, required parameters, link endpoint latencies, plugin-delegated validation, and subcomponent attachments.
+- gem5 unit coverage for built-in component metadata, toolchain command selection, and validation outcomes.
+- SST unit coverage for target compatibility reporting, scene migration planning/application, variable ports, subcomponents, and JSON export behavior.
+
+These tests are intended to be comprehensive for the current dependency-light code paths, but they do not replace live SST/gem5 integration tests. Any behavior that depends on an actual simulator binary should remain under the corresponding live marker.
 
 ## Writing stable UI tests
 
