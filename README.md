@@ -16,7 +16,13 @@ The goal of FUSE is to provide an extensible editor where users can drag archite
 [![SST Integration Tests](https://github.com/PKBLabs/fuse/actions/workflows/sst-integration.yml/badge.svg?branch=develop&event=workflow_dispatch)](https://github.com/PKBLabs/fuse/actions/workflows/sst-integration.yml)
 [![gem5 Integration Tests](https://github.com/PKBLabs/fuse/actions/workflows/gem5-integration.yml/badge.svg?branch=develop&event=workflow_dispatch)](https://github.com/PKBLabs/fuse/actions/workflows/gem5-integration.yml)
 
-Core tests run on pull requests and on pushes to `main` or `develop`. SST and gem5 integration tests require prebuilt simulator CI images and are run manually, weekly, or when relevant plugin code changes.
+Core tests run on pull requests and on pushes to `main` or `develop` using the dependency-light marker expression `not sst_live and not gem5_live`. SST and gem5 integration tests require prebuilt simulator CI images and are run manually, weekly, or when relevant plugin/core/toolchain paths change.
+
+For local validation from the FUSE package root, run:
+
+```bash
+QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q -m "not sst_live and not gem5_live"
+```
 
 ## Current development status
 

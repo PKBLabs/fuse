@@ -51,14 +51,31 @@ PYTHONPATH="$(pwd)/.." .venv/bin/python -m fuse.app.main
 
 ## Running tests
 
+Run the fast suite first. This is the same dependency-light suite used by the Core Tests workflow and should not require installed SST or gem5 binaries:
+
 ```bash
-.venv/bin/python -m pytest -q
+QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q -m "not sst_live and not gem5_live"
 ```
 
-Fast tests only:
+Run all tests that your current environment can satisfy:
 
 ```bash
-.venv/bin/python -m pytest -q -m "not sst_live and not gem5_live"
+QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q
+```
+
+Run live simulator tests explicitly when the matching simulator is available:
+
+```bash
+.venv/bin/python -m pytest -q -m "sst_live"
+.venv/bin/python -m pytest -q -m "gem5_live"
+```
+
+For focused debugging:
+
+```bash
+.venv/bin/python -m pytest -q -x
+.venv/bin/python -m pytest --maxfail=3 -vv
+.venv/bin/python -m pytest -q -k "project_settings or toolchain or compatibility"
 ```
 
 ## Code organization rules
