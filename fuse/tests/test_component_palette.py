@@ -44,12 +44,7 @@ def test_component_palette_loads_plugin_component_definitions(qtbot, monkeypatch
 
     palette.load_components()
 
-    if hasattr(palette, "topLevelItemCount"):
-        assert palette.topLevelItemCount() > 0
-    elif hasattr(palette, "count"):
-        assert palette.count() > 0
-    else:
-        assert palette.model().rowCount() > 0
+    assert palette.tree.topLevelItemCount() > 0
 
 
 def test_component_palette_load_components_does_not_crash(qtbot):

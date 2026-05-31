@@ -17,6 +17,22 @@ from fuse.core.model.models import ComponentDefinition
 from fuse.core.ui.model_scene import ModelScene
 
 
+def _outline_leaf_texts(tree):
+    texts = []
+
+    def visit(item):
+        if item.childCount() == 0:
+            texts.append(item.text(0))
+            return
+        for index in range(item.childCount()):
+            visit(item.child(index))
+
+    for index in range(tree.topLevelItemCount()):
+        visit(tree.topLevelItem(index))
+
+    return texts
+
+
 def _component(name="CPU"):
     return ComponentDefinition(
         plugin_id="core",
@@ -66,8 +82,8 @@ def test_main_window_outline_and_dirty_state_track_component_creation(qtbot, mon
     node = window.scene.create_component_node(_component("CPU"), QPointF(10, 20))
 
     assert window.is_dirty is True
-    assert window.model_outline.count() == 1
-    assert window.model_outline.item(0).text() == node.instance_name
+    assert window.model_outline.topLevelItemCount() >= 1
+    assert node.instance_name in _outline_leaf_texts(window.model_outline)
 
 
 def test_main_window_dirty_state_tracks_parameter_edits(qtbot, monkeypatch):
@@ -93,5 +109,5 @@ def test_main_window_dirty_state_tracks_parameter_edits(qtbot, monkeypatch):
     window.properties_panel.property_changed_callback()
 
     assert window.is_dirty is True
-    assert window.model_outline.count() == 1
-    assert window.model_outline.item(0).text() == "RenamedCPU"
+    assert window.model_outline.topLevelItemCount() >= 1
+    assert "RenamedCPU" in _outline_leaf_texts(window.model_outline)

@@ -168,7 +168,8 @@ def test_fuse_model_save_load_two_components_with_link_round_trip(tmp_path, qtbo
         target_node_id=cache_node.node_id,
         target_component_name="cache0",
         target_port="in",
-        latency="1ns",
+        source_latency="1ns",
+        target_latency="1ns",
     )
 
     connection = ConnectionItem(link, cpu_out, cache_in)
