@@ -62,6 +62,7 @@ class ModelScene(QGraphicsScene):
         self.active_plugin_id: str | None = None
         self.selected_connection: Optional[ConnectionItem] = None
         self.selected_subcomp_attachment: Optional[SubcompAttachmentItem] = None
+        self.selected_component: Optional[ComponentNodeItem] = None
         self.suppress_mixed_endpoint_warning = False
         self.suppress_port_occupied_warning = False
 
@@ -195,6 +196,7 @@ class ModelScene(QGraphicsScene):
             attachment.set_highlighted(attachment.is_connected_to_node(node))
 
     def select_component(self, node: "ComponentNodeItem"):
+        self.selected_component = node
         self.selected_connection = None
         self.selected_subcomp_attachment = None
         self.highlight_links_for_node(node)
@@ -207,6 +209,7 @@ class ModelScene(QGraphicsScene):
 
     def select_link(self, connection: ConnectionItem):
         self.clear_all_selection_highlights()
+        self.selected_component = None
         self.selected_connection = connection
         connection.set_highlighted(True)
 
@@ -218,6 +221,7 @@ class ModelScene(QGraphicsScene):
 
     def select_subcomp_attachment(self, attachment: SubcompAttachmentItem):
         self.clear_all_selection_highlights()
+        self.selected_component = None
         self.selected_subcomp_attachment = attachment
         attachment.set_highlighted(True)
 
@@ -226,6 +230,13 @@ class ModelScene(QGraphicsScene):
 
         if self.selection_changed_callback is not None:
             self.selection_changed_callback(None)
+
+    def find_node_by_id(self, node_id: int) -> ComponentNodeItem | None:
+        for node in self.component_items():
+            if node.node_id == node_id:
+                return node
+
+        return None
 
     def begin_node_drag(self):
         self._dragging_node = True
@@ -484,6 +495,81 @@ class ModelScene(QGraphicsScene):
             self.properties_panel.show_empty()
 
         self.notify_model_changed()
+
+    def find_connection_by_link_id(self, link_id: int) -> ConnectionItem | None:
+        for connection in self.connection_items():
+            if connection.link.link_id == link_id:
+                return connection
+
+        return None
+
+    def select_link_by_id(self, link_id: int):
+        connection = self.find_connection_by_link_id(link_id)
+
+        if connection is None:
+            return
+
+        self.select_link(connection)
+
+    def delete_component_node(self, node: ComponentNodeItem):
+        """
+        Delete a component or subcomponent instance from the model.
+
+        This also removes:
+        - normal links attached to any of the node's ports
+        - subcomponent attachment edges where the node is either the parent or child
+        - child subcomponents recursively attached underneath this node
+        """
+        # Recursively delete attached child subcomponents first.
+        child_node_ids = [
+            attachment.child_node_id
+            for attachment in list(getattr(self, "subcomp_attachments", []))
+            if attachment.parent_node_id == node.node_id
+        ]
+
+        for child_node_id in child_node_ids:
+            child_node = self.find_node_by_id(child_node_id)
+            if child_node is not None:
+                self.delete_component_node(child_node)
+
+        # Delete normal links attached to this node.
+        for connection in list(self.connection_items()):
+            if connection.is_connected_to_node(node):
+                self.delete_link(connection)
+
+        # Delete subcomponent attachment edges involving this node.
+        for attachment_item in list(self.subcomp_attachment_items()):
+            attachment = attachment_item.attachment
+            if (
+                    attachment.parent_node_id == node.node_id
+                    or attachment.child_node_id == node.node_id
+            ):
+                self.delete_subcomp_attachment(attachment_item)
+
+        if self.selected_component is node:
+            self.selected_component = None
+
+        if self.properties_panel is not None:
+            self.properties_panel.show_empty()
+
+        self.removeItem(node)
+        self.notify_model_changed()
+
+    def delete_component_by_id(self, node_id: int):
+        node = self.find_node_by_id(node_id)
+
+        if node is None:
+            return
+
+        self.delete_component_node(node)
+
+    def delete_link_by_id(self, link_id: int):
+        connection = self.find_connection_by_link_id(link_id)
+
+        if connection is None:
+            return
+
+        self.delete_link(connection)
 
     def port_clicked(self, port: PortItem):
         if self.pending_subcomp_connector is not None:
@@ -903,6 +989,11 @@ class ModelScene(QGraphicsScene):
                 event.accept()
                 return
 
+            if self.selected_component is not None:
+                self.delete_component_node(self.selected_component)
+                event.accept()
+                return
+
         super().keyPressEvent(event)
 
     def mouseMoveEvent(self, event):
@@ -977,6 +1068,7 @@ class ModelScene(QGraphicsScene):
             and not clicked_a_link
             and not clicked_a_subcomp_attachment
         ):
+            self.selected_component = None
             self.clear_all_selection_highlights()
 
             if self.properties_panel is not None:

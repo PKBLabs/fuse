@@ -246,6 +246,20 @@ class ConnectionItem(QGraphicsPathItem):
 
         self.update_position()
 
+    def contextMenuEvent(self, event):
+        scene = self.scene()
+
+        menu = QMenu()
+        remove_action = menu.addAction("Remove Link")
+
+        action = menu.exec(event.screenPos())
+
+        if action == remove_action:
+            if scene is not None and hasattr(scene, "delete_link"):
+                scene.delete_link(self)
+
+        event.accept()
+
     def update_tooltip(self):
         tooltip = (
             f"{self.link.name}\n"
@@ -847,12 +861,24 @@ class ComponentNodeItem(QGraphicsRectItem):
 
         menu = QMenu()
         add_action = menu.addAction("Add to Frequently Used")
+        menu.addSeparator()
+
+        remove_text = (
+            "Remove SubComponent"
+            if int(getattr(self.component, "is_subcomp", 0) or 0)
+            else "Remove Component"
+        )
+        remove_action = menu.addAction(remove_text)
 
         action = menu.exec(event.screenPos())
 
         if action == add_action:
             if scene is not None and hasattr(scene, "component_favorite_requested_callback"):
                 scene.component_favorite_requested_callback(self.component)
+
+        elif action == remove_action:
+            if scene is not None and hasattr(scene, "delete_component_node"):
+                scene.delete_component_node(self)
 
         event.accept()
 

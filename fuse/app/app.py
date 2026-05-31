@@ -24,12 +24,14 @@ from PySide6.QtWidgets import (
     QDockWidget,
     QFileDialog,
     QLabel,
-    QListWidget,
     QMainWindow,
+    QMenu,
     QMenuBar,
     QMessageBox,
     QSplitter,
     QStatusBar,
+    QTreeWidget,
+    QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
 )
@@ -52,6 +54,9 @@ from fuse.core.ui.model_scene import ModelScene
 from fuse.core.ui.model_view import ModelView
 from fuse.core.ui.properties_panel import PropertiesPanel
 
+OUTLINE_ROLE_KIND = Qt.UserRole
+OUTLINE_ROLE_NODE_ID = Qt.UserRole + 1
+OUTLINE_ROLE_LINK_ID = Qt.UserRole + 2
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -73,7 +78,13 @@ class MainWindow(QMainWindow):
         self.scene = ModelScene()
         self.model_view = ModelView(self.scene)
         self.properties_panel = PropertiesPanel()
-        self.model_outline = QListWidget()
+        self.model_outline = QTreeWidget()
+        self.model_outline.setHeaderHidden(True)
+        self.model_outline.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.model_outline.customContextMenuRequested.connect(
+            self.show_model_outline_context_menu
+        )
+        self.model_outline.itemClicked.connect(self.on_model_outline_item_clicked)
 
         self.properties_dock: QDockWidget | None = None
         self.model_outline_dock: QDockWidget | None = None
@@ -336,8 +347,163 @@ class MainWindow(QMainWindow):
     def update_model_outline(self):
         self.model_outline.clear()
 
+        attachments_by_parent, attached_child_ids = self.subcomponent_attachment_maps()
+        nodes_by_id = self.node_by_id()
+
+        component_groups: dict[str, list] = {}
+
         for node in self.scene.component_items():
-            self.model_outline.addItem(node.instance_name)
+            # Attached subcomponents are shown underneath their parent component
+            # through subcomp_attachments, not as independent top-level outline rows.
+            if node.node_id in attached_child_ids:
+                continue
+
+            group_name = self.model_outline_group_for_node(node)
+            component_groups.setdefault(group_name, []).append(node)
+
+        for group_name in sorted(component_groups, key=str.lower):
+            group_item = QTreeWidgetItem([group_name])
+            group_item.setData(0, OUTLINE_ROLE_KIND, "group")
+            group_item.setFlags(group_item.flags() & ~Qt.ItemIsSelectable)
+            self.model_outline.addTopLevelItem(group_item)
+
+            for node in sorted(
+                    component_groups[group_name],
+                    key=lambda item: item.instance_name.lower(),
+            ):
+                self.add_outline_node_item(
+                    group_item,
+                    node,
+                    attachments_by_parent,
+                    nodes_by_id,
+                )
+
+        links_item = QTreeWidgetItem(["Links"])
+        links_item.setData(0, OUTLINE_ROLE_KIND, "group")
+        links_item.setFlags(links_item.flags() & ~Qt.ItemIsSelectable)
+        self.model_outline.addTopLevelItem(links_item)
+
+        for link in sorted(self.scene.links, key=lambda item: item.name.lower()):
+            link_item = QTreeWidgetItem([link.name])
+            link_item.setData(0, OUTLINE_ROLE_KIND, "link")
+            link_item.setData(0, OUTLINE_ROLE_LINK_ID, link.link_id)
+            link_item.setToolTip(
+                0,
+                (
+                    f"{link.source_component_name}.{link.source_port} -> "
+                    f"{link.target_component_name}.{link.target_port}"
+                ),
+            )
+            links_item.addChild(link_item)
+
+        self.model_outline.expandAll()
+
+    def subcomponent_attachment_maps(self):
+        attachments_by_parent: dict[int, list] = {}
+        attached_child_ids: set[int] = set()
+
+        for attachment in getattr(self.scene, "subcomp_attachments", []):
+            attachments_by_parent.setdefault(
+                attachment.parent_node_id,
+                [],
+            ).append(attachment)
+            attached_child_ids.add(attachment.child_node_id)
+
+        return attachments_by_parent, attached_child_ids
+
+    def node_by_id(self) -> dict[int, object]:
+        return {
+            node.node_id: node
+            for node in self.scene.component_items()
+        }
+
+    def add_outline_node_item(
+            self,
+            parent_item: QTreeWidgetItem,
+            node,
+            attachments_by_parent: dict[int, list],
+            nodes_by_id: dict[int, object],
+    ):
+        node_item = QTreeWidgetItem([node.instance_name])
+        node_item.setData(0, OUTLINE_ROLE_KIND, "component")
+        node_item.setData(0, OUTLINE_ROLE_NODE_ID, node.node_id)
+        node_item.setToolTip(
+            0,
+            node.component.description or node.component.display_name,
+        )
+
+        if int(getattr(node.component, "is_subcomp", 0) or 0):
+            font = node_item.font(0)
+            font.setItalic(True)
+            node_item.setFont(0, font)
+
+        parent_item.addChild(node_item)
+
+        child_attachments = attachments_by_parent.get(node.node_id, [])
+
+        for attachment in sorted(
+                child_attachments,
+                key=lambda item: (
+                        item.slot_name.lower(),
+                        item.child_component_name.lower(),
+                ),
+        ):
+            child_node = nodes_by_id.get(attachment.child_node_id)
+            if child_node is None:
+                continue
+
+            slot_item = QTreeWidgetItem(
+                [f"{attachment.slot_name}: {child_node.instance_name}"]
+            )
+            slot_item.setData(0, OUTLINE_ROLE_KIND, "subcomp_slot")
+            slot_item.setToolTip(
+                0,
+                (
+                    f"SubComponent slot: {attachment.slot_name}\n"
+                    f"Required interface: {attachment.required_interface or '(unknown)'}"
+                ),
+            )
+            node_item.addChild(slot_item)
+
+            self.add_outline_node_item(
+                slot_item,
+                child_node,
+                attachments_by_parent,
+                nodes_by_id,
+            )
+
+    def model_outline_group_for_node(self, node) -> str:
+        component = node.component
+
+        text = " ".join(
+            [
+                getattr(component, "category", "") or "",
+                getattr(component, "functionality", "") or "",
+                getattr(component, "description", "") or "",
+                getattr(component, "element", "") or "",
+                getattr(component, "name", "") or "",
+                getattr(component, "iface", "") or "",
+            ]
+        ).lower()
+
+        rules = [
+            ("CPU", ("cpu", "processor", "core", "miranda")),
+            ("Memory", ("memory", "mem", "cache", "directory", "dram", "hbm", "ram")),
+            ("Network", ("network", "router", "nic", "linkcontrol", "merlin", "mesh", "torus")),
+            ("Bus / Interconnect", ("bus", "interconnect", "crossbar", "xbar")),
+            ("I/O", ("io", "disk", "file", "trace", "reader", "writer")),
+            ("Generator", ("generator", "spmv", "stream", "traffic")),
+            ("Statistics / Debug", ("stat", "debug", "monitor", "profiler")),
+        ]
+
+        for group_name, tokens in rules:
+            if any(token in text for token in tokens):
+                return group_name
+
+        if int(getattr(component, "is_subcomp", 0) or 0):
+            return "SubComponents"
+
+        return "Other"
 
     def set_dirty(self, dirty: bool):
         self.is_dirty = dirty
@@ -349,6 +515,7 @@ class MainWindow(QMainWindow):
             self.setWindowTitle(f"FUSE{marker}")
 
     def mark_dirty(self):
+        self.update_model_outline()
         self.set_dirty(True)
 
     def new_project(self):
@@ -602,6 +769,102 @@ class MainWindow(QMainWindow):
     def on_component_used(self, component):
         self.palette.record_component_used(component)
 
+    def on_model_outline_item_clicked(self, item: QTreeWidgetItem, column: int):
+        kind = item.data(0, OUTLINE_ROLE_KIND)
+
+        if kind == "component":
+            node_id = item.data(0, OUTLINE_ROLE_NODE_ID)
+
+            for node in self.scene.component_items():
+                if node.node_id == node_id:
+                    self.scene.select_component(node)
+                    self.model_view.centerOn(node)
+                    return
+
+        if kind == "link":
+            link_id = item.data(0, OUTLINE_ROLE_LINK_ID)
+            self.scene.select_link_by_id(int(link_id))
+            return
+
+    def show_model_outline_context_menu(self, position):
+        item = self.model_outline.itemAt(position)
+
+        if item is None:
+            return
+
+        kind = item.data(0, OUTLINE_ROLE_KIND)
+
+        menu = QMenu(self.model_outline)
+
+        if kind == "link":
+            link_id = item.data(0, OUTLINE_ROLE_LINK_ID)
+            remove_action = menu.addAction("Remove Link")
+
+            action = menu.exec(self.model_outline.viewport().mapToGlobal(position))
+
+            if action == remove_action:
+                self.scene.delete_link_by_id(int(link_id))
+                self.update_model_outline()
+
+            return
+
+        if kind == "component":
+            node_id = item.data(0, OUTLINE_ROLE_NODE_ID)
+            node = self.scene.find_node_by_id(int(node_id))
+
+            if node is None:
+                return
+
+            add_frequent_action = menu.addAction("Add to Frequently Used")
+            menu.addSeparator()
+
+            remove_text = (
+                "Remove SubComponent"
+                if int(getattr(node.component, "is_subcomp", 0) or 0)
+                else "Remove Component"
+            )
+            remove_action = menu.addAction(remove_text)
+
+            action = menu.exec(self.model_outline.viewport().mapToGlobal(position))
+
+            if action == add_frequent_action:
+                self.palette.add_to_frequently_used(node.component)
+
+            elif action == remove_action:
+                self.scene.delete_component_by_id(int(node_id))
+                self.update_model_outline()
+
+            return
+
+    def keyPressEvent(self, event):
+        if event.key() in (Qt.Key_Delete, Qt.Key_Backspace):
+            item = self.model_outline.currentItem()
+
+            if item is not None and self.model_outline.hasFocus():
+                kind = item.data(0, OUTLINE_ROLE_KIND)
+
+                if kind == "link":
+                    link_id = item.data(0, OUTLINE_ROLE_LINK_ID)
+                    self.scene.delete_link_by_id(int(link_id))
+                    self.update_model_outline()
+                    event.accept()
+                    return
+
+                if kind == "component":
+                    node_id = item.data(0, OUTLINE_ROLE_NODE_ID)
+                    self.scene.delete_component_by_id(int(node_id))
+                    self.update_model_outline()
+                    event.accept()
+                    return
+
+            # If the outline does not own the focused selection, let the scene handle
+            # the selected model item.
+            self.scene.keyPressEvent(event)
+            if event.isAccepted():
+                self.update_model_outline()
+                return
+
+        super().keyPressEvent(event)
 
 def main():
     app = QApplication(sys.argv)
