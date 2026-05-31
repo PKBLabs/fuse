@@ -99,9 +99,9 @@ def node_for_palette_item(item, parameters=None):
         component_id=item.item_id,
         element=item.element_name,
         name=item.type_name,
-        is_subcomponent=1 if item.raw_kind == "SubComponent" else 0,
+        is_subcomp=1 if item.raw_kind == "SubComponent" else 0,
         category=item.category,
-        interface=item.iface,
+        iface=item.iface,
         display_name_override=item.display_name,
     )
 
