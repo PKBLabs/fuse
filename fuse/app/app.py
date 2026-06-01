@@ -11,6 +11,8 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+import copy
+import json
 import os
 import sys
 from pathlib import Path
@@ -76,6 +78,13 @@ class MainWindow(QMainWindow):
         self.active_target_id: str | None = None
         self.is_dirty = False
 
+        self._history_limit = 100
+        self._undo_stack: list[dict] = []
+        self._redo_stack: list[dict] = []
+        self._last_history_signature = ""
+        self._saved_history_signature = ""
+        self._restoring_history = False
+
         self.palette = ComponentPalette()
         self.scene = ModelScene()
         self.model_view = ModelView(self.scene)
@@ -96,7 +105,7 @@ class MainWindow(QMainWindow):
         self.validation_results_dock: QDockWidget | None = None
 
         self.scene.properties_panel = self.properties_panel
-        self.scene.model_changed_callback = self.mark_dirty
+        self.scene.model_changed_callback = self.on_model_changed
         self.scene.component_added_callback = self.on_component_added
         self.scene.component_used_callback = self.on_component_used
         self.scene.component_favorite_requested_callback = self.on_component_favorite_requested
@@ -110,6 +119,7 @@ class MainWindow(QMainWindow):
 
         ensure_database_ready()
         self.load_framework_targets()
+        self.reset_undo_history(mark_clean=True)
 
     def on_component_favorite_requested(self, component):
         self.palette.add_to_frequently_used(component)
@@ -176,8 +186,18 @@ class MainWindow(QMainWindow):
         about_action.triggered.connect(self.show_about)
         help_menu.addAction(about_action)
 
-        edit_menu.addAction(QAction("Undo", self))
-        edit_menu.addAction(QAction("Redo", self))
+        self.undo_action = QAction("Undo", self)
+        self.undo_action.setShortcut("Ctrl+Z")
+        self.undo_action.triggered.connect(self.undo)
+        self.undo_action.setEnabled(False)
+
+        self.redo_action = QAction("Redo", self)
+        self.redo_action.setShortcut("Ctrl+Shift+Z")
+        self.redo_action.triggered.connect(self.redo)
+        self.redo_action.setEnabled(False)
+
+        edit_menu.addAction(self.undo_action)
+        edit_menu.addAction(self.redo_action)
         view_menu.addAction(QAction("Zoom In", self))
         view_menu.addAction(QAction("Zoom Out", self))
 
@@ -256,6 +276,9 @@ class MainWindow(QMainWindow):
     def setup_status_bar(self):
         status = QStatusBar(self)
         status.showMessage("Ready")
+        self.unsaved_indicator = QLabel("")
+        self.unsaved_indicator.setToolTip("The current FUSE model has unsaved changes.")
+        status.addPermanentWidget(self.unsaved_indicator)
         self.setStatusBar(status)
 
     def load_framework_targets(self):
@@ -531,6 +554,98 @@ class MainWindow(QMainWindow):
 
         return "Other"
 
+    def history_snapshot(self) -> dict:
+        """Return a stable project snapshot suitable for undo/redo history."""
+        snapshot = copy.deepcopy(self.project_dict())
+        snapshot.setdefault("project", {})["updatedAt"] = ""
+        return snapshot
+
+    def history_signature(self, snapshot: dict | None = None) -> str:
+        if snapshot is None:
+            snapshot = self.history_snapshot()
+        return json.dumps(snapshot, sort_keys=True, separators=(",", ":"))
+
+    def reset_undo_history(self, mark_clean: bool = True):
+        snapshot = self.history_snapshot()
+        signature = self.history_signature(snapshot)
+        self._undo_stack = [snapshot]
+        self._redo_stack = []
+        self._last_history_signature = signature
+        if mark_clean:
+            self._saved_history_signature = signature
+        self.update_undo_redo_actions()
+        if mark_clean:
+            self.set_dirty(False)
+
+    def update_undo_redo_actions(self):
+        if hasattr(self, "undo_action"):
+            self.undo_action.setEnabled(len(self._undo_stack) > 1)
+        if hasattr(self, "redo_action"):
+            self.redo_action.setEnabled(bool(self._redo_stack))
+
+    def record_history_snapshot(self):
+        if self._restoring_history:
+            return
+
+        snapshot = self.history_snapshot()
+        signature = self.history_signature(snapshot)
+
+        if signature == self._last_history_signature:
+            self.update_undo_redo_actions()
+            return
+
+        self._undo_stack.append(snapshot)
+        if len(self._undo_stack) > self._history_limit + 1:
+            self._undo_stack = self._undo_stack[-(self._history_limit + 1):]
+
+        self._redo_stack.clear()
+        self._last_history_signature = signature
+        self.update_undo_redo_actions()
+
+    def restore_history_snapshot(self, snapshot: dict):
+        self._restoring_history = True
+        try:
+            self.project_settings = ProjectSettings.from_project_dict(snapshot)
+            self.project_name = snapshot.get("project", {}).get("name", self.project_name)
+            load_project_into_scene(snapshot, self.scene)
+            self.properties_panel.set_validation_issues([])
+            self.properties_panel.show_empty()
+            self.apply_project_settings_to_ui()
+            self.update_model_outline()
+            self._last_history_signature = self.history_signature(snapshot)
+        finally:
+            self._restoring_history = False
+
+        self.set_dirty(self._last_history_signature != self._saved_history_signature)
+        self.update_undo_redo_actions()
+
+    def undo(self):
+        if len(self._undo_stack) <= 1:
+            return
+
+        current = self._undo_stack.pop()
+        self._redo_stack.append(current)
+        snapshot = self._undo_stack[-1]
+        self.restore_history_snapshot(snapshot)
+        self.statusBar().showMessage("Undo", 1500)
+
+    def redo(self):
+        if not self._redo_stack:
+            return
+
+        snapshot = self._redo_stack.pop()
+        self._undo_stack.append(snapshot)
+        self.restore_history_snapshot(snapshot)
+        self.statusBar().showMessage("Redo", 1500)
+
+    def on_model_changed(self):
+        if self._restoring_history:
+            return
+
+        self.update_model_outline()
+        self.record_history_snapshot()
+        self.set_dirty(self._last_history_signature != self._saved_history_signature)
+
     def set_dirty(self, dirty: bool):
         self.is_dirty = dirty
         marker = "*" if dirty else ""
@@ -540,9 +655,13 @@ class MainWindow(QMainWindow):
         else:
             self.setWindowTitle(f"FUSE{marker}")
 
+        if hasattr(self, "unsaved_indicator"):
+            self.unsaved_indicator.setText("● Unsaved" if dirty else "")
+            self.unsaved_indicator.setVisible(dirty)
+
     def mark_dirty(self):
-        self.update_model_outline()
-        self.set_dirty(True)
+        # Backward-compatible alias for older tests/callers.
+        self.on_model_changed()
 
     def confirm_discard_unsaved_changes(self, action_name: str) -> bool:
         if not self.is_dirty:
@@ -587,7 +706,7 @@ class MainWindow(QMainWindow):
         self.set_current_project_path(None)
         self.apply_project_settings_to_ui()
         self.update_model_outline()
-        self.set_dirty(False)
+        self.reset_undo_history(mark_clean=True)
         self.statusBar().showMessage("New project created", 3000)
 
     def new_model(self):
@@ -629,6 +748,9 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Save Failed", str(exc))
             return False
 
+        self._saved_history_signature = self.history_signature()
+        self._last_history_signature = self._saved_history_signature
+        self.update_undo_redo_actions()
         self.set_dirty(False)
         self.statusBar().showMessage(f"Saved {self.current_project_path}", 3000)
         return True
@@ -752,7 +874,7 @@ class MainWindow(QMainWindow):
 
         self.apply_project_settings_to_ui()
         self.update_model_outline()
-        self.set_dirty(False)
+        self.reset_undo_history(mark_clean=True)
 
         self.statusBar().showMessage(f"Opened {file_path}", 3000)
 

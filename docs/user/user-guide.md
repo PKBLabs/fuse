@@ -162,6 +162,12 @@ FUSE provides several equivalent deletion paths:
 
 Deleting a component also deletes normal links attached to that component, subcomponent attachment edges involving that component, and recursively attached child subcomponents. Deleting a link removes it from both endpoint ports and makes those ports available again. All deletion operations mark the project dirty.
 
+## Undo, redo, and unsaved changes
+
+Use **Edit -> Undo** or **Ctrl+Z** to undo the most recent model edit. Use **Edit -> Redo** or **Ctrl+Shift+Z** to restore an edit that was undone. Undo/redo covers the current editing session and is intended for normal model-editing actions such as component creation, deletion, property changes, link changes, subcomponent attachment changes, and layout moves.
+
+When the model has unsaved changes, FUSE shows an asterisk in the window title and an **Unsaved** indicator in the status bar. Saving the project clears the indicator. New/Open/Exit prompts still protect unsaved changes.
+
 ## Validating a model
 
 FUSE validates generic model rules before save/export workflows.

@@ -4,7 +4,7 @@ FUSE is in early active development. The following limitations are expected.
 
 ## UI and model editor
 
-- Undo/redo menu items may be placeholders.
+- Undo/redo is available for the current editing session, but long-term history persistence across application restarts is not implemented.
 - Routing is designed for responsiveness, not full schematic-quality autorouting.
 - Point-to-point links currently allow one connection per port.
 - Multi-endpoint/bus links are planned but not complete.
