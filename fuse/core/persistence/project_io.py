@@ -40,8 +40,11 @@ def component_node_to_save_dict(node: ComponentNodeItem) -> dict:
         "componentId": node.component.component_id,
         "isSubcomponent": node.component.is_subcomp,
         "category": node.component.category,
+        "functionality": node.component.functionality,
+        "description": node.component.description,
         "iconPath": node.icon_path,
         "interface": node.component.iface,
+        "displayNameOverride": node.component.display_name_override,
         "instanceName": node.instance_name,
         "parameters": node.parameters,
         "variablePortCounts": getattr(node, "variable_port_counts", {}),
@@ -220,8 +223,11 @@ def load_project_into_scene(project: dict, scene: ModelScene) -> None:
             name=component_data.get("name", ""),
             is_subcomp=int(component_data.get("isSubcomponent", 0)),
             category=component_data.get("category", ""),
+            functionality=component_data.get("functionality", ""),
+            description=component_data.get("description", ""),
             iface=component_data.get("interface", ""),
             icon_path=icon_path,
+            display_name_override=component_data.get("displayNameOverride", ""),
         )
 
         node_id = int(component_data["id"])

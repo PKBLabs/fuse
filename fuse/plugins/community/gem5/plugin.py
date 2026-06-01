@@ -20,6 +20,8 @@ from fuse.plugin_api.interfaces import (
     ConnectorDefinition,
     FrameworkTarget,
     ItemDetails,
+    LinkCompatibilityResult,
+    LinkEndpoint,
     PaletteItem,
     PropertyDefinition,
 )
@@ -253,6 +255,120 @@ class Gem5Plugin:
                 for property_definition in metadata["properties"]
             ],
         )
+
+
+    def compatible_gem5_interfaces(self, source_iface: str, target_iface: str) -> bool:
+        pair = {source_iface, target_iface}
+        if not source_iface or not target_iface:
+            return True
+        if pair == {"request_port", "response_port"}:
+            return True
+        if source_iface == target_iface == "bus":
+            return True
+        if source_iface == target_iface == "memory_range":
+            return True
+        return False
+
+    def check_link_compatibility(
+        self,
+        source: LinkEndpoint,
+        target: LinkEndpoint,
+    ) -> LinkCompatibilityResult:
+        source_iface = (source.port_metadata.get("iface") or source.port_metadata.get("interface") or "").strip()
+        target_iface = (target.port_metadata.get("iface") or target.port_metadata.get("interface") or "").strip()
+
+        if self.compatible_gem5_interfaces(source_iface, target_iface):
+            return LinkCompatibilityResult()
+
+        return LinkCompatibilityResult(
+            can_create=False,
+            severity="error",
+            title="Incompatible gem5 Ports",
+            message=(
+                f"gem5 port '{source.port_name}' ({source_iface or 'unknown'}) cannot be "
+                f"linked to '{target.port_name}' ({target_iface or 'unknown'})."
+            ),
+            code="gem5_incompatible_port_interface",
+            visual_indicator="error",
+        )
+
+    def validate_links(self, scene) -> list:
+        from fuse.core.model.validation import ValidationIssue
+
+        issues = []
+        nodes_by_id = {node.node_id: node for node in scene.component_items()}
+
+        for link in getattr(scene, "links", []):
+            source = nodes_by_id.get(link.source_node_id)
+            target = nodes_by_id.get(link.target_node_id)
+
+            if source is None or target is None:
+                continue
+
+            if getattr(source.component, "plugin_id", "") != self.plugin_id or getattr(target.component, "plugin_id", "") != self.plugin_id:
+                continue
+
+            source_port = next((port for port in getattr(source, "ports", []) if port.name == link.source_port), None)
+            target_port = next((port for port in getattr(target, "ports", []) if port.name == link.target_port), None)
+
+            if source_port is None or target_port is None:
+                issues.append(
+                    ValidationIssue(
+                        issue_type="gem5_link",
+                        object_name=link.name,
+                        link_id=link.link_id,
+                        message="gem5 link references a port that no longer exists.",
+                    )
+                )
+                continue
+
+            result = self.check_link_compatibility(
+                LinkEndpoint(source.instance_name, source_port.name, getattr(source_port, "metadata", {}) or {}),
+                LinkEndpoint(target.instance_name, target_port.name, getattr(target_port, "metadata", {}) or {}),
+            )
+
+            if result.is_error:
+                issues.append(
+                    ValidationIssue(
+                        issue_type="gem5_link",
+                        object_name=link.name,
+                        link_id=link.link_id,
+                        message=result.message,
+                    )
+                )
+
+        return issues
+
+    def validate_export(self, scene) -> list:
+        from fuse.core.model.validation import ValidationIssue
+
+        issues = []
+        gem5_nodes = [
+            node
+            for node in scene.component_items()
+            if getattr(node.component, "plugin_id", "") == self.plugin_id
+        ]
+
+        if not gem5_nodes:
+            issues.append(
+                ValidationIssue(
+                    issue_type="gem5_export",
+                    object_name="Project",
+                    message="There are no gem5 components to export.",
+                )
+            )
+            return issues
+
+        if not any(getattr(node.component, "name", "") == "System" for node in gem5_nodes):
+            issues.append(
+                ValidationIssue(
+                    issue_type="gem5_export",
+                    object_name="Project",
+                    message="gem5 export validation expects a System component in the model.",
+                )
+            )
+
+        return issues
 
     def validate_toolchain(
         self,

@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QLabel,
     QMainWindow,
+    QPlainTextEdit,
     QMenu,
     QMenuBar,
     QMessageBox,
@@ -41,7 +42,7 @@ from fuse.app.project_settings_dialog import ProjectSettingsDialog
 from fuse.app.splash import create_splash_screen
 from fuse.core.app_info import APP_NAME, ORG_NAME
 from fuse.core.model.project_settings import ProjectSettings
-from fuse.core.model.validation import validate_model
+from fuse.core.model.validation import validate_model, validate_model_for_export
 from fuse.core.persistence.db_access import ensure_database_ready, load_framework_targets
 from fuse.core.persistence.project_io import (
     build_project_dict,
@@ -57,6 +58,7 @@ from fuse.core.ui.properties_panel import PropertiesPanel
 OUTLINE_ROLE_KIND = Qt.UserRole
 OUTLINE_ROLE_NODE_ID = Qt.UserRole + 1
 OUTLINE_ROLE_LINK_ID = Qt.UserRole + 2
+OUTLINE_ROLE_ATTACHMENT_ID = Qt.UserRole + 3
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -88,6 +90,10 @@ class MainWindow(QMainWindow):
 
         self.properties_dock: QDockWidget | None = None
         self.model_outline_dock: QDockWidget | None = None
+        self.validation_results = QPlainTextEdit()
+        self.validation_results.setReadOnly(True)
+        self.validation_results.setPlaceholderText("Validation results will appear here.")
+        self.validation_results_dock: QDockWidget | None = None
 
         self.scene.properties_panel = self.properties_panel
         self.scene.model_changed_callback = self.mark_dirty
@@ -121,6 +127,8 @@ class MainWindow(QMainWindow):
         new_action = QAction("New Project...", self)
         open_action = QAction("Open Project...", self)
         project_settings_action = QAction("Project Settings...", self)
+        validate_model_action = QAction("Validate Model", self)
+        validate_export_action = QAction("Validate for Export", self)
         save_action = QAction("Save", self)
         save_as_action = QAction("Save As...", self)
         export_sst_json_action = QAction("SST JSON...", self)
@@ -129,6 +137,8 @@ class MainWindow(QMainWindow):
         new_action.triggered.connect(self.new_project)
         open_action.triggered.connect(self.open_model)
         project_settings_action.triggered.connect(self.show_project_settings)
+        validate_model_action.triggered.connect(self.validate_current_model)
+        validate_export_action.triggered.connect(self.validate_current_model_for_export)
         save_action.triggered.connect(self.save_model)
         save_as_action.triggered.connect(self.save_model_as)
         export_sst_json_action.triggered.connect(self.export_sst_json)
@@ -137,6 +147,9 @@ class MainWindow(QMainWindow):
         file_menu.addAction(new_action)
         file_menu.addAction(open_action)
         file_menu.addAction(project_settings_action)
+        file_menu.addSeparator()
+        file_menu.addAction(validate_model_action)
+        file_menu.addAction(validate_export_action)
         file_menu.addSeparator()
         file_menu.addAction(save_action)
         file_menu.addAction(save_as_action)
@@ -213,6 +226,7 @@ class MainWindow(QMainWindow):
         """
         self.properties_dock = self.make_dock("Properties", self.properties_panel)
         self.model_outline_dock = self.make_dock("Model Outline", self.model_outline)
+        self.validation_results_dock = self.make_dock("Validation Results", self.validation_results)
 
         self.addDockWidget(Qt.RightDockWidgetArea, self.properties_dock)
         self.splitDockWidget(
@@ -228,6 +242,9 @@ class MainWindow(QMainWindow):
             [600, 400],
             Qt.Vertical,
         )
+
+        self.addDockWidget(Qt.BottomDockWidgetArea, self.validation_results_dock)
+        self.validation_results_dock.hide()
 
         # Give the right dock column a reasonable initial width.
         self.resizeDocks(
@@ -417,6 +434,14 @@ class MainWindow(QMainWindow):
             for node in self.scene.component_items()
         }
 
+    def outline_label_for_node(self, node) -> str:
+        plugin_id = (getattr(node.component, "plugin_id", "") or "").strip()
+
+        if plugin_id:
+            return f"{node.instance_name} ({plugin_id.upper() if plugin_id == 'sst' else plugin_id.capitalize()})"
+
+        return node.instance_name
+
     def add_outline_node_item(
             self,
             parent_item: QTreeWidgetItem,
@@ -424,7 +449,7 @@ class MainWindow(QMainWindow):
             attachments_by_parent: dict[int, list],
             nodes_by_id: dict[int, object],
     ):
-        node_item = QTreeWidgetItem([node.instance_name])
+        node_item = QTreeWidgetItem([self.outline_label_for_node(node)])
         node_item.setData(0, OUTLINE_ROLE_KIND, "component")
         node_item.setData(0, OUTLINE_ROLE_NODE_ID, node.node_id)
         node_item.setToolTip(
@@ -453,9 +478,10 @@ class MainWindow(QMainWindow):
                 continue
 
             slot_item = QTreeWidgetItem(
-                [f"{attachment.slot_name}: {child_node.instance_name}"]
+                [f"{attachment.slot_name}: {self.outline_label_for_node(child_node)}"]
             )
-            slot_item.setData(0, OUTLINE_ROLE_KIND, "subcomp_slot")
+            slot_item.setData(0, OUTLINE_ROLE_KIND, "subcomp_attachment")
+            slot_item.setData(0, OUTLINE_ROLE_ATTACHMENT_ID, attachment.attachment_id)
             slot_item.setToolTip(
                 0,
                 (
@@ -518,7 +544,31 @@ class MainWindow(QMainWindow):
         self.update_model_outline()
         self.set_dirty(True)
 
+    def confirm_discard_unsaved_changes(self, action_name: str) -> bool:
+        if not self.is_dirty:
+            return True
+
+        message = QMessageBox(self)
+        message.setIcon(QMessageBox.Warning)
+        message.setWindowTitle("Unsaved Changes")
+        message.setText(f"The current FUSE model has unsaved changes. Save before {action_name}?")
+        save_button = message.addButton(f"Save && {action_name.title()}", QMessageBox.AcceptRole)
+        discard_button = message.addButton("Don't Save", QMessageBox.DestructiveRole)
+        cancel_button = message.addButton(QMessageBox.Cancel)
+        message.setDefaultButton(save_button)
+        message.exec()
+
+        clicked = message.clickedButton()
+        if clicked == cancel_button:
+            return False
+        if clicked == discard_button:
+            return True
+        return self.save_model()
+
     def new_project(self):
+        if not self.confirm_discard_unsaved_changes("new"):
+            return
+
         settings = ProjectSettings(
             project_name="Untitled FUSE Project",
             active_plugin_id="sst",
@@ -565,20 +615,25 @@ class MainWindow(QMainWindow):
 
         self.set_dirty(self.is_dirty)
 
-    def save_model(self):
+    def save_model(self) -> bool:
         if not self.validate_model_before_save():
-            return
+            return False
 
         if self.current_project_path is None:
-            self.save_model_as()
-            return
+            return self.save_model_as()
 
         project = self.project_dict()
-        save_project_file(project, self.current_project_path)
+        try:
+            save_project_file(project, self.current_project_path)
+        except Exception as exc:
+            QMessageBox.critical(self, "Save Failed", str(exc))
+            return False
+
         self.set_dirty(False)
         self.statusBar().showMessage(f"Saved {self.current_project_path}", 3000)
+        return True
 
-    def save_model_as(self):
+    def save_model_as(self) -> bool:
         file_path, _ = QFileDialog.getSaveFileName(
             self,
             "Save FUSE Model",
@@ -587,13 +642,18 @@ class MainWindow(QMainWindow):
         )
 
         if not file_path:
-            return
+            return False
 
         if not file_path.endswith(".fse"):
             file_path += ".fse"
 
+        old_path = self.current_project_path
         self.set_current_project_path(file_path)
-        self.save_model()
+        if self.save_model():
+            return True
+
+        self.set_current_project_path(old_path)
+        return False
 
     def export_sst_json(self):
         """
@@ -665,6 +725,9 @@ class MainWindow(QMainWindow):
         )
 
     def open_model(self):
+        if not self.confirm_discard_unsaved_changes("open"):
+            return
+
         file_path, _ = QFileDialog.getOpenFileName(
             self,
             "Open FUSE Model",
@@ -724,8 +787,8 @@ class MainWindow(QMainWindow):
 
         self.properties_panel.set_validation_issues(issues)
 
-    def format_validation_message(self, issues) -> str:
-        lines = ["The model has issues that must be fixed before saving:", ""]
+    def format_validation_message(self, issues, title: str = "The model has issues") -> str:
+        lines = [f"{title}:", ""]
 
         for issue in issues[:25]:
             lines.append(f"• {issue.object_name}: {issue.message}")
@@ -735,33 +798,84 @@ class MainWindow(QMainWindow):
             lines.append(f"...and {len(issues) - 25} more issue(s).")
 
         lines.append("")
-        lines.append("Components with missing required values are marked with a warning icon.")
+        lines.append("Affected components are marked in the canvas and parameter rows are highlighted where possible.")
 
         return "\n".join(lines)
 
-    def validate_model_before_save(self) -> bool:
-        issues = validate_model(self.scene)
-        self.apply_validation_issues(issues)
+    def show_validation_results(self, issues, title: str):
+        if issues:
+            lines = [title, ""]
+            for issue in issues:
+                location = issue.object_name or "Project"
+                lines.append(f"[{issue.issue_type}] {location}: {issue.message}")
+        else:
+            lines = [title, "", "No validation issues found."]
 
-        if not issues:
-            return True
+        self.validation_results.setPlainText("\n".join(lines))
+        if self.validation_results_dock is not None:
+            self.validation_results_dock.show()
+            self.validation_results_dock.raise_()
 
+    def focus_first_validation_issue(self, issues):
         first_component_issue = next(
             (issue for issue in issues if issue.node_id is not None),
             None,
         )
 
-        if first_component_issue is not None:
-            for node in self.scene.component_items():
-                if node.node_id == first_component_issue.node_id:
-                    self.scene.select_component(node)
-                    self.model_view.centerOn(node)
-                    break
+        if first_component_issue is None:
+            return
+
+        for node in self.scene.component_items():
+            if node.node_id == first_component_issue.node_id:
+                self.scene.select_component(node)
+                self.model_view.centerOn(node)
+                break
+
+    def validate_current_model(self) -> bool:
+        issues = validate_model(self.scene)
+        self.apply_validation_issues(issues)
+        self.show_validation_results(issues, "FUSE model validation")
+
+        if issues:
+            self.focus_first_validation_issue(issues)
+            self.statusBar().showMessage(f"Validation found {len(issues)} issue(s)", 5000)
+            return False
+
+        self.statusBar().showMessage("Model validation passed", 5000)
+        return True
+
+    def validate_current_model_for_export(self) -> bool:
+        issues = validate_model_for_export(self.scene, self.active_plugin_id)
+        active = self.project_settings.active_plugin_settings()
+        target_label = active.target_label if active is not None else self.active_plugin_id or "active target"
+        self.apply_validation_issues(issues)
+        self.show_validation_results(issues, f"Export validation for {target_label}")
+
+        if issues:
+            self.focus_first_validation_issue(issues)
+            self.statusBar().showMessage(f"Export validation found {len(issues)} issue(s)", 5000)
+            return False
+
+        self.statusBar().showMessage("Export validation passed", 5000)
+        return True
+
+    def validate_model_before_save(self) -> bool:
+        issues = validate_model(self.scene)
+        self.apply_validation_issues(issues)
+        self.show_validation_results(issues, "FUSE model validation")
+
+        if not issues:
+            return True
+
+        self.focus_first_validation_issue(issues)
 
         QMessageBox.warning(
             self,
             "Model Needs Attention",
-            self.format_validation_message(issues),
+            self.format_validation_message(
+                issues,
+                "The model has issues that must be fixed before saving",
+            ),
         )
 
         return False
@@ -786,6 +900,13 @@ class MainWindow(QMainWindow):
             self.scene.select_link_by_id(int(link_id))
             return
 
+        if kind == "subcomp_attachment":
+            attachment_id = item.data(0, OUTLINE_ROLE_ATTACHMENT_ID)
+            attachment = self.scene.find_subcomp_attachment_by_id(int(attachment_id))
+            if attachment is not None:
+                self.scene.select_subcomp_attachment(attachment)
+            return
+
     def show_model_outline_context_menu(self, position):
         item = self.model_outline.itemAt(position)
 
@@ -804,6 +925,18 @@ class MainWindow(QMainWindow):
 
             if action == remove_action:
                 self.scene.delete_link_by_id(int(link_id))
+                self.update_model_outline()
+
+            return
+
+        if kind == "subcomp_attachment":
+            attachment_id = item.data(0, OUTLINE_ROLE_ATTACHMENT_ID)
+            remove_action = menu.addAction("Remove SubComponent Attachment")
+
+            action = menu.exec(self.model_outline.viewport().mapToGlobal(position))
+
+            if action == remove_action:
+                self.scene.delete_subcomp_attachment_by_id(int(attachment_id))
                 self.update_model_outline()
 
             return
@@ -857,6 +990,13 @@ class MainWindow(QMainWindow):
                     event.accept()
                     return
 
+                if kind == "subcomp_attachment":
+                    attachment_id = item.data(0, OUTLINE_ROLE_ATTACHMENT_ID)
+                    self.scene.delete_subcomp_attachment_by_id(int(attachment_id))
+                    self.update_model_outline()
+                    event.accept()
+                    return
+
             # If the outline does not own the focused selection, let the scene handle
             # the selected model item.
             self.scene.keyPressEvent(event)
@@ -865,6 +1005,12 @@ class MainWindow(QMainWindow):
                 return
 
         super().keyPressEvent(event)
+
+    def closeEvent(self, event):
+        if self.confirm_discard_unsaved_changes("exit"):
+            event.accept()
+        else:
+            event.ignore()
 
 def main():
     app = QApplication(sys.argv)

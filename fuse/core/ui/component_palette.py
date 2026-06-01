@@ -242,11 +242,31 @@ class ComponentPalette(QWidget):
         self.populate_tree()
 
     def load_components(self):
+        """Load the palette across simulator plugins.
+
+        The active plugin/target is still preferred for that plugin, but other
+        plugins are included with their default targets so users can browse SST
+        and gem5 side-by-side. Mixed models remain editable/savable even when a
+        single-simulator exporter is selected.
+        """
         try:
-            self.components = load_component_definitions(
-                plugin_id=self.active_plugin_id,
-                target_id=self.active_target_id,
-            )
+            if self.active_plugin_id:
+                active_components = load_component_definitions(
+                    plugin_id=self.active_plugin_id,
+                    target_id=self.active_target_id,
+                )
+                default_components = load_component_definitions()
+                active_keys = {
+                    (component.plugin_id, str(component.component_id))
+                    for component in active_components
+                }
+                self.components = active_components + [
+                    component
+                    for component in default_components
+                    if (component.plugin_id, str(component.component_id)) not in active_keys
+                ]
+            else:
+                self.components = load_component_definitions()
         except TypeError:
             self.components = load_component_definitions()
 
@@ -364,29 +384,52 @@ class ComponentPalette(QWidget):
         subcomponents = [component for component in components if component.is_subcomp]
         return normal, subcomponents
 
-    def populate_element_tree(self):
-        by_element: dict[str, list[ComponentDefinition]] = defaultdict(list)
+    def simulator_label_for_component(self, component: ComponentDefinition) -> str:
+        plugin_id = (component.plugin_id or "core").strip()
+        labels = {"sst": "SST", "gem5": "Gem5", "core": "Core"}
+        return labels.get(plugin_id, plugin_id.upper() if len(plugin_id) <= 4 else plugin_id.title())
 
-        for component in self.components:
-            by_element[component.element or "(No Element)"].append(component)
+    def components_by_simulator(
+        self,
+        components: list[ComponentDefinition] | None = None,
+    ) -> dict[str, list[ComponentDefinition]]:
+        by_simulator: dict[str, list[ComponentDefinition]] = defaultdict(list)
 
-        element_names = list(by_element)
+        for component in components if components is not None else self.components:
+            by_simulator[self.simulator_label_for_component(component)].append(component)
+
+        return by_simulator
+
+    def sorted_group_names(self, names):
+        names = list(names)
         if self.sort_alphabetically.isChecked():
-            element_names.sort(key=str.lower)
+            names.sort(key=str.lower)
+        return names
 
-        for element_name in element_names:
-            element_item = self.make_group_item(element_name)
-            normal, subcomponents = self.split_by_kind(
-                self.sorted_components(by_element[element_name])
-            )
+    def populate_element_tree(self):
+        by_simulator = self.components_by_simulator()
 
-            components_group = self.make_group_item("Components", element_item)
-            for component in normal:
-                self.make_component_item(component, components_group)
+        for simulator_name in self.sorted_group_names(by_simulator):
+            simulator_item = self.make_group_item(simulator_name)
+            by_element: dict[str, list[ComponentDefinition]] = defaultdict(list)
 
-            subcomponents_group = self.make_group_item("SubComponents", element_item)
-            for component in subcomponents:
-                self.make_component_item(component, subcomponents_group, prefix="↳ ")
+            for component in by_simulator[simulator_name]:
+                by_element[component.element or "(No Element)"].append(component)
+
+            for element_name in self.sorted_group_names(by_element):
+                element_item = self.make_group_item(element_name, simulator_item)
+                normal, subcomponents = self.split_by_kind(
+                    self.sorted_components(by_element[element_name])
+                )
+
+                components_group = self.make_group_item("Components", element_item)
+                for component in normal:
+                    self.make_component_item(component, components_group)
+
+                if subcomponents:
+                    subcomponents_group = self.make_group_item("SubComponents", element_item)
+                    for component in subcomponents:
+                        self.make_component_item(component, subcomponents_group, prefix="↳ ")
 
     def function_group_for_component(self, component: ComponentDefinition) -> str:
         text = " ".join(
@@ -417,44 +460,44 @@ class ComponentPalette(QWidget):
         return "Other"
 
     def populate_function_tree(self):
-        by_function: dict[str, list[ComponentDefinition]] = defaultdict(list)
+        by_simulator = self.components_by_simulator()
 
-        for component in self.components:
-            by_function[self.function_group_for_component(component)].append(component)
+        for simulator_name in self.sorted_group_names(by_simulator):
+            simulator_item = self.make_group_item(simulator_name)
+            by_function: dict[str, list[ComponentDefinition]] = defaultdict(list)
 
-        function_names = list(by_function)
-        if self.sort_alphabetically.isChecked():
-            function_names.sort(key=str.lower)
+            for component in by_simulator[simulator_name]:
+                by_function[self.function_group_for_component(component)].append(component)
 
-        for function_name in function_names:
-            function_item = self.make_group_item(function_name)
+            for function_name in self.sorted_group_names(by_function):
+                function_item = self.make_group_item(function_name, simulator_item)
 
-            by_element: dict[str, list[ComponentDefinition]] = defaultdict(list)
-            for component in by_function[function_name]:
-                by_element[component.element or "(No Element)"].append(component)
+                by_element: dict[str, list[ComponentDefinition]] = defaultdict(list)
+                for component in by_function[function_name]:
+                    by_element[component.element or "(No Element)"].append(component)
 
-            element_names = list(by_element)
-            if self.sort_alphabetically.isChecked():
-                element_names.sort(key=str.lower)
+                for element_name in self.sorted_group_names(by_element):
+                    element_item = self.make_group_item(element_name, function_item)
+                    normal, subcomponents = self.split_by_kind(
+                        self.sorted_components(by_element[element_name])
+                    )
 
-            for element_name in element_names:
-                element_item = self.make_group_item(element_name, function_item)
-                normal, subcomponents = self.split_by_kind(
-                    self.sorted_components(by_element[element_name])
-                )
+                    for component in normal:
+                        self.make_component_item(component, element_item)
 
-                for component in normal:
-                    self.make_component_item(component, element_item)
-
-                if subcomponents:
-                    subcomponents_group = self.make_group_item("SubComponents", element_item)
-                    for component in subcomponents:
-                        self.make_component_item(component, subcomponents_group, prefix="↳ ")
+                    if subcomponents:
+                        subcomponents_group = self.make_group_item("SubComponents", element_item)
+                        for component in subcomponents:
+                            self.make_component_item(component, subcomponents_group, prefix="↳ ")
 
     def populate_flat_tree(self):
-        for component in self.sorted_components(self.components):
-            prefix = "    ↳ " if component.is_subcomp else ""
-            self.make_component_item(component, prefix=prefix)
+        by_simulator = self.components_by_simulator()
+
+        for simulator_name in self.sorted_group_names(by_simulator):
+            simulator_item = self.make_group_item(simulator_name)
+            for component in self.sorted_components(by_simulator[simulator_name]):
+                prefix = "    ↳ " if component.is_subcomp else ""
+                self.make_component_item(component, simulator_item, prefix=prefix)
 
     def populate_compatible_tree(self):
         if self.compatibility_context_node is None:

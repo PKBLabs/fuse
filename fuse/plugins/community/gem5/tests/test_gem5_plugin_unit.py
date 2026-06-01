@@ -132,3 +132,42 @@ def test_gem5_builtin_catalog_has_unique_item_ids_and_required_fields():
         assert metadata["type_name"]
         assert metadata["connectors"]
         assert metadata["properties"]
+
+
+def test_gem5_link_compatibility_allows_request_to_response_ports():
+    from fuse.plugin_api.interfaces import LinkEndpoint
+
+    plugin = Gem5Plugin()
+    result = plugin.check_link_compatibility(
+        LinkEndpoint("cpu", "dcache_port", {"iface": "request_port"}),
+        LinkEndpoint("xbar", "cpu_side_ports", {"iface": "response_port"}),
+    )
+
+    assert result.is_ok
+    assert result.can_create
+
+
+def test_gem5_link_compatibility_rejects_same_direction_ports():
+    from fuse.plugin_api.interfaces import LinkEndpoint
+
+    plugin = Gem5Plugin()
+    result = plugin.check_link_compatibility(
+        LinkEndpoint("cpu0", "dcache_port", {"iface": "request_port"}),
+        LinkEndpoint("cpu1", "icache_port", {"iface": "request_port"}),
+    )
+
+    assert result.is_error
+    assert not result.can_create
+    assert "cannot be linked" in result.message
+
+
+def test_gem5_export_validation_requires_system_component():
+    plugin = Gem5Plugin()
+    node = SimpleNamespace(
+        component=SimpleNamespace(plugin_id="gem5", name="TimingSimpleCPU"),
+    )
+    scene = SimpleNamespace(component_items=lambda: [node])
+
+    issues = plugin.validate_export(scene)
+
+    assert any("System component" in issue.message for issue in issues)

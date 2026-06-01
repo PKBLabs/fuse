@@ -379,7 +379,9 @@ class ModelScene(QGraphicsScene):
         source_port: PortItem,
         target_port: PortItem,
     ) -> LinkCompatibilityResult:
-        plugin_id = self.active_plugin_id or getattr(source_port.node.component, "plugin_id", "")
+        source_plugin_id = getattr(source_port.node.component, "plugin_id", "") or ""
+        target_plugin_id = getattr(target_port.node.component, "plugin_id", "") or ""
+        plugin_id = source_plugin_id if source_plugin_id == target_plugin_id else (self.active_plugin_id or source_plugin_id)
 
         if not plugin_id:
             return LinkCompatibilityResult()
@@ -460,7 +462,11 @@ class ModelScene(QGraphicsScene):
             source_latency="1ns",
             target_latency="1ns",
             link_type="point_to_point",
-            plugin_id=self.active_plugin_id or getattr(source_port.node.component, "plugin_id", ""),
+            plugin_id=(
+                getattr(source_port.node.component, "plugin_id", "")
+                if getattr(source_port.node.component, "plugin_id", "") == getattr(target_port.node.component, "plugin_id", "")
+                else (self.active_plugin_id or getattr(source_port.node.component, "plugin_id", ""))
+            ),
             compatibility_severity=compatibility.severity,
             compatibility_code=compatibility.code,
             compatibility_message=compatibility.message,
@@ -570,6 +576,21 @@ class ModelScene(QGraphicsScene):
             return
 
         self.delete_link(connection)
+
+    def find_subcomp_attachment_by_id(self, attachment_id: int) -> SubcompAttachmentItem | None:
+        for item in self.subcomp_attachment_items():
+            if item.attachment.attachment_id == attachment_id:
+                return item
+
+        return None
+
+    def delete_subcomp_attachment_by_id(self, attachment_id: int):
+        item = self.find_subcomp_attachment_by_id(attachment_id)
+
+        if item is None:
+            return
+
+        self.delete_subcomp_attachment(item)
 
     def port_clicked(self, port: PortItem):
         if self.pending_subcomp_connector is not None:

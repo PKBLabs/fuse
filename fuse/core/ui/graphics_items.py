@@ -691,6 +691,20 @@ class SubcompAttachmentItem(QGraphicsPathItem):
     def is_connected_to_node(self, node: "ComponentNodeItem") -> bool:
         return self.source_connector.node is node or self.target_connector.node is node
 
+    def contextMenuEvent(self, event):
+        scene = self.scene()
+
+        menu = QMenu()
+        remove_action = menu.addAction("Remove SubComponent Attachment")
+
+        action = menu.exec(event.screenPos())
+
+        if action == remove_action:
+            if scene is not None and hasattr(scene, "delete_subcomp_attachment"):
+                scene.delete_subcomp_attachment(self)
+
+        event.accept()
+
     def set_highlighted(self, highlighted: bool):
         if highlighted:
             self.setPen(QPen(self.highlight_color, 4, Qt.DashLine))
