@@ -40,13 +40,13 @@ BUILTIN_GEM5_COMPONENTS = {
         "category": "System",
         "description": "Top-level gem5 system object.",
         "connectors": [
-            {"name": "mem_ranges", "description": "System memory ranges", "interface": "memory_range"},
-            {"name": "membus", "description": "System memory bus", "interface": "bus"},
+            {"name": "system_port", "description": "System functional access port", "interface": "request_port"},
         ],
         "properties": [
             {"name": "clock", "description": "System clock frequency", "default_value": "1GHz", "required": True},
             {"name": "mem_mode", "description": "gem5 memory mode", "default_value": "timing", "required": True},
             {"name": "cache_line_size", "description": "Cache line size in bytes", "default_value": "64", "required": True},
+            {"name": "mem_ranges", "description": "System memory ranges", "default_value": "512MiB", "required": True},
         ],
     },
     "timing_simple_cpu": {
@@ -55,6 +55,37 @@ BUILTIN_GEM5_COMPONENTS = {
         "element_name": "gem5",
         "category": "CPU",
         "description": "TimingSimpleCPU SimObject for timing-mode gem5 models.",
+        "connectors": [
+            {"name": "icache_port", "description": "Instruction cache port", "interface": "request_port"},
+            {"name": "dcache_port", "description": "Data cache port", "interface": "request_port"},
+        ],
+        "properties": [
+            {"name": "numThreads", "description": "Number of hardware threads", "default_value": "1", "required": True},
+            {"name": "clock", "description": "CPU clock frequency", "default_value": "2GHz", "required": True},
+        ],
+    },
+
+    "atomic_simple_cpu": {
+        "display_name": "gem5.AtomicSimpleCPU (Component)",
+        "type_name": "AtomicSimpleCPU",
+        "element_name": "gem5",
+        "category": "CPU",
+        "description": "AtomicSimpleCPU SimObject for fast functional gem5 models.",
+        "connectors": [
+            {"name": "icache_port", "description": "Instruction cache port", "interface": "request_port"},
+            {"name": "dcache_port", "description": "Data cache port", "interface": "request_port"},
+        ],
+        "properties": [
+            {"name": "numThreads", "description": "Number of hardware threads", "default_value": "1", "required": True},
+            {"name": "clock", "description": "CPU clock frequency", "default_value": "2GHz", "required": True},
+        ],
+    },
+    "minor_cpu": {
+        "display_name": "gem5.MinorCPU (Component)",
+        "type_name": "MinorCPU",
+        "element_name": "gem5",
+        "category": "CPU",
+        "description": "MinorCPU SimObject for in-order pipeline studies.",
         "connectors": [
             {"name": "icache_port", "description": "Instruction cache port", "interface": "request_port"},
             {"name": "dcache_port", "description": "Data cache port", "interface": "request_port"},
@@ -339,15 +370,38 @@ class Gem5Plugin:
 
         return issues
 
-    def validate_export(self, scene) -> list:
-        from fuse.core.model.validation import ValidationIssue
-
-        issues = []
-        gem5_nodes = [
+    def _gem5_nodes(self, scene) -> list:
+        return [
             node
             for node in scene.component_items()
             if getattr(node.component, "plugin_id", "") == self.plugin_id
         ]
+
+    def _node_type(self, node) -> str:
+        return getattr(node.component, "name", "")
+
+    def _link_map(self, scene, gem5_nodes: list) -> dict[tuple[int, str], list]:
+        node_ids = {getattr(node, "node_id", None) for node in gem5_nodes}
+        node_ids.discard(None)
+        result: dict[tuple[int, str], list] = {}
+        for link in getattr(scene, "links", []):
+            if link.source_node_id in node_ids and link.target_node_id in node_ids:
+                result.setdefault((link.source_node_id, link.source_port), []).append(link)
+                result.setdefault((link.target_node_id, link.target_port), []).append(link)
+        return result
+
+    def _target_ids(self, gem5_nodes: list) -> set[str]:
+        return {
+            str(getattr(node.component, "target_id", "") or "")
+            for node in gem5_nodes
+            if str(getattr(node.component, "target_id", "") or "")
+        }
+
+    def validate_export(self, scene) -> list:
+        from fuse.core.model.validation import ValidationIssue
+
+        issues = []
+        gem5_nodes = self._gem5_nodes(scene)
 
         if not gem5_nodes:
             issues.append(
@@ -359,12 +413,108 @@ class Gem5Plugin:
             )
             return issues
 
-        if not any(getattr(node.component, "name", "") == "System" for node in gem5_nodes):
+        target_ids = self._target_ids(gem5_nodes)
+        if len(target_ids) > 1:
             issues.append(
                 ValidationIssue(
                     issue_type="gem5_export",
                     object_name="Project",
-                    message="gem5 export validation expects a System component in the model.",
+                    message=(
+                        "gem5 export requires all gem5 components to use the same "
+                        f"target/version; found {', '.join(sorted(target_ids))}."
+                    ),
+                )
+            )
+
+        system_nodes = [node for node in gem5_nodes if self._node_type(node) == "System"]
+        if len(system_nodes) != 1:
+            issues.append(
+                ValidationIssue(
+                    issue_type="gem5_export",
+                    object_name="Project",
+                    message="gem5 export validation expects exactly one System component in the model.",
+                )
+            )
+
+        link_map = self._link_map(scene, gem5_nodes)
+
+        cpu_nodes = [node for node in gem5_nodes if "CPU" in self._node_type(node)]
+        if not cpu_nodes:
+            issues.append(
+                ValidationIssue(
+                    issue_type="gem5_export",
+                    object_name="Project",
+                    message="gem5 export validation expects at least one CPU component.",
+                )
+            )
+
+        for node in cpu_nodes:
+            for port_name in ("icache_port", "dcache_port"):
+                if not link_map.get((getattr(node, "node_id", None), port_name)):
+                    issues.append(
+                        ValidationIssue(
+                            issue_type="gem5_export",
+                            object_name=getattr(node, "instance_name", "<unnamed>"),
+                            node_id=getattr(node, "node_id", None),
+                            parameter_name=port_name,
+                            message=f"CPU port '{port_name}' must be connected for gem5 export.",
+                        )
+                    )
+
+        xbar_nodes = [node for node in gem5_nodes if self._node_type(node) == "SystemXBar"]
+        if not xbar_nodes:
+            issues.append(
+                ValidationIssue(
+                    issue_type="gem5_export",
+                    object_name="Project",
+                    message="gem5 export validation expects a SystemXBar interconnect component.",
+                )
+            )
+
+        for node in xbar_nodes:
+            for port_name in ("cpu_side_ports", "mem_side_ports"):
+                if not link_map.get((getattr(node, "node_id", None), port_name)):
+                    issues.append(
+                        ValidationIssue(
+                            issue_type="gem5_export",
+                            object_name=getattr(node, "instance_name", "<unnamed>"),
+                            node_id=getattr(node, "node_id", None),
+                            parameter_name=port_name,
+                            message=f"SystemXBar port '{port_name}' must be connected for gem5 export.",
+                        )
+                    )
+
+        memory_nodes = [
+            node for node in gem5_nodes
+            if self._node_type(node) in {"DDR3_1600_8x8"}
+        ]
+        if not memory_nodes:
+            issues.append(
+                ValidationIssue(
+                    issue_type="gem5_export",
+                    object_name="Project",
+                    message="gem5 export validation expects at least one memory controller/DRAM component.",
+                )
+            )
+
+        for node in memory_nodes:
+            if not link_map.get((getattr(node, "node_id", None), "port")):
+                issues.append(
+                    ValidationIssue(
+                        issue_type="gem5_export",
+                        object_name=getattr(node, "instance_name", "<unnamed>"),
+                        node_id=getattr(node, "node_id", None),
+                        parameter_name="port",
+                        message="Memory component port must be connected for gem5 export.",
+                    )
+                )
+
+        if getattr(scene, "subcomp_attachments", []):
+            issues.append(
+                ValidationIssue(
+                    issue_type="gem5_export",
+                    object_name="Project",
+                    message="gem5 export does not currently support FUSE SubComponent attachments.",
                 )
             )
 

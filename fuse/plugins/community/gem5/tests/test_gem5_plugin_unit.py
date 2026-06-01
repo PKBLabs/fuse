@@ -171,3 +171,116 @@ def test_gem5_export_validation_requires_system_component():
     issues = plugin.validate_export(scene)
 
     assert any("System component" in issue.message for issue in issues)
+
+class FakePort:
+    def __init__(self, name, iface):
+        self.name = name
+        self.metadata = {"iface": iface}
+
+
+def _gem5_node(node_id, name, type_name, ports, parameters=None, target_id="1"):
+    return SimpleNamespace(
+        node_id=node_id,
+        instance_name=name,
+        parameters=parameters or {},
+        component=SimpleNamespace(
+            plugin_id="gem5",
+            name=type_name,
+            target_id=target_id,
+        ),
+        ports=[FakePort(port_name, iface) for port_name, iface in ports],
+    )
+
+
+def _valid_gem5_scene():
+    from fuse.core.model.models import ModelLink
+
+    system = _gem5_node(
+        1,
+        "system0",
+        "System",
+        [("system_port", "request_port")],
+        {"clock": "1GHz", "mem_ranges": "512MiB"},
+    )
+    cpu = _gem5_node(
+        2,
+        "cpu0",
+        "TimingSimpleCPU",
+        [("icache_port", "request_port"), ("dcache_port", "request_port")],
+        {"clock": "2GHz"},
+    )
+    xbar = _gem5_node(
+        3,
+        "membus",
+        "SystemXBar",
+        [("cpu_side_ports", "response_port"), ("mem_side_ports", "request_port")],
+    )
+    memory = _gem5_node(
+        4,
+        "mem0",
+        "DDR3_1600_8x8",
+        [("port", "response_port")],
+        {"range": "512MiB"},
+    )
+    links = [
+        ModelLink(1, "icache", 2, "cpu0", "icache_port", 3, "membus", "cpu_side_ports", plugin_id="gem5"),
+        ModelLink(2, "dcache", 2, "cpu0", "dcache_port", 3, "membus", "cpu_side_ports", plugin_id="gem5"),
+        ModelLink(3, "mem", 3, "membus", "mem_side_ports", 4, "mem0", "port", plugin_id="gem5"),
+    ]
+    return SimpleNamespace(
+        component_items=lambda: [system, cpu, xbar, memory],
+        links=links,
+        subcomp_attachments=[],
+    )
+
+
+def test_gem5_export_validation_accepts_minimal_connected_system():
+    issues = Gem5Plugin().validate_export(_valid_gem5_scene())
+
+    assert issues == []
+
+
+def test_gem5_export_validation_reports_missing_topology_parts():
+    scene = SimpleNamespace(
+        component_items=lambda: [
+            _gem5_node(1, "system0", "System", [("system_port", "request_port")]),
+            _gem5_node(2, "cpu0", "TimingSimpleCPU", [("icache_port", "request_port"), ("dcache_port", "request_port")]),
+        ],
+        links=[],
+        subcomp_attachments=[],
+    )
+
+    messages = "\n".join(issue.message for issue in Gem5Plugin().validate_export(scene))
+
+    assert "CPU port 'icache_port' must be connected" in messages
+    assert "CPU port 'dcache_port' must be connected" in messages
+    assert "SystemXBar interconnect" in messages
+    assert "memory controller/DRAM" in messages
+
+
+def test_gem5_export_validation_rejects_mixed_target_versions():
+    scene = _valid_gem5_scene()
+    scene.component_items()[1].component.target_id = "2"
+
+    messages = "\n".join(issue.message for issue in Gem5Plugin().validate_export(scene))
+
+    assert "same target/version" in messages
+
+
+def test_build_gem5_python_exports_connected_model(tmp_path):
+    from fuse.plugins.community.gem5.export_python import build_gem5_python, export_gem5_python
+
+    text = build_gem5_python(_valid_gem5_scene())
+
+    assert "system = System()" in text
+    assert "system.cpu0 = TimingSimpleCPU()" in text
+    assert "system.membus = SystemXBar()" in text
+    assert "system.mem0 = MemCtrl()" in text
+    assert "system.cpu0.icache_port = system.membus.cpu_side_ports" in text
+    assert "system.cpu0.dcache_port = system.membus.cpu_side_ports" in text
+    assert "system.membus.mem_side_ports = system.mem0.port" in text
+    assert "root = Root(full_system=False, system=system)" in text
+
+    output = tmp_path / "model.py"
+    export_gem5_python(_valid_gem5_scene(), output)
+    assert output.read_text(encoding="utf-8") == text

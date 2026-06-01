@@ -142,6 +142,7 @@ class MainWindow(QMainWindow):
         save_action = QAction("Save", self)
         save_as_action = QAction("Save As...", self)
         export_sst_json_action = QAction("SST JSON...", self)
+        export_gem5_python_action = QAction("gem5 Python...", self)
         exit_action = QAction("Exit", self)
 
         new_action.triggered.connect(self.new_project)
@@ -152,6 +153,7 @@ class MainWindow(QMainWindow):
         save_action.triggered.connect(self.save_model)
         save_as_action.triggered.connect(self.save_model_as)
         export_sst_json_action.triggered.connect(self.export_sst_json)
+        export_gem5_python_action.triggered.connect(self.export_gem5_python)
         exit_action.triggered.connect(self.close)
 
         file_menu.addAction(new_action)
@@ -166,6 +168,7 @@ class MainWindow(QMainWindow):
 
         export_menu = file_menu.addMenu("Export")
         export_menu.addAction(export_sst_json_action)
+        export_menu.addAction(export_gem5_python_action)
 
         file_menu.addSeparator()
         file_menu.addAction(exit_action)
@@ -843,6 +846,73 @@ class MainWindow(QMainWindow):
 
         self.statusBar().showMessage(
             f"Exported SST JSON to {file_path}",
+            5000,
+        )
+
+
+    def export_gem5_python(self):
+        """
+        Export the current gem5-only FUSE model to an editable gem5 Python
+        configuration file.
+        """
+        if not self.scene.component_items():
+            QMessageBox.information(
+                self,
+                "Export gem5 Python",
+                "There are no components to export.",
+            )
+            return
+
+        active = self.project_settings.active_plugin_settings()
+
+        if active is None or active.plugin_id != "gem5":
+            QMessageBox.warning(
+                self,
+                "Export gem5 Python",
+                (
+                    "The active project target is not gem5.\n\n"
+                    "Open Project Settings and select a gem5 target before "
+                    "exporting to a gem5 Python configuration."
+                ),
+            )
+            return
+
+        if not self.validate_current_model_for_export():
+            return
+
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export gem5 Python",
+            str(self.current_project_path.with_suffix(".gem5.py"))
+            if self.current_project_path
+            else "",
+            "gem5 Python (*.py);;All Files (*)",
+        )
+
+        if not file_path:
+            return
+
+        if not file_path.lower().endswith(".py"):
+            file_path += ".py"
+
+        try:
+            from fuse.plugins.community.gem5.export_python import export_gem5_python
+
+            export_gem5_python(
+                scene=self.scene,
+                output_path=file_path,
+            )
+
+        except Exception as error:
+            QMessageBox.critical(
+                self,
+                "Export gem5 Python Failed",
+                str(error),
+            )
+            return
+
+        self.statusBar().showMessage(
+            f"Exported gem5 Python configuration to {file_path}",
             5000,
         )
 

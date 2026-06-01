@@ -69,6 +69,8 @@
 |---|---|---|
 | Built-in metadata | gem5 targets/items/details, catalog integrity, connector/property mapping | `fuse/plugins/community/gem5/tests/` |
 | Toolchain validation | command selection, version checks, non-gem5 output, command failures | `test_gem5_plugin_unit.py` |
+| Export readiness | gem5 topology validation, target consistency, required CPU/xbar/memory connections | `test_gem5_plugin_unit.py` |
+| Python export | generated gem5 Python configuration content and file writing | `test_gem5_plugin_unit.py` |
 | Live gem5 | real gem5 binary smoke test | `fuse/plugins/community/gem5/tests/test_gem5_live_integration.py` |
 
 ## CI mapping
