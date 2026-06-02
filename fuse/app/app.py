@@ -754,15 +754,20 @@ class MainWindow(QMainWindow):
         self.project_settings = dialog.settings()
         self.project_name = self.project_settings.project_name or "Untitled FUSE Project"
         self.project_settings.project_name = self.project_name
-        self.scene.clear_model()
+
+        # Clear the associated file path for a new unsaved project without
+        # resetting the project name chosen in Project Settings. Suppress model
+        # change history while clearing the previous scene so the old project
+        # state cannot be serialized back into the newly accepted settings.
+        self.current_project_path = None
+        self._restoring_history = True
+        try:
+            self.scene.clear_model()
+        finally:
+            self._restoring_history = False
+
         self.properties_panel.set_validation_issues([])
         self.properties_panel.show_empty()
-        # Clear the associated file path for a new unsaved project without
-        # resetting the project name chosen in Project Settings.
-        self.current_project_path = None
-        self.set_dirty(self.is_dirty)
-        self.project_name = self.project_settings.project_name or "Untitled FUSE Project"
-        self.project_settings.project_name = self.project_name
         self.apply_project_settings_to_ui()
         self.update_model_outline()
         self.reset_undo_history(mark_clean=True)
