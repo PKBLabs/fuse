@@ -51,6 +51,27 @@ def test_validate_gem5_toolchain_reports_command_failure(monkeypatch):
     assert output == "missing"
 
 
+def test_validate_gem5_toolchain_accepts_build_without_version_option(monkeypatch):
+    class Provider:
+        def run(self, command, timeout_seconds=60):
+            if command[-1] == "--version":
+                return CommandExecutionResult(
+                    command,
+                    2,
+                    "",
+                    "gem5.opt: error: no such option: --version",
+                )
+            return CommandExecutionResult(command, 0, "Usage: gem5.opt [gem5 options] script.py", "")
+
+    monkeypatch.setattr("fuse.plugins.community.gem5.plugin.provider_from_toolchain", lambda toolchain: Provider())
+
+    ok, message, output = validate_gem5_toolchain(ToolchainSettings())
+
+    assert ok is True
+    assert "does not support the --version option" in message
+    assert "Usage: gem5.opt" in output
+
+
 def test_validate_gem5_toolchain_rejects_non_gem5_output(monkeypatch):
     class Provider:
         def run(self, command, timeout_seconds=60):
@@ -334,6 +355,35 @@ def test_query_gem5_metadata_runs_configured_binary_and_extracts_probe_payload(m
     assert calls[1][0][0] == "/opt/gem5/build/X86/gem5.opt"
     assert calls[1][0][1].endswith("_fuse_gem5_probe.py")
     assert calls[1][2] == {"GEM5_TEST": "1"}
+
+
+def test_query_gem5_metadata_continues_when_version_option_is_unsupported(monkeypatch):
+    from fuse.plugins.community.gem5 import plugin as gem5_plugin
+    from fuse.plugins.community.gem5.plugin import query_gem5_metadata
+
+    class Provider:
+        def run(self, command, timeout_seconds=60, env=None, cwd=None):
+            if command[-1] == "--version":
+                return CommandExecutionResult(
+                    command,
+                    2,
+                    "",
+                    "gem5.opt: error: no such option: --version",
+                )
+            payload = {"components": [{"item_id": "system", "type_name": "System"}]}
+            output = (
+                f"noise\n{gem5_plugin.GEM5_METADATA_BEGIN}\n"
+                f"{__import__('json').dumps(payload)}\n"
+                f"{gem5_plugin.GEM5_METADATA_END}\n"
+            )
+            return CommandExecutionResult(command, 0, output, "")
+
+    monkeypatch.setattr(gem5_plugin, "provider_from_toolchain", lambda toolchain: Provider())
+
+    metadata = query_gem5_metadata(ToolchainSettings(tool_paths={"gem5Binary": "/opt/gem5/gem5.opt"}))
+
+    assert metadata["version"] == ""
+    assert metadata["components"][0]["type_name"] == "System"
 
 
 def test_query_gem5_metadata_rejects_non_local_toolchain():

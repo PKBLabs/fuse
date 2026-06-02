@@ -983,6 +983,38 @@ def _extract_probe_payload(output: str) -> dict[str, Any]:
     return payload
 
 
+def _gem5_version_option_unsupported(output: str) -> bool:
+    lowered = (output or "").lower()
+    return "--version" in lowered and ("no such option" in lowered or "unrecognized" in lowered)
+
+
+def _query_gem5_version(
+    provider,
+    toolchain: ToolchainSettings,
+    timeout_seconds: int,
+) -> tuple[str, str, bool]:
+    version_command = [*gem5_command_from_toolchain(toolchain), "--version"]
+    version_result = provider.run(
+        version_command,
+        timeout_seconds=timeout_seconds,
+        env=toolchain.environment,
+    )
+    version_output = (version_result.stdout + version_result.stderr).strip()
+
+    if version_result.return_code == 0:
+        parsed_version = parse_version_text(version_output)
+        return (parsed_version.text if parsed_version is not None else "", version_output, False)
+
+    if _gem5_version_option_unsupported(version_output):
+        return "", version_output, True
+
+    raise RuntimeError(
+        "Could not query gem5 version before metadata import.\n\n"
+        f"Command: {' '.join(version_command)}\n"
+        f"Return code: {version_result.return_code}\n\n{version_output}"
+    )
+
+
 def query_gem5_metadata(toolchain: ToolchainSettings, timeout_seconds: int = 120) -> dict[str, Any]:
     if (toolchain.backend or "local") != "local":
         raise RuntimeError(
@@ -991,22 +1023,7 @@ def query_gem5_metadata(toolchain: ToolchainSettings, timeout_seconds: int = 120
         )
 
     provider = provider_from_toolchain(toolchain)
-    version_command = [*gem5_command_from_toolchain(toolchain), "--version"]
-    version_result = provider.run(
-        version_command,
-        timeout_seconds=timeout_seconds,
-        env=toolchain.environment,
-    )
-    version_output = (version_result.stdout + version_result.stderr).strip()
-    if version_result.return_code != 0:
-        raise RuntimeError(
-            "Could not query gem5 version before metadata import.\n\n"
-            f"Command: {' '.join(version_command)}\n"
-            f"Return code: {version_result.return_code}\n\n{version_output}"
-        )
-
-    parsed_version = parse_version_text(version_output)
-    version = parsed_version.text if parsed_version is not None else ""
+    version, _, _ = _query_gem5_version(provider, toolchain, timeout_seconds)
 
     script_path = None
     try:
@@ -1053,6 +1070,32 @@ def validate_gem5_toolchain(
     command = [*gem5_command_from_toolchain(toolchain), "--version"]
     result = provider.run(command, timeout_seconds=timeout_seconds)
     output = (result.stdout + result.stderr).strip()
+
+    if result.return_code != 0 and _gem5_version_option_unsupported(output):
+        help_command = [*gem5_command_from_toolchain(toolchain), "--help"]
+        help_result = provider.run(help_command, timeout_seconds=timeout_seconds)
+        help_output = (help_result.stdout + help_result.stderr).strip()
+        if help_result.return_code == 0 and "gem5" in help_output.lower():
+            version_note = (
+                "The gem5 binary is reachable, but this build does not support "
+                "the --version option, so FUSE could not verify the exact gem5 "
+                "version from the executable."
+            )
+            return (
+                True,
+                (
+                    f"Validated gem5 toolchain reachability.\n\n"
+                    f"Backend: {help_result.backend}\n"
+                    f"Host: {help_result.host or 'local'}\n"
+                    f"Command: {' '.join(help_command)}\n\n"
+                    f"{version_note}\n\n"
+                    f"Output:\n{help_output}"
+                ),
+                help_output or output,
+            )
+        output = help_output or output
+        result = help_result
+        command = help_command
 
     if result.return_code != 0:
         return (
