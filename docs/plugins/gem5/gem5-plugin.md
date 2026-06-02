@@ -48,7 +48,7 @@ These appear in Project Settings as target version/catalog choices.
 
 ## Built-in component metadata
 
-The plugin currently includes built-in definitions for selected gem5 objects, such as:
+The plugin includes built-in fallback definitions for selected gem5 objects, such as:
 
 ```text
 gem5.System
@@ -159,7 +159,7 @@ The gem5 plugin can export a gem5-only FUSE graph to an editable Python configur
 File -> Export -> gem5 Python...
 ```
 
-The exporter currently targets the built-in gem5 component subset exposed by the community plugin. It writes a normal Python config using `m5.objects`, including a top-level `System`, clock/voltage domains, memory ranges, SimObject construction, and port assignments from FUSE links.
+The exporter targets the gem5 component subset that FUSE can structurally validate. It writes a normal Python config using `m5.objects`, including a top-level `System`, clock/voltage domains, memory ranges, SimObject construction, and port assignments from FUSE links. Imported live metadata improves catalog and validation behavior, but generated configs are still intended to be reviewed and edited before production simulations.
 
 The generated file is intentionally editable. Users should review workload, process, ISA, and simulator-specific settings before using it for production simulation runs.
 
@@ -168,8 +168,8 @@ The generated file is intentionally editable. Users should review workload, proc
 
 Future gem5 plugin work may include:
 
-- Broader gem5 SimObject metadata discovery.
-- gem5 parameter/property schema import.
+- Remote/SSH gem5 metadata import with safe probe staging.
+- Deeper gem5 parameter/property type validation.
 - gem5 model construction assistance.
 - Broader gem5 configuration generation/export.
 - Richer gem5-specific validation.

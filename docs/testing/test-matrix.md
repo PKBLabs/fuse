@@ -19,8 +19,8 @@
 | Model roundtrip | save/load components and links | `fuse/tests/test_fuse_model_roundtrip.py` |
 | Resources | logo and icon path resolution | `fuse/tests/test_resource_paths.py` |
 | Routing | path simplification and route validity | `fuse/tests/test_routing.py` |
-| Validation | duplicate names, required params, link endpoint latencies, plugin validation delegation, subcomponent attachments | `fuse/tests/test_validation.py`, `fuse/tests/test_validation_core_extended.py` |
-| UI | splash/about/palette, variable ports, model outline, dirty state | `fuse/tests/` |
+| Validation | duplicate names, required params, link endpoint latencies, plugin validation delegation, subcomponent attachments, structured results panel, severity filtering, result navigation | `fuse/tests/test_validation.py`, `fuse/tests/test_validation_core_extended.py`, `fuse/tests/test_validation_results_panel.py` |
+| UI | splash/about/palette, variable ports, model outline, dirty state, validation result navigation/highlighting | `fuse/tests/` |
 | Project/plugin settings | project settings, plugin settings, toolchain settings, legacy field compatibility | `fuse/tests/test_project_settings.py` |
 | Toolchains | local/SSH command providers, executable discovery, version parsing and match policies | `fuse/tests/test_toolchain_utilities.py`, `fuse/tests/test_discovery_and_plugin_manager_extended.py` |
 | Plugin API models | compatibility result/report and migration plan helpers | `fuse/tests/test_plugin_api_models.py` |
@@ -45,6 +45,8 @@
 | Dirty state after edits | `test_component_instance_naming_outline_dirty.py`, `test_properties_panel_parameter_editing.py`, `test_undo_redo_history.py` |
 | Undo/redo for editing actions | `test_undo_redo_history.py` |
 | Unsaved status-bar indicator | `test_undo_redo_history.py` |
+| Validation results panel filters and object navigation | `test_validation_results_panel.py` |
+| Universal validation highlighting hooks for components, links, and subcomponent attachments | `test_validation_results_panel.py`, `test_validation_core_extended.py` |
 
 ## SST plugin tests
 
@@ -67,11 +69,11 @@
 
 | Area | Tests | Location |
 |---|---|---|
-| Built-in metadata | gem5 targets/items/details, catalog integrity, connector/property mapping | `fuse/plugins/community/gem5/tests/` |
+| Catalog metadata | built-in fallback metadata, imported live metadata persistence, functionality/category mapping, connector/property mapping | `fuse/plugins/community/gem5/tests/` |
 | Toolchain validation | command selection, version checks, non-gem5 output, command failures | `test_gem5_plugin_unit.py` |
 | Export readiness | gem5 topology validation, target consistency, required CPU/xbar/memory connections | `test_gem5_plugin_unit.py` |
 | Python export | generated gem5 Python configuration content and file writing | `test_gem5_plugin_unit.py` |
-| Live gem5 | real gem5 binary smoke test | `fuse/plugins/community/gem5/tests/test_gem5_live_integration.py` |
+| Live gem5 | real gem5 binary smoke test, live `m5.objects` metadata probing, imported catalog validation | `fuse/plugins/community/gem5/tests/test_gem5_live_integration.py` |
 
 ## CI mapping
 

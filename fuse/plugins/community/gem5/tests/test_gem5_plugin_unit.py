@@ -448,3 +448,94 @@ def test_import_metadata_replaces_previous_live_catalog_for_same_target(monkeypa
 
     live_target = next(target for target in plugin.list_targets() if target.display_name.startswith("gem5 25.1.0.1"))
     assert [item.item_id for item in plugin.load_palette_items(target_id=live_target.target_id)] == ["new"]
+
+
+def test_gem5_palette_items_include_functionality_for_catalog_grouping(monkeypatch):
+    target = SimpleNamespace(
+        target_id="1",
+        display_name="gem5 25",
+        framework_version="25.1.0.1",
+    )
+    plugin = Gem5Plugin()
+    monkeypatch.setattr(plugin, "list_targets", lambda: [target])
+
+    by_type = {item.type_name: item for item in plugin.load_palette_items(target_id="1")}
+
+    assert by_type["System"].functionality == "System"
+    assert by_type["TimingSimpleCPU"].functionality == "Processor"
+    assert by_type["SystemXBar"].functionality == "Interconnect"
+    assert by_type["DDR3_1600_8x8"].functionality == "Memory"
+
+
+def test_imported_gem5_metadata_preserves_functionality_for_catalog_and_details(monkeypatch, tmp_path):
+    from fuse.core.persistence.database import get_connection
+    from fuse.plugins.community.gem5 import plugin as gem5_plugin
+
+    monkeypatch.setenv("FUSE_DB_PATH", str(tmp_path / "app.db"))
+    plugin = Gem5Plugin()
+    with get_connection() as conn:
+        plugin.initialize_database(conn)
+        conn.commit()
+
+    monkeypatch.setattr(
+        gem5_plugin,
+        "query_gem5_metadata",
+        lambda toolchain: {
+            "version": "25.1.0.1",
+            "build_isa": "X86",
+            "components": [
+                {
+                    "item_id": "ruby_cache",
+                    "display_name": "gem5.RubyCache (Component)",
+                    "type_name": "RubyCache",
+                    "element_name": "gem5",
+                    "category": "Cache",
+                    "functionality": "Memory Hierarchy",
+                    "description": "Imported cache",
+                    "raw_kind": "Component",
+                    "connectors": [
+                        {"name": "cpu_side", "description": "CPU side", "interface": "response_port"}
+                    ],
+                    "properties": [],
+                }
+            ],
+        },
+    )
+
+    plugin.import_metadata_for_toolchain(
+        PluginProjectSettings(
+            plugin_id="gem5",
+            toolchain=ToolchainSettings(tool_paths={"gem5Binary": "/opt/gem5/gem5.opt"}),
+        )
+    )
+    live_target = next(target for target in plugin.list_targets() if target.is_default)
+
+    item = plugin.load_palette_items(target_id=live_target.target_id)[0]
+    details = plugin.load_item_details("ruby_cache", target_id=live_target.target_id)
+
+    assert item.functionality == "Memory Hierarchy"
+    assert details.palette_item.functionality == "Memory Hierarchy"
+
+
+def test_gem5_export_validation_accepts_imported_memory_role_with_response_port():
+    from fuse.core.model.models import ModelLink
+
+    scene = _valid_gem5_scene()
+    nodes = scene.component_items()
+    imported_memory = _gem5_node(
+        5,
+        "hbm0",
+        "HBMCtrl",
+        [("mem_port", "response_port")],
+        {"range": "512MiB"},
+    )
+    imported_memory.component.category = "Memory"
+    imported_memory.component.functionality = "Memory"
+    # Replace DDR3 memory with a generic imported memory controller.
+    scene.component_items = lambda: [*nodes[:3], imported_memory]
+    scene.links = [
+        *scene.links[:2],
+        ModelLink(3, "mem", 3, "membus", "mem_side_ports", 5, "hbm0", "mem_port", plugin_id="gem5"),
+    ]
+
+    assert Gem5Plugin().validate_export(scene) == []

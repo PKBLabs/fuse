@@ -44,7 +44,7 @@ The Community Edition includes community plugin directories for:
 
 The SST plugin populates palette items by reading SST metadata from `sst-info`, parsing it, storing it in `sst_*` database tables, and translating records into generic FUSE palette items.
 
-The gem5 plugin currently provides built-in metadata for supported gem5 objects such as `System`, `TimingSimpleCPU`, `SystemXBar`, and `DDR3_1600_8x8`.
+The gem5 plugin can import live SimObject metadata from a configured local gem5 executable. When no live metadata has been imported for the selected target, it falls back to built-in metadata for supported objects such as `System`, `TimingSimpleCPU`, `SystemXBar`, and `DDR3_1600_8x8`.
 
 ### Palette organization and sorting
 
@@ -58,7 +58,7 @@ The palette can show the active catalog in several views:
 
 The **A-Z** checkbox controls catalog sorting. When it is enabled, groups and entries are sorted alphabetically. Component sorting uses the component element, whether the entry is a component or subcomponent, and the component name. When it is disabled, entries keep the order returned by the active plugin/catalog.
 
-Palette entries show tooltips when you hover over them. A component tooltip includes the display name, description, function, interface, and category when that metadata is available.
+Palette entries show tooltips when you hover over them. A component tooltip includes the display name, description, function, interface, and category when that metadata is available. Gem5 entries use imported or inferred functionality such as System, Processor, Interconnect, Memory, Memory Hierarchy, Device, or SimObject to keep live catalogs navigable.
 
 ### Frequently used and recent components
 

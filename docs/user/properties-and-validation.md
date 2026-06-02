@@ -27,7 +27,7 @@ The Object section includes:
 | `Framework Version` | No | Framework version associated with the component metadata. |
 | `Icon Path` | Yes | Icon path used to render the component instance. |
 
-The Parameters section is generated from plugin-provided parameter metadata. For example, SST parameters come from imported `sst-info` metadata, while gem5 parameters currently come from built-in gem5 plugin metadata.
+The Parameters section is generated from plugin-provided parameter metadata. For example, SST parameters come from imported `sst-info` metadata, while gem5 parameters come from imported live `m5.objects` metadata when available and from the built-in gem5 fallback catalog otherwise.
 
 Required parameters are displayed with `*`:
 
@@ -209,19 +209,31 @@ Plugin-provided property definitions can mark parameters as required. The SST pl
 
 ## Validation feedback
 
-When validation fails:
+When validation runs, FUSE opens the **Validation Results** panel at the bottom of the main window. The panel behaves like an IDE problems view and lists each result with:
 
-- FUSE shows a summary dialog listing the issues.
-- The affected component rows can be highlighted in the properties panel.
-- Component boxes can show validation markers.
-- The user should fix all issues before saving or exporting.
+- severity, such as Error, Warning, or Info;
+- scope, such as Project, Component, Link, or SubComponent;
+- affected object name;
+- message;
+- suggested fix.
 
-Example validation summary:
+Use the filter control in the panel to show all results or only errors, warnings, or informational entries. Double-click a validation result to select and center the affected object in the Model View when the result refers to a component, link, or subcomponent attachment.
+
+Validation feedback is also reflected in the editor:
+
+- affected component boxes show validation markers;
+- affected link and subcomponent attachment edges are highlighted;
+- affected component property rows are highlighted where FUSE can map the issue to a property name;
+- tooltips on affected objects include validation details.
+
+The user should fix all errors before saving or exporting. Warnings identify suspicious or incomplete model details that may still be editable as a FUSE model, but may need review before simulator export.
+
+Example validation results:
 
 ```text
-Name 'cache0' is already used. Names must be unique.
-Required parameter 'clock' has no value.
-Link latency is required.
+Error | Component | cache0 | Required parameter 'clock' has no value. | Set 'clock' in the Properties panel.
+Error | Link      | link0  | Source endpoint latency is required.     | Set 'source_latency' in the Properties panel.
+Error | Project   | Project| Mixed-plugin export is not supported.    | Select the correct target or remove unsupported simulator components.
 ```
 
 ## Plugin-specific validation

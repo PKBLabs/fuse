@@ -48,6 +48,7 @@ BUILTIN_GEM5_COMPONENTS = {
         "type_name": "System",
         "element_name": "gem5",
         "category": "System",
+        "functionality": "System",
         "description": "Top-level gem5 system object.",
         "connectors": [
             {"name": "system_port", "description": "System functional access port", "interface": "request_port"},
@@ -64,6 +65,7 @@ BUILTIN_GEM5_COMPONENTS = {
         "type_name": "TimingSimpleCPU",
         "element_name": "gem5",
         "category": "CPU",
+        "functionality": "Processor",
         "description": "TimingSimpleCPU SimObject for timing-mode gem5 models.",
         "connectors": [
             {"name": "icache_port", "description": "Instruction cache port", "interface": "request_port"},
@@ -80,6 +82,7 @@ BUILTIN_GEM5_COMPONENTS = {
         "type_name": "AtomicSimpleCPU",
         "element_name": "gem5",
         "category": "CPU",
+        "functionality": "Processor",
         "description": "AtomicSimpleCPU SimObject for fast functional gem5 models.",
         "connectors": [
             {"name": "icache_port", "description": "Instruction cache port", "interface": "request_port"},
@@ -95,6 +98,7 @@ BUILTIN_GEM5_COMPONENTS = {
         "type_name": "MinorCPU",
         "element_name": "gem5",
         "category": "CPU",
+        "functionality": "Processor",
         "description": "MinorCPU SimObject for in-order pipeline studies.",
         "connectors": [
             {"name": "icache_port", "description": "Instruction cache port", "interface": "request_port"},
@@ -110,6 +114,7 @@ BUILTIN_GEM5_COMPONENTS = {
         "type_name": "SystemXBar",
         "element_name": "gem5",
         "category": "Interconnect",
+        "functionality": "Interconnect",
         "description": "gem5 system crossbar interconnect.",
         "connectors": [
             {"name": "cpu_side_ports", "description": "CPU-side ports", "interface": "response_port"},
@@ -127,6 +132,7 @@ BUILTIN_GEM5_COMPONENTS = {
         "type_name": "DDR3_1600_8x8",
         "element_name": "gem5",
         "category": "Memory",
+        "functionality": "Memory",
         "description": "Common gem5 DDR3 memory controller model.",
         "connectors": [
             {"name": "port", "description": "Memory controller port", "interface": "response_port"},
@@ -170,6 +176,7 @@ class Gem5Plugin:
                 type_name TEXT NOT NULL,
                 element_name TEXT NOT NULL DEFAULT 'gem5',
                 category TEXT NOT NULL DEFAULT 'SimObject',
+                functionality TEXT NOT NULL DEFAULT '',
                 description TEXT NOT NULL DEFAULT '',
                 raw_kind TEXT NOT NULL DEFAULT 'Component',
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -205,6 +212,8 @@ class Gem5Plugin:
             )
         """)
 
+        self._ensure_gem5_component_columns(conn)
+
         conn.execute("""
             INSERT OR IGNORE INTO gem5_framework_versions (
                 version,
@@ -227,6 +236,20 @@ class Gem5Plugin:
             f"gem5 {PREVIOUS_GEM5_VERSION}",
             DEFAULT_GEM5_ISA,
         ))
+
+    def _ensure_gem5_component_columns(self, conn) -> None:
+        """Add optional catalog columns for databases created by older FUSE builds."""
+        try:
+            rows = conn.execute("PRAGMA table_info(gem5_components)").fetchall()
+        except sqlite3.OperationalError:
+            return
+
+        names = {row[1] for row in rows}
+        if "functionality" not in names:
+            conn.execute(
+                "ALTER TABLE gem5_components ADD COLUMN functionality TEXT NOT NULL DEFAULT ''"
+            )
+
 
     def bootstrap_database(self) -> None:
         return
@@ -281,6 +304,7 @@ class Gem5Plugin:
                     type_name=metadata["type_name"],
                     element_name=metadata["element_name"],
                     category=metadata["category"],
+                    functionality=metadata.get("functionality", gem5_functionality_for_type(metadata["type_name"])),
                     description=metadata["description"],
                     raw_kind="Component",
                     target_id=str(target_id or ""),
@@ -321,6 +345,7 @@ class Gem5Plugin:
             type_name=metadata["type_name"],
             element_name=metadata["element_name"],
             category=metadata["category"],
+            functionality=metadata.get("functionality", gem5_functionality_for_type(metadata["type_name"])),
             description=metadata["description"],
             raw_kind="Component",
             target_id=str(target_id or ""),
@@ -362,7 +387,7 @@ class Gem5Plugin:
             with get_connection() as conn:
                 rows = conn.execute(
                     """
-                    SELECT item_id, display_name, type_name, element_name, category, description, raw_kind
+                    SELECT item_id, display_name, type_name, element_name, category, functionality, description, raw_kind
                     FROM gem5_components
                     WHERE framework_version_id = ?
                     ORDER BY category COLLATE NOCASE, display_name COLLATE NOCASE, type_name COLLATE NOCASE
@@ -380,6 +405,7 @@ class Gem5Plugin:
                 type_name=row["type_name"],
                 element_name=row["element_name"] or "gem5",
                 category=row["category"] or "SimObject",
+                functionality=row.get("functionality") or gem5_functionality_for_type(row["type_name"]),
                 description=row["description"] or "Imported gem5 SimObject.",
                 raw_kind=row["raw_kind"] or "Component",
                 target_id=target_id,
@@ -403,7 +429,7 @@ class Gem5Plugin:
             conn = get_connection()
             component_row = conn.execute(
                 """
-                SELECT id, item_id, display_name, type_name, element_name, category, description, raw_kind
+                SELECT id, item_id, display_name, type_name, element_name, category, functionality, description, raw_kind
                 FROM gem5_components
                 WHERE framework_version_id = ? AND item_id = ?
                 """,
@@ -447,6 +473,7 @@ class Gem5Plugin:
             type_name=row["type_name"],
             element_name=row["element_name"] or "gem5",
             category=row["category"] or "SimObject",
+            functionality=row.get("functionality") or gem5_functionality_for_type(row["type_name"]),
             description=row["description"] or "Imported gem5 SimObject.",
             raw_kind=row["raw_kind"] or "Component",
             target_id=target_id,
@@ -569,6 +596,27 @@ class Gem5Plugin:
     def _node_type(self, node) -> str:
         return getattr(node.component, "name", "")
 
+    def _node_category(self, node) -> str:
+        return getattr(node.component, "category", "") or _category_for_gem5_type(self._node_type(node))
+
+    def _node_functionality(self, node) -> str:
+        return getattr(node.component, "functionality", "") or gem5_functionality_for_type(self._node_type(node), self._node_category(node))
+
+    def _node_role(self, node) -> str:
+        return gem5_component_role(self._node_type(node), self._node_category(node), self._node_functionality(node))
+
+    def _has_port(self, node, port_name: str) -> bool:
+        return any(getattr(port, "name", "") == port_name for port in getattr(node, "ports", []) or [])
+
+    def _ports_with_interface(self, node, interface: str) -> list[str]:
+        result = []
+        for port in getattr(node, "ports", []) or []:
+            metadata = getattr(port, "metadata", {}) or {}
+            iface = (metadata.get("iface") or metadata.get("interface") or "").strip()
+            if iface == interface:
+                result.append(getattr(port, "name", ""))
+        return [name for name in result if name]
+
     def _link_map(self, scene, gem5_nodes: list) -> dict[tuple[int, str], list]:
         node_ids = {getattr(node, "node_id", None) for node in gem5_nodes}
         node_ids.discard(None)
@@ -627,7 +675,7 @@ class Gem5Plugin:
 
         link_map = self._link_map(scene, gem5_nodes)
 
-        cpu_nodes = [node for node in gem5_nodes if "CPU" in self._node_type(node)]
+        cpu_nodes = [node for node in gem5_nodes if self._node_role(node) == "cpu"]
         if not cpu_nodes:
             issues.append(
                 ValidationIssue(
@@ -650,7 +698,7 @@ class Gem5Plugin:
                         )
                     )
 
-        xbar_nodes = [node for node in gem5_nodes if self._node_type(node) == "SystemXBar"]
+        xbar_nodes = [node for node in gem5_nodes if self._node_role(node) == "interconnect"]
         if not xbar_nodes:
             issues.append(
                 ValidationIssue(
@@ -673,10 +721,7 @@ class Gem5Plugin:
                         )
                     )
 
-        memory_nodes = [
-            node for node in gem5_nodes
-            if self._node_type(node) in {"DDR3_1600_8x8"}
-        ]
+        memory_nodes = [node for node in gem5_nodes if self._node_role(node) == "memory"]
         if not memory_nodes:
             issues.append(
                 ValidationIssue(
@@ -687,16 +732,18 @@ class Gem5Plugin:
             )
 
         for node in memory_nodes:
-            if not link_map.get((getattr(node, "node_id", None), "port")):
-                issues.append(
-                    ValidationIssue(
-                        issue_type="gem5_export",
-                        object_name=getattr(node, "instance_name", "<unnamed>"),
-                        node_id=getattr(node, "node_id", None),
-                        parameter_name="port",
-                        message="Memory component port must be connected for gem5 export.",
-                    )
+            candidate_ports = ["port"] if self._has_port(node, "port") else self._ports_with_interface(node, "response_port")
+            if candidate_ports and any(link_map.get((getattr(node, "node_id", None), port_name)) for port_name in candidate_ports):
+                continue
+            issues.append(
+                ValidationIssue(
+                    issue_type="gem5_export",
+                    object_name=getattr(node, "instance_name", "<unnamed>"),
+                    node_id=getattr(node, "node_id", None),
+                    parameter_name=",".join(candidate_ports) or "port",
+                    message="Memory component response port must be connected for gem5 export.",
                 )
+            )
 
         if getattr(scene, "subcomp_attachments", []):
             issues.append(
@@ -782,9 +829,9 @@ class Gem5Plugin:
                 """
                 INSERT INTO gem5_components (
                     framework_version_id, item_id, display_name, type_name,
-                    element_name, category, description, raw_kind
+                    element_name, category, functionality, description, raw_kind
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     target_id,
@@ -793,6 +840,7 @@ class Gem5Plugin:
                     type_name,
                     component.get("element_name", "gem5") or "gem5",
                     component.get("category", "SimObject") or "SimObject",
+                    component.get("functionality", "") or gem5_functionality_for_type(type_name),
                     component.get("description", "") or "Imported gem5 SimObject.",
                     component.get("raw_kind", "Component") or "Component",
                 ),
@@ -868,6 +916,44 @@ def _category_for_gem5_type(type_name: str) -> str:
     if any(token in type_name for token in ("Device", "Disk", "Ether", "Pci", "PCI", "VirtIO")):
         return "Device"
     return "SimObject"
+
+
+
+def gem5_functionality_for_type(type_name: str, category: str = "") -> str:
+    text = str(type_name or "")
+    category_text = str(category or _category_for_gem5_type(text) or "")
+    lowered = text.lower()
+    if category_text == "System" or text in {"System", "Root"}:
+        return "System"
+    if category_text == "CPU" or "cpu" in lowered:
+        return "Processor"
+    if category_text == "Interconnect" or any(token in text for token in ("XBar", "Bus", "Bridge", "Switch")):
+        return "Interconnect"
+    if category_text == "Memory" or any(token in text for token in ("DRAM", "DDR", "HBM", "Memory", "Mem", "NVM")):
+        return "Memory"
+    if category_text == "Cache" or any(token in text for token in ("Cache", "TLB", "MMU")):
+        return "Memory Hierarchy"
+    if category_text == "Device":
+        return "Device"
+    return category_text or "SimObject"
+
+
+def gem5_component_role(type_name: str, category: str = "", functionality: str = "") -> str:
+    type_text = str(type_name or "")
+    cat = str(category or _category_for_gem5_type(type_text) or "").lower()
+    func = str(functionality or gem5_functionality_for_type(type_text, category) or "").lower()
+    lowered = type_text.lower()
+    if type_text == "System" or func == "system":
+        return "system"
+    if "cpu" in lowered or func == "processor" or cat == "cpu":
+        return "cpu"
+    if any(token in type_text for token in ("XBar", "Bus", "Bridge", "Switch")) or func == "interconnect" or cat == "interconnect":
+        return "interconnect"
+    if any(token in type_text for token in ("DRAM", "DDR", "HBM", "Memory", "Mem", "NVM")) or func == "memory" or cat == "memory":
+        return "memory"
+    if "cache" in lowered or cat == "cache":
+        return "cache"
+    return "simobject"
 
 
 def _infer_gem5_port_interface(port_text: str) -> str:
