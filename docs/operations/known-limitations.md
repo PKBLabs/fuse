@@ -4,7 +4,7 @@ FUSE is in early active development. The following limitations are expected.
 
 ## UI and model editor
 
-- Undo/redo menu items may be placeholders.
+- Undo/redo is available for the current editing session, but long-term history persistence across application restarts is not implemented.
 - Routing is designed for responsiveness, not full schematic-quality autorouting.
 - Point-to-point links currently allow one connection per port.
 - Multi-endpoint/bus links are planned but not complete.
@@ -13,13 +13,14 @@ FUSE is in early active development. The following limitations are expected.
 ## Project files
 
 - `.fse` schema version is early and may change.
-- Backward compatibility may require migration logic as the schema evolves.
+- The serializer now stores format/version metadata and validates structure, but backward compatibility may still require migration logic as the schema evolves.
+- FUSE can persist mixed SST/gem5 projects, but mixed simulator export is intentionally not supported until a defined hybrid backend exists.
 
 ## Plugin system
 
 - Plugin API is still stabilizing.
 - Some manifest capability fields may be descriptive rather than fully enforced.
-- gem5 support may be placeholder-level.
+- gem5 support includes built-in metadata, live local metadata import, validation, and Python export scaffolding. Remote gem5 metadata import is not yet implemented.
 
 ## SST plugin
 

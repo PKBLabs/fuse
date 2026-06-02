@@ -123,7 +123,7 @@ For SST, metadata is imported from `sst-info` into the local database. If the pa
 - The selected SST target has been imported into the FUSE database.
 - The project is using the expected active plugin and target.
 
-For gem5, the current community plugin provides built-in catalog metadata for supported gem5 objects.
+For gem5, the community plugin can import live SimObject metadata from the configured local gem5 binary. When live metadata has not been imported yet, FUSE falls back to the built-in gem5 catalog for supported objects.
 
 ## 5. Add components to the model
 
@@ -139,6 +139,8 @@ When a drop occurs, FUSE:
 4. Generates a unique default instance name.
 5. Adds the instance to the scene/model outline.
 6. Marks the model as changed/dirty.
+
+The **Edit -> Undo** and **Edit -> Redo** actions track model-editing changes such as component creation, deletion, property edits, link edits, subcomponent attachment edits, and canvas layout changes. Use **Ctrl+Z** to undo the last recorded edit and **Ctrl+Shift+Z** to redo an edit that was undone. FUSE keeps a bounded edit history for the current project session and clears the redo stack when a new edit is made after undoing. Component drags are coalesced into one history entry so a single mouse drag can be undone with one **Undo** action.
 
 Example default names:
 
@@ -170,7 +172,7 @@ The saved `.fse` project stores the resulting scene position:
 }
 ```
 
-When the project is reopened, FUSE restores the component to that model coordinate.
+When the project is reopened, FUSE restores the component to that model coordinate. The `.fse` serializer also stores format/version metadata, model counts, plugin identities, component properties, ports/link references, subcomponent attachment references, and editor layout data so users can continue editing after reopening the project.
 
 ## 7. Select and inspect components
 
@@ -392,3 +394,19 @@ FUSE .fse project
 - Save often.
 - Keep `.fse` project files separate from generated simulator export files.
 - Revalidate after switching framework targets.
+
+## 15. Save/load and `.fse` serialization
+
+The `.fse` file is the editable FUSE project format. It is distinct from simulator export formats such as SST JSON or gem5 Python. A saved `.fse` project preserves:
+
+- project settings and enabled plugin targets
+- SST, gem5, and mixed-plugin component instances
+- component properties and variable-port counts
+- point-to-point links, endpoint latencies, compatibility status, and plugin metadata
+- subcomponent attachments and compatibility metadata
+- canvas positions, scene bounds, and view metadata
+- serializer/schema metadata used for future compatibility checks
+
+FUSE validates the file structure before loading a project and before writing a project file. Saves are written atomically through a temporary file and replace the destination only after JSON serialization succeeds, which reduces the chance of leaving a partially written `.fse` file after a failed save.
+
+Mixed SST/gem5 models are valid FUSE models and can be saved, reopened, and edited. Export validation remains simulator-specific: SST-only models can be validated for SST export, gem5-only models can be validated for gem5 export, and mixed export is reported as unsupported until a defined hybrid backend exists.

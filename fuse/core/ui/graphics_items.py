@@ -231,6 +231,7 @@ class ConnectionItem(QGraphicsPathItem):
         self.highlight_color = QColor("#f59e0b")
         self.warning_color = QColor("#f59e0b")
         self.error_color = QColor("#ef4444")
+        self.validation_messages: list[str] = []
 
         self.setPen(QPen(self.base_color, 2))
         self.setZValue(5)
@@ -271,6 +272,9 @@ class ConnectionItem(QGraphicsPathItem):
 
         if getattr(self.link, "compatibility_severity", "ok") != "ok":
             tooltip += f"\n\n⚠ {self.link.compatibility_message}"
+
+        if self.validation_messages:
+            tooltip += "\n\nValidation:\n" + "\n".join(self.validation_messages)
 
         self.setToolTip(tooltip)
 
@@ -480,11 +484,24 @@ class ConnectionItem(QGraphicsPathItem):
         return self.source_port.node is node or self.target_port.node is node
 
     def link_base_color(self) -> QColor:
+        if self.validation_messages:
+            return self.error_color
         if getattr(self.link, "compatibility_severity", "ok") == "error":
             return self.error_color
         if getattr(self.link, "compatibility_severity", "ok") == "warning":
             return self.warning_color
         return self.base_color
+
+    def set_validation_warnings(self, messages: list[str]):
+        self.validation_messages = list(messages)
+        self.update_tooltip()
+
+        if messages:
+            self.setPen(QPen(self.error_color, 3))
+            self.setZValue(15)
+        else:
+            self.setPen(QPen(self.link_base_color(), 2))
+            self.setZValue(5)
 
     def set_highlighted(self, highlighted: bool):
         if highlighted:
@@ -492,7 +509,7 @@ class ConnectionItem(QGraphicsPathItem):
             self.setZValue(20)
         else:
             self.setPen(QPen(self.link_base_color(), 2))
-            self.setZValue(5)
+            self.setZValue(15 if self.validation_messages else 5)
 
     def segment_intersects_rect(self, a: QPointF, b: QPointF, rect) -> bool:
         """
@@ -651,6 +668,8 @@ class SubcompAttachmentItem(QGraphicsPathItem):
         self.target_connector = interface_connector
         self.base_color = QColor("#8b5cf6")
         self.highlight_color = QColor("#f59e0b")
+        self.error_color = QColor("#ef4444")
+        self.validation_messages: list[str] = []
         self.setPen(QPen(self.base_color, 2, Qt.DashLine))
         self.setZValue(4)
         self.setFlag(QGraphicsItem.ItemIsSelectable, True)
@@ -668,6 +687,8 @@ class SubcompAttachmentItem(QGraphicsPathItem):
         )
         if self.attachment.compatibility_severity != "ok":
             tooltip += f"\n\n⚠ {self.attachment.compatibility_message}"
+        if self.validation_messages:
+            tooltip += "\n\nValidation:\n" + "\n".join(self.validation_messages)
         self.setToolTip(tooltip)
 
     def update_position(self):
@@ -691,13 +712,42 @@ class SubcompAttachmentItem(QGraphicsPathItem):
     def is_connected_to_node(self, node: "ComponentNodeItem") -> bool:
         return self.source_connector.node is node or self.target_connector.node is node
 
+    def contextMenuEvent(self, event):
+        scene = self.scene()
+
+        menu = QMenu()
+        remove_action = menu.addAction("Remove SubComponent Attachment")
+
+        action = menu.exec(event.screenPos())
+
+        if action == remove_action:
+            if scene is not None and hasattr(scene, "delete_subcomp_attachment"):
+                scene.delete_subcomp_attachment(self)
+
+        event.accept()
+
+    def set_validation_warnings(self, messages: list[str]):
+        self.validation_messages = list(messages)
+        self.update_tooltip()
+
+        if messages:
+            self.setPen(QPen(self.error_color, 3, Qt.DashLine))
+            self.setZValue(15)
+        else:
+            self.setPen(QPen(self.base_color, 2, Qt.DashLine))
+            self.setZValue(4)
+
     def set_highlighted(self, highlighted: bool):
         if highlighted:
             self.setPen(QPen(self.highlight_color, 4, Qt.DashLine))
             self.setZValue(20)
         else:
-            self.setPen(QPen(self.base_color, 2, Qt.DashLine))
-            self.setZValue(4)
+            if self.validation_messages:
+                self.setPen(QPen(self.error_color, 3, Qt.DashLine))
+                self.setZValue(15)
+            else:
+                self.setPen(QPen(self.base_color, 2, Qt.DashLine))
+                self.setZValue(4)
 
 
 class AddPortsButtonItem(QGraphicsTextItem):
@@ -1403,8 +1453,11 @@ class ComponentNodeItem(QGraphicsRectItem):
                     for connection in port.connections:
                         connection.update_position()
 
-            if scene is not None and hasattr(scene, "notify_model_changed"):
-                scene.notify_model_changed()
+            if scene is not None:
+                if getattr(scene, "_dragging_node", False):
+                    scene._drag_changed = True
+                elif hasattr(scene, "notify_model_changed"):
+                    scene.notify_model_changed()
 
         return super().itemChange(change, value)
 

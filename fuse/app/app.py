@@ -11,6 +11,8 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+import copy
+import json
 import os
 import sys
 from pathlib import Path
@@ -20,11 +22,14 @@ from PySide6.QtCore import Qt, QElapsedTimer, QTimer
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QApplication,
+    QComboBox,
     QDialog,
     QDockWidget,
     QFileDialog,
+    QHBoxLayout,
     QLabel,
     QMainWindow,
+    QPlainTextEdit,
     QMenu,
     QMenuBar,
     QMessageBox,
@@ -41,7 +46,7 @@ from fuse.app.project_settings_dialog import ProjectSettingsDialog
 from fuse.app.splash import create_splash_screen
 from fuse.core.app_info import APP_NAME, ORG_NAME
 from fuse.core.model.project_settings import ProjectSettings
-from fuse.core.model.validation import validate_model
+from fuse.core.model.validation import validate_model, validate_model_for_export
 from fuse.core.persistence.db_access import ensure_database_ready, load_framework_targets
 from fuse.core.persistence.project_io import (
     build_project_dict,
@@ -57,6 +62,17 @@ from fuse.core.ui.properties_panel import PropertiesPanel
 OUTLINE_ROLE_KIND = Qt.UserRole
 OUTLINE_ROLE_NODE_ID = Qt.UserRole + 1
 OUTLINE_ROLE_LINK_ID = Qt.UserRole + 2
+OUTLINE_ROLE_ATTACHMENT_ID = Qt.UserRole + 3
+
+VALIDATION_ROLE_ISSUE_INDEX = Qt.UserRole
+VALIDATION_ROLE_SEVERITY = Qt.UserRole + 1
+VALIDATION_ROLE_NODE_ID = Qt.UserRole + 2
+VALIDATION_ROLE_LINK_ID = Qt.UserRole + 3
+VALIDATION_ROLE_ATTACHMENT_ID = Qt.UserRole + 4
+
+UNSAVED_CHOICE_SAVE = "save"
+UNSAVED_CHOICE_DISCARD = "discard"
+UNSAVED_CHOICE_CANCEL = "cancel"
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -74,6 +90,13 @@ class MainWindow(QMainWindow):
         self.active_target_id: str | None = None
         self.is_dirty = False
 
+        self._history_limit = 100
+        self._undo_stack: list[dict] = []
+        self._redo_stack: list[dict] = []
+        self._last_history_signature = ""
+        self._saved_history_signature = ""
+        self._restoring_history = False
+
         self.palette = ComponentPalette()
         self.scene = ModelScene()
         self.model_view = ModelView(self.scene)
@@ -88,9 +111,32 @@ class MainWindow(QMainWindow):
 
         self.properties_dock: QDockWidget | None = None
         self.model_outline_dock: QDockWidget | None = None
+        self.validation_results_panel = QWidget()
+        validation_layout = QVBoxLayout(self.validation_results_panel)
+        validation_layout.setContentsMargins(6, 6, 6, 6)
+
+        validation_toolbar = QHBoxLayout()
+        validation_toolbar.addWidget(QLabel("Show:"))
+        self.validation_filter = QComboBox()
+        self.validation_filter.addItems(["All", "Errors", "Warnings", "Info"])
+        self.validation_filter.currentTextChanged.connect(self.refresh_validation_results_view)
+        validation_toolbar.addWidget(self.validation_filter)
+        validation_toolbar.addStretch(1)
+
+        self.validation_results = QTreeWidget()
+        self.validation_results.setHeaderLabels(["Severity", "Scope", "Object", "Message", "Suggested Fix"])
+        self.validation_results.setRootIsDecorated(False)
+        self.validation_results.setAlternatingRowColors(True)
+        self.validation_results.itemDoubleClicked.connect(self.on_validation_result_activated)
+
+        validation_layout.addLayout(validation_toolbar)
+        validation_layout.addWidget(self.validation_results)
+        self.validation_results_dock: QDockWidget | None = None
+        self._last_validation_issues = []
+        self._last_validation_title = ""
 
         self.scene.properties_panel = self.properties_panel
-        self.scene.model_changed_callback = self.mark_dirty
+        self.scene.model_changed_callback = self.on_model_changed
         self.scene.component_added_callback = self.on_component_added
         self.scene.component_used_callback = self.on_component_used
         self.scene.component_favorite_requested_callback = self.on_component_favorite_requested
@@ -104,6 +150,7 @@ class MainWindow(QMainWindow):
 
         ensure_database_ready()
         self.load_framework_targets()
+        self.reset_undo_history(mark_clean=True)
 
     def on_component_favorite_requested(self, component):
         self.palette.add_to_frequently_used(component)
@@ -121,28 +168,38 @@ class MainWindow(QMainWindow):
         new_action = QAction("New Project...", self)
         open_action = QAction("Open Project...", self)
         project_settings_action = QAction("Project Settings...", self)
+        validate_model_action = QAction("Validate Model", self)
+        validate_export_action = QAction("Validate for Export", self)
         save_action = QAction("Save", self)
         save_as_action = QAction("Save As...", self)
         export_sst_json_action = QAction("SST JSON...", self)
+        export_gem5_python_action = QAction("gem5 Python...", self)
         exit_action = QAction("Exit", self)
 
         new_action.triggered.connect(self.new_project)
         open_action.triggered.connect(self.open_model)
         project_settings_action.triggered.connect(self.show_project_settings)
+        validate_model_action.triggered.connect(self.validate_current_model)
+        validate_export_action.triggered.connect(self.validate_current_model_for_export)
         save_action.triggered.connect(self.save_model)
         save_as_action.triggered.connect(self.save_model_as)
         export_sst_json_action.triggered.connect(self.export_sst_json)
+        export_gem5_python_action.triggered.connect(self.export_gem5_python)
         exit_action.triggered.connect(self.close)
 
         file_menu.addAction(new_action)
         file_menu.addAction(open_action)
         file_menu.addAction(project_settings_action)
         file_menu.addSeparator()
+        file_menu.addAction(validate_model_action)
+        file_menu.addAction(validate_export_action)
+        file_menu.addSeparator()
         file_menu.addAction(save_action)
         file_menu.addAction(save_as_action)
 
         export_menu = file_menu.addMenu("Export")
         export_menu.addAction(export_sst_json_action)
+        export_menu.addAction(export_gem5_python_action)
 
         file_menu.addSeparator()
         file_menu.addAction(exit_action)
@@ -163,8 +220,18 @@ class MainWindow(QMainWindow):
         about_action.triggered.connect(self.show_about)
         help_menu.addAction(about_action)
 
-        edit_menu.addAction(QAction("Undo", self))
-        edit_menu.addAction(QAction("Redo", self))
+        self.undo_action = QAction("Undo", self)
+        self.undo_action.setShortcut("Ctrl+Z")
+        self.undo_action.triggered.connect(self.undo)
+        self.undo_action.setEnabled(False)
+
+        self.redo_action = QAction("Redo", self)
+        self.redo_action.setShortcut("Ctrl+Shift+Z")
+        self.redo_action.triggered.connect(self.redo)
+        self.redo_action.setEnabled(False)
+
+        edit_menu.addAction(self.undo_action)
+        edit_menu.addAction(self.redo_action)
         view_menu.addAction(QAction("Zoom In", self))
         view_menu.addAction(QAction("Zoom Out", self))
 
@@ -213,6 +280,7 @@ class MainWindow(QMainWindow):
         """
         self.properties_dock = self.make_dock("Properties", self.properties_panel)
         self.model_outline_dock = self.make_dock("Model Outline", self.model_outline)
+        self.validation_results_dock = self.make_dock("Validation Results", self.validation_results_panel)
 
         self.addDockWidget(Qt.RightDockWidgetArea, self.properties_dock)
         self.splitDockWidget(
@@ -229,6 +297,9 @@ class MainWindow(QMainWindow):
             Qt.Vertical,
         )
 
+        self.addDockWidget(Qt.BottomDockWidgetArea, self.validation_results_dock)
+        self.validation_results_dock.hide()
+
         # Give the right dock column a reasonable initial width.
         self.resizeDocks(
             [self.properties_dock],
@@ -239,6 +310,9 @@ class MainWindow(QMainWindow):
     def setup_status_bar(self):
         status = QStatusBar(self)
         status.showMessage("Ready")
+        self.unsaved_indicator = QLabel("")
+        self.unsaved_indicator.setToolTip("The current FUSE model has unsaved changes.")
+        status.addPermanentWidget(self.unsaved_indicator)
         self.setStatusBar(status)
 
     def load_framework_targets(self):
@@ -417,6 +491,14 @@ class MainWindow(QMainWindow):
             for node in self.scene.component_items()
         }
 
+    def outline_label_for_node(self, node) -> str:
+        plugin_id = (getattr(node.component, "plugin_id", "") or "").strip()
+
+        if plugin_id:
+            return f"{node.instance_name} ({plugin_id.upper() if plugin_id == 'sst' else plugin_id.capitalize()})"
+
+        return node.instance_name
+
     def add_outline_node_item(
             self,
             parent_item: QTreeWidgetItem,
@@ -424,7 +506,7 @@ class MainWindow(QMainWindow):
             attachments_by_parent: dict[int, list],
             nodes_by_id: dict[int, object],
     ):
-        node_item = QTreeWidgetItem([node.instance_name])
+        node_item = QTreeWidgetItem([self.outline_label_for_node(node)])
         node_item.setData(0, OUTLINE_ROLE_KIND, "component")
         node_item.setData(0, OUTLINE_ROLE_NODE_ID, node.node_id)
         node_item.setToolTip(
@@ -453,9 +535,10 @@ class MainWindow(QMainWindow):
                 continue
 
             slot_item = QTreeWidgetItem(
-                [f"{attachment.slot_name}: {child_node.instance_name}"]
+                [f"{attachment.slot_name}: {self.outline_label_for_node(child_node)}"]
             )
-            slot_item.setData(0, OUTLINE_ROLE_KIND, "subcomp_slot")
+            slot_item.setData(0, OUTLINE_ROLE_KIND, "subcomp_attachment")
+            slot_item.setData(0, OUTLINE_ROLE_ATTACHMENT_ID, attachment.attachment_id)
             slot_item.setToolTip(
                 0,
                 (
@@ -505,6 +588,98 @@ class MainWindow(QMainWindow):
 
         return "Other"
 
+    def history_snapshot(self) -> dict:
+        """Return a stable project snapshot suitable for undo/redo history."""
+        snapshot = copy.deepcopy(self.project_dict())
+        snapshot.setdefault("project", {})["updatedAt"] = ""
+        return snapshot
+
+    def history_signature(self, snapshot: dict | None = None) -> str:
+        if snapshot is None:
+            snapshot = self.history_snapshot()
+        return json.dumps(snapshot, sort_keys=True, separators=(",", ":"))
+
+    def reset_undo_history(self, mark_clean: bool = True):
+        snapshot = self.history_snapshot()
+        signature = self.history_signature(snapshot)
+        self._undo_stack = [snapshot]
+        self._redo_stack = []
+        self._last_history_signature = signature
+        if mark_clean:
+            self._saved_history_signature = signature
+        self.update_undo_redo_actions()
+        if mark_clean:
+            self.set_dirty(False)
+
+    def update_undo_redo_actions(self):
+        if hasattr(self, "undo_action"):
+            self.undo_action.setEnabled(len(self._undo_stack) > 1)
+        if hasattr(self, "redo_action"):
+            self.redo_action.setEnabled(bool(self._redo_stack))
+
+    def record_history_snapshot(self):
+        if self._restoring_history:
+            return
+
+        snapshot = self.history_snapshot()
+        signature = self.history_signature(snapshot)
+
+        if signature == self._last_history_signature:
+            self.update_undo_redo_actions()
+            return
+
+        self._undo_stack.append(snapshot)
+        if len(self._undo_stack) > self._history_limit + 1:
+            self._undo_stack = self._undo_stack[-(self._history_limit + 1):]
+
+        self._redo_stack.clear()
+        self._last_history_signature = signature
+        self.update_undo_redo_actions()
+
+    def restore_history_snapshot(self, snapshot: dict):
+        self._restoring_history = True
+        try:
+            self.project_settings = ProjectSettings.from_project_dict(snapshot)
+            self.project_name = snapshot.get("project", {}).get("name", self.project_name)
+            load_project_into_scene(snapshot, self.scene)
+            self.properties_panel.set_validation_issues([])
+            self.properties_panel.show_empty()
+            self.apply_project_settings_to_ui()
+            self.update_model_outline()
+            self._last_history_signature = self.history_signature(snapshot)
+        finally:
+            self._restoring_history = False
+
+        self.set_dirty(self._last_history_signature != self._saved_history_signature)
+        self.update_undo_redo_actions()
+
+    def undo(self):
+        if len(self._undo_stack) <= 1:
+            return
+
+        current = self._undo_stack.pop()
+        self._redo_stack.append(current)
+        snapshot = self._undo_stack[-1]
+        self.restore_history_snapshot(snapshot)
+        self.statusBar().showMessage("Undo", 1500)
+
+    def redo(self):
+        if not self._redo_stack:
+            return
+
+        snapshot = self._redo_stack.pop()
+        self._undo_stack.append(snapshot)
+        self.restore_history_snapshot(snapshot)
+        self.statusBar().showMessage("Redo", 1500)
+
+    def on_model_changed(self):
+        if self._restoring_history:
+            return
+
+        self.update_model_outline()
+        self.record_history_snapshot()
+        self.set_dirty(self._last_history_signature != self._saved_history_signature)
+
     def set_dirty(self, dirty: bool):
         self.is_dirty = dirty
         marker = "*" if dirty else ""
@@ -514,11 +689,58 @@ class MainWindow(QMainWindow):
         else:
             self.setWindowTitle(f"FUSE{marker}")
 
+        if hasattr(self, "unsaved_indicator"):
+            self.unsaved_indicator.setText("● Unsaved" if dirty else "")
+            self.unsaved_indicator.setVisible(dirty)
+
     def mark_dirty(self):
-        self.update_model_outline()
-        self.set_dirty(True)
+        # Backward-compatible alias for older tests/callers.
+        self.on_model_changed()
+
+    def prompt_for_unsaved_changes(self, action_name: str) -> str:
+        """Ask the user how to handle dirty model state before a destructive action.
+
+        Returns one of UNSAVED_CHOICE_SAVE, UNSAVED_CHOICE_DISCARD, or
+        UNSAVED_CHOICE_CANCEL. Keeping this as a small separate method makes the
+        New/Open/Exit lifecycle behavior testable without opening modal dialogs
+        in headless/offscreen test runs.
+        """
+        message = QMessageBox(self)
+        message.setIcon(QMessageBox.Warning)
+        message.setWindowTitle("Unsaved Changes")
+        message.setText(f"The current FUSE model has unsaved changes. Save before {action_name}?")
+        save_button = message.addButton(f"Save && {action_name.title()}", QMessageBox.AcceptRole)
+        discard_button = message.addButton("Don't Save", QMessageBox.DestructiveRole)
+        cancel_button = message.addButton(QMessageBox.Cancel)
+        message.setDefaultButton(save_button)
+        message.exec()
+
+        clicked = message.clickedButton()
+        if clicked == save_button:
+            return UNSAVED_CHOICE_SAVE
+        if clicked == discard_button:
+            return UNSAVED_CHOICE_DISCARD
+        return UNSAVED_CHOICE_CANCEL
+
+    def confirm_discard_unsaved_changes(self, action_name: str) -> bool:
+        if not self.is_dirty:
+            return True
+
+        choice = self.prompt_for_unsaved_changes(action_name)
+        if choice == UNSAVED_CHOICE_CANCEL:
+            return False
+        if choice == UNSAVED_CHOICE_DISCARD:
+            return True
+        if choice == UNSAVED_CHOICE_SAVE:
+            return self.save_model()
+
+        # Unknown responses are treated as cancel to avoid accidental data loss.
+        return False
 
     def new_project(self):
+        if not self.confirm_discard_unsaved_changes("new"):
+            return
+
         settings = ProjectSettings(
             project_name="Untitled FUSE Project",
             active_plugin_id="sst",
@@ -531,13 +753,24 @@ class MainWindow(QMainWindow):
 
         self.project_settings = dialog.settings()
         self.project_name = self.project_settings.project_name or "Untitled FUSE Project"
-        self.scene.clear_model()
+        self.project_settings.project_name = self.project_name
+
+        # Clear the associated file path for a new unsaved project without
+        # resetting the project name chosen in Project Settings. Suppress model
+        # change history while clearing the previous scene so the old project
+        # state cannot be serialized back into the newly accepted settings.
+        self.current_project_path = None
+        self._restoring_history = True
+        try:
+            self.scene.clear_model()
+        finally:
+            self._restoring_history = False
+
         self.properties_panel.set_validation_issues([])
         self.properties_panel.show_empty()
-        self.set_current_project_path(None)
         self.apply_project_settings_to_ui()
         self.update_model_outline()
-        self.set_dirty(False)
+        self.reset_undo_history(mark_clean=True)
         self.statusBar().showMessage("New project created", 3000)
 
     def new_model(self):
@@ -565,20 +798,28 @@ class MainWindow(QMainWindow):
 
         self.set_dirty(self.is_dirty)
 
-    def save_model(self):
+    def save_model(self) -> bool:
         if not self.validate_model_before_save():
-            return
+            return False
 
         if self.current_project_path is None:
-            self.save_model_as()
-            return
+            return self.save_model_as()
 
         project = self.project_dict()
-        save_project_file(project, self.current_project_path)
+        try:
+            save_project_file(project, self.current_project_path)
+        except Exception as exc:
+            QMessageBox.critical(self, "Save Failed", str(exc))
+            return False
+
+        self._saved_history_signature = self.history_signature()
+        self._last_history_signature = self._saved_history_signature
+        self.update_undo_redo_actions()
         self.set_dirty(False)
         self.statusBar().showMessage(f"Saved {self.current_project_path}", 3000)
+        return True
 
-    def save_model_as(self):
+    def save_model_as(self) -> bool:
         file_path, _ = QFileDialog.getSaveFileName(
             self,
             "Save FUSE Model",
@@ -587,13 +828,18 @@ class MainWindow(QMainWindow):
         )
 
         if not file_path:
-            return
+            return False
 
         if not file_path.endswith(".fse"):
             file_path += ".fse"
 
+        old_path = self.current_project_path
         self.set_current_project_path(file_path)
-        self.save_model()
+        if self.save_model():
+            return True
+
+        self.set_current_project_path(old_path)
+        return False
 
     def export_sst_json(self):
         """
@@ -664,7 +910,77 @@ class MainWindow(QMainWindow):
             5000,
         )
 
+
+    def export_gem5_python(self):
+        """
+        Export the current gem5-only FUSE model to an editable gem5 Python
+        configuration file.
+        """
+        if not self.scene.component_items():
+            QMessageBox.information(
+                self,
+                "Export gem5 Python",
+                "There are no components to export.",
+            )
+            return
+
+        active = self.project_settings.active_plugin_settings()
+
+        if active is None or active.plugin_id != "gem5":
+            QMessageBox.warning(
+                self,
+                "Export gem5 Python",
+                (
+                    "The active project target is not gem5.\n\n"
+                    "Open Project Settings and select a gem5 target before "
+                    "exporting to a gem5 Python configuration."
+                ),
+            )
+            return
+
+        if not self.validate_current_model_for_export():
+            return
+
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export gem5 Python",
+            str(self.current_project_path.with_suffix(".gem5.py"))
+            if self.current_project_path
+            else "",
+            "gem5 Python (*.py);;All Files (*)",
+        )
+
+        if not file_path:
+            return
+
+        if not file_path.lower().endswith(".py"):
+            file_path += ".py"
+
+        try:
+            from fuse.plugins.community.gem5.export_python import export_gem5_python
+
+            export_gem5_python(
+                scene=self.scene,
+                output_path=file_path,
+            )
+
+        except Exception as error:
+            QMessageBox.critical(
+                self,
+                "Export gem5 Python Failed",
+                str(error),
+            )
+            return
+
+        self.statusBar().showMessage(
+            f"Exported gem5 Python configuration to {file_path}",
+            5000,
+        )
+
     def open_model(self):
+        if not self.confirm_discard_unsaved_changes("open"):
+            return
+
         file_path, _ = QFileDialog.getOpenFileName(
             self,
             "Open FUSE Model",
@@ -689,7 +1005,7 @@ class MainWindow(QMainWindow):
 
         self.apply_project_settings_to_ui()
         self.update_model_outline()
-        self.set_dirty(False)
+        self.reset_undo_history(mark_clean=True)
 
         self.statusBar().showMessage(f"Opened {file_path}", 3000)
 
@@ -714,18 +1030,35 @@ class MainWindow(QMainWindow):
 
     def apply_validation_issues(self, issues):
         issues_by_node: dict[int, list[str]] = {}
+        issues_by_link: dict[int, list[str]] = {}
+        issues_by_attachment: dict[int, list[str]] = {}
 
         for issue in issues:
             if issue.node_id is not None:
                 issues_by_node.setdefault(issue.node_id, []).append(issue.message)
+            if issue.link_id is not None:
+                issues_by_link.setdefault(issue.link_id, []).append(issue.message)
+            attachment_id = getattr(issue, "attachment_id", None)
+            if attachment_id is not None:
+                issues_by_attachment.setdefault(attachment_id, []).append(issue.message)
 
         for node in self.scene.component_items():
             node.set_validation_warnings(issues_by_node.get(node.node_id, []))
 
+        for connection in self.scene.connection_items():
+            if hasattr(connection, "set_validation_warnings"):
+                connection.set_validation_warnings(issues_by_link.get(connection.link.link_id, []))
+
+        for attachment in self.scene.subcomp_attachment_items():
+            if hasattr(attachment, "set_validation_warnings"):
+                attachment.set_validation_warnings(
+                    issues_by_attachment.get(attachment.attachment.attachment_id, [])
+                )
+
         self.properties_panel.set_validation_issues(issues)
 
-    def format_validation_message(self, issues) -> str:
-        lines = ["The model has issues that must be fixed before saving:", ""]
+    def format_validation_message(self, issues, title: str = "The model has issues") -> str:
+        lines = [f"{title}:", ""]
 
         for issue in issues[:25]:
             lines.append(f"• {issue.object_name}: {issue.message}")
@@ -735,33 +1068,199 @@ class MainWindow(QMainWindow):
             lines.append(f"...and {len(issues) - 25} more issue(s).")
 
         lines.append("")
-        lines.append("Components with missing required values are marked with a warning icon.")
+        lines.append("Affected components are marked in the canvas and parameter rows are highlighted where possible.")
 
         return "\n".join(lines)
+
+    def issue_severity(self, issue) -> str:
+        severity = (getattr(issue, "severity", "") or "").lower()
+        if severity in {"error", "warning", "info"}:
+            return severity
+        if getattr(issue, "issue_type", "").startswith("info"):
+            return "info"
+        if getattr(issue, "issue_type", "").startswith("warning"):
+            return "warning"
+        return "error"
+
+    def issue_scope(self, issue) -> str:
+        if getattr(issue, "node_id", None) is not None:
+            return "Component"
+        if getattr(issue, "link_id", None) is not None:
+            return "Link"
+        if getattr(issue, "attachment_id", None) is not None:
+            return "SubComponent"
+        return "Project"
+
+    def issue_suggested_fix(self, issue) -> str:
+        parameter_name = getattr(issue, "parameter_name", None)
+        issue_type = getattr(issue, "issue_type", "")
+
+        if parameter_name:
+            if issue_type in {"component_parameter", "link_parameter"}:
+                return f"Set '{parameter_name}' in the Properties panel."
+            return f"Review '{parameter_name}' in the Properties panel."
+
+        if issue_type in {"component_name", "link_name"}:
+            return "Rename the object so model names are unique and non-empty."
+        if issue_type == "subcomp_attachment":
+            return "Review or remove the SubComponent attachment."
+        if issue_type == "export_target":
+            return "Select the correct target or remove unsupported simulator components."
+        if issue_type == "export_plugin":
+            return "Check the active plugin and target settings."
+
+        return "Review the affected model object."
+
+    def validation_filter_accepts(self, issue) -> bool:
+        selected = self.validation_filter.currentText().lower()
+        if selected == "all":
+            return True
+        return self.issue_severity(issue) == selected.rstrip("s")
+
+    def refresh_validation_results_view(self):
+        self.validation_results.clear()
+
+        issues = [
+            issue
+            for issue in getattr(self, "_last_validation_issues", [])
+            if self.validation_filter_accepts(issue)
+        ]
+
+        if not getattr(self, "_last_validation_issues", []):
+            item = QTreeWidgetItem(["Info", "Project", "Project", "No validation issues found.", ""])
+            item.setData(0, VALIDATION_ROLE_SEVERITY, "info")
+            self.validation_results.addTopLevelItem(item)
+        else:
+            for index, issue in enumerate(issues):
+                severity = self.issue_severity(issue)
+                item = QTreeWidgetItem(
+                    [
+                        severity.capitalize(),
+                        self.issue_scope(issue),
+                        issue.object_name or "Project",
+                        issue.message,
+                        self.issue_suggested_fix(issue),
+                    ]
+                )
+                item.setData(0, VALIDATION_ROLE_ISSUE_INDEX, index)
+                item.setData(0, VALIDATION_ROLE_SEVERITY, severity)
+                item.setData(0, VALIDATION_ROLE_NODE_ID, getattr(issue, "node_id", None))
+                item.setData(0, VALIDATION_ROLE_LINK_ID, getattr(issue, "link_id", None))
+                item.setData(0, VALIDATION_ROLE_ATTACHMENT_ID, getattr(issue, "attachment_id", None))
+                item.setToolTip(3, issue.message)
+                item.setToolTip(4, self.issue_suggested_fix(issue))
+                self.validation_results.addTopLevelItem(item)
+
+        for column in range(self.validation_results.columnCount()):
+            self.validation_results.resizeColumnToContents(column)
+
+    def show_validation_results(self, issues, title: str):
+        self._last_validation_issues = list(issues)
+        self._last_validation_title = title
+        self.refresh_validation_results_view()
+
+        if self.validation_results_dock is not None:
+            self.validation_results_dock.setWindowTitle(title)
+            self.validation_results_dock.show()
+            self.validation_results_dock.raise_()
+
+    def focus_validation_issue(self, issue):
+        if getattr(issue, "node_id", None) is not None:
+            for node in self.scene.component_items():
+                if node.node_id == issue.node_id:
+                    self.scene.select_component(node)
+                    self.model_view.centerOn(node)
+                    return
+
+        if getattr(issue, "link_id", None) is not None:
+            connection = self.scene.find_connection_by_link_id(issue.link_id)
+            if connection is not None:
+                self.scene.select_link(connection)
+                self.model_view.centerOn(connection.path().boundingRect().center())
+                return
+
+        attachment_id = getattr(issue, "attachment_id", None)
+        if attachment_id is not None:
+            attachment = self.scene.find_subcomp_attachment_by_id(attachment_id)
+            if attachment is not None:
+                self.scene.select_subcomp_attachment(attachment)
+                self.model_view.centerOn(attachment.path().boundingRect().center())
+                return
+
+    def on_validation_result_activated(self, item, column):
+        issue_index = item.data(0, VALIDATION_ROLE_ISSUE_INDEX)
+        if issue_index is None:
+            return
+
+        filtered = [
+            issue
+            for issue in getattr(self, "_last_validation_issues", [])
+            if self.validation_filter_accepts(issue)
+        ]
+
+        if 0 <= issue_index < len(filtered):
+            self.focus_validation_issue(filtered[issue_index])
+
+    def focus_first_validation_issue(self, issues):
+        first_focusable_issue = next(
+            (
+                issue
+                for issue in issues
+                if getattr(issue, "node_id", None) is not None
+                or getattr(issue, "link_id", None) is not None
+                or getattr(issue, "attachment_id", None) is not None
+            ),
+            None,
+        )
+
+        if first_focusable_issue is not None:
+            self.focus_validation_issue(first_focusable_issue)
+
+    def validate_current_model(self) -> bool:
+        issues = validate_model(self.scene)
+        self.apply_validation_issues(issues)
+        self.show_validation_results(issues, "FUSE model validation")
+
+        if issues:
+            self.focus_first_validation_issue(issues)
+            self.statusBar().showMessage(f"Validation found {len(issues)} issue(s)", 5000)
+            return False
+
+        self.statusBar().showMessage("Model validation passed", 5000)
+        return True
+
+    def validate_current_model_for_export(self) -> bool:
+        issues = validate_model_for_export(self.scene, self.active_plugin_id)
+        active = self.project_settings.active_plugin_settings()
+        target_label = active.target_label if active is not None else self.active_plugin_id or "active target"
+        self.apply_validation_issues(issues)
+        self.show_validation_results(issues, f"Export validation for {target_label}")
+
+        if issues:
+            self.focus_first_validation_issue(issues)
+            self.statusBar().showMessage(f"Export validation found {len(issues)} issue(s)", 5000)
+            return False
+
+        self.statusBar().showMessage("Export validation passed", 5000)
+        return True
 
     def validate_model_before_save(self) -> bool:
         issues = validate_model(self.scene)
         self.apply_validation_issues(issues)
+        self.show_validation_results(issues, "FUSE model validation")
 
         if not issues:
             return True
 
-        first_component_issue = next(
-            (issue for issue in issues if issue.node_id is not None),
-            None,
-        )
-
-        if first_component_issue is not None:
-            for node in self.scene.component_items():
-                if node.node_id == first_component_issue.node_id:
-                    self.scene.select_component(node)
-                    self.model_view.centerOn(node)
-                    break
+        self.focus_first_validation_issue(issues)
 
         QMessageBox.warning(
             self,
             "Model Needs Attention",
-            self.format_validation_message(issues),
+            self.format_validation_message(
+                issues,
+                "The model has issues that must be fixed before saving",
+            ),
         )
 
         return False
@@ -786,6 +1285,13 @@ class MainWindow(QMainWindow):
             self.scene.select_link_by_id(int(link_id))
             return
 
+        if kind == "subcomp_attachment":
+            attachment_id = item.data(0, OUTLINE_ROLE_ATTACHMENT_ID)
+            attachment = self.scene.find_subcomp_attachment_by_id(int(attachment_id))
+            if attachment is not None:
+                self.scene.select_subcomp_attachment(attachment)
+            return
+
     def show_model_outline_context_menu(self, position):
         item = self.model_outline.itemAt(position)
 
@@ -804,6 +1310,18 @@ class MainWindow(QMainWindow):
 
             if action == remove_action:
                 self.scene.delete_link_by_id(int(link_id))
+                self.update_model_outline()
+
+            return
+
+        if kind == "subcomp_attachment":
+            attachment_id = item.data(0, OUTLINE_ROLE_ATTACHMENT_ID)
+            remove_action = menu.addAction("Remove SubComponent Attachment")
+
+            action = menu.exec(self.model_outline.viewport().mapToGlobal(position))
+
+            if action == remove_action:
+                self.scene.delete_subcomp_attachment_by_id(int(attachment_id))
                 self.update_model_outline()
 
             return
@@ -857,6 +1375,13 @@ class MainWindow(QMainWindow):
                     event.accept()
                     return
 
+                if kind == "subcomp_attachment":
+                    attachment_id = item.data(0, OUTLINE_ROLE_ATTACHMENT_ID)
+                    self.scene.delete_subcomp_attachment_by_id(int(attachment_id))
+                    self.update_model_outline()
+                    event.accept()
+                    return
+
             # If the outline does not own the focused selection, let the scene handle
             # the selected model item.
             self.scene.keyPressEvent(event)
@@ -865,6 +1390,12 @@ class MainWindow(QMainWindow):
                 return
 
         super().keyPressEvent(event)
+
+    def closeEvent(self, event):
+        if self.confirm_discard_unsaved_changes("exit"):
+            event.accept()
+        else:
+            event.ignore()
 
 def main():
     app = QApplication(sys.argv)

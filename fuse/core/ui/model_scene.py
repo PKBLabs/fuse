@@ -70,6 +70,8 @@ class ModelScene(QGraphicsScene):
         # hundreds of ItemPositionHasChanged events per second. During drag we
         # use cheap preview routing, then do one full reroute on release.
         self._dragging_node = False
+        self._drag_changed = False
+        self._drag_start_positions: dict[int, tuple[float, float]] = {}
         self._reroute_timer = QTimer()
         self._reroute_timer.setSingleShot(True)
         self._reroute_timer.setInterval(250)
@@ -240,6 +242,11 @@ class ModelScene(QGraphicsScene):
 
     def begin_node_drag(self):
         self._dragging_node = True
+        self._drag_changed = False
+        self._drag_start_positions = {
+            node.node_id: (node.pos().x(), node.pos().y())
+            for node in self.component_items()
+        }
         self._reroute_timer.stop()
 
     def end_node_drag(self, node: Optional["ComponentNodeItem"] = None):
@@ -257,6 +264,18 @@ class ModelScene(QGraphicsScene):
         if node is not None:
             self.reroute_links_affected_by_node(node)
             self.update_subcomp_attachments_for_node(node)
+
+        changed = self._drag_changed
+        if node is not None:
+            start = self._drag_start_positions.get(node.node_id)
+            if start is not None:
+                changed = changed or (node.pos().x(), node.pos().y()) != start
+
+        self._drag_changed = False
+        self._drag_start_positions = {}
+
+        if changed:
+            self.notify_model_changed()
 
     def request_reroute_all_links(self):
         """
@@ -379,7 +398,9 @@ class ModelScene(QGraphicsScene):
         source_port: PortItem,
         target_port: PortItem,
     ) -> LinkCompatibilityResult:
-        plugin_id = self.active_plugin_id or getattr(source_port.node.component, "plugin_id", "")
+        source_plugin_id = getattr(source_port.node.component, "plugin_id", "") or ""
+        target_plugin_id = getattr(target_port.node.component, "plugin_id", "") or ""
+        plugin_id = source_plugin_id if source_plugin_id == target_plugin_id else (self.active_plugin_id or source_plugin_id)
 
         if not plugin_id:
             return LinkCompatibilityResult()
@@ -460,7 +481,11 @@ class ModelScene(QGraphicsScene):
             source_latency="1ns",
             target_latency="1ns",
             link_type="point_to_point",
-            plugin_id=self.active_plugin_id or getattr(source_port.node.component, "plugin_id", ""),
+            plugin_id=(
+                getattr(source_port.node.component, "plugin_id", "")
+                if getattr(source_port.node.component, "plugin_id", "") == getattr(target_port.node.component, "plugin_id", "")
+                else (self.active_plugin_id or getattr(source_port.node.component, "plugin_id", ""))
+            ),
             compatibility_severity=compatibility.severity,
             compatibility_code=compatibility.code,
             compatibility_message=compatibility.message,
@@ -570,6 +595,21 @@ class ModelScene(QGraphicsScene):
             return
 
         self.delete_link(connection)
+
+    def find_subcomp_attachment_by_id(self, attachment_id: int) -> SubcompAttachmentItem | None:
+        for item in self.subcomp_attachment_items():
+            if item.attachment.attachment_id == attachment_id:
+                return item
+
+        return None
+
+    def delete_subcomp_attachment_by_id(self, attachment_id: int):
+        item = self.find_subcomp_attachment_by_id(attachment_id)
+
+        if item is None:
+            return
+
+        self.delete_subcomp_attachment(item)
 
     def port_clicked(self, port: PortItem):
         if self.pending_subcomp_connector is not None:

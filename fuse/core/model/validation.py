@@ -23,7 +23,9 @@ class ValidationIssue:
     message: str
     node_id: Optional[int] = None
     link_id: Optional[int] = None
+    attachment_id: Optional[int] = None
     parameter_name: Optional[str] = None
+    severity: str = "error"
 
 
 def normalize_default_value(value) -> str:
@@ -197,6 +199,7 @@ def validate_subcomp_attachments(scene) -> list[ValidationIssue]:
                 ValidationIssue(
                     issue_type="subcomp_attachment",
                     object_name=attachment.name,
+                    attachment_id=attachment.attachment_id,
                     message="SubComponent attachment parent node does not exist.",
                 )
             )
@@ -206,6 +209,7 @@ def validate_subcomp_attachments(scene) -> list[ValidationIssue]:
                 ValidationIssue(
                     issue_type="subcomp_attachment",
                     object_name=attachment.name,
+                    attachment_id=attachment.attachment_id,
                     message="SubComponent attachment child node does not exist.",
                 )
             )
@@ -217,6 +221,7 @@ def validate_subcomp_attachments(scene) -> list[ValidationIssue]:
                     issue_type="subcomp_attachment",
                     object_name=attachment.name,
                     node_id=attachment.parent_node_id,
+                    attachment_id=attachment.attachment_id,
                     parameter_name=attachment.slot_name,
                     message=(
                         f"SubComponent slot '{attachment.slot_name}' is assigned more "
@@ -233,6 +238,7 @@ def validate_subcomp_attachments(scene) -> list[ValidationIssue]:
                     issue_type="subcomp_attachment",
                     object_name=attachment.name,
                     node_id=attachment.child_node_id,
+                    attachment_id=attachment.attachment_id,
                     message="This SubComponent is assigned to more than one parent slot.",
                 )
             )
@@ -259,20 +265,28 @@ def validate_subcomp_attachments(scene) -> list[ValidationIssue]:
 
 
 def validate_plugin_links(scene) -> list[ValidationIssue]:
-    plugin_id = getattr(scene, "active_plugin_id", "") or ""
-
-    if not plugin_id:
-        return []
+    plugin_ids = {getattr(scene, "active_plugin_id", "") or ""}
 
     try:
-        plugin = get_plugin_by_id(plugin_id)
+        for node in scene.component_items():
+            plugin_ids.add(getattr(node.component, "plugin_id", "") or "")
     except Exception:
-        return []
+        pass
 
-    if not hasattr(plugin, "validate_links"):
-        return []
+    issues: list[ValidationIssue] = []
 
-    return plugin.validate_links(scene)
+    for plugin_id in sorted(item for item in plugin_ids if item):
+        try:
+            plugin = get_plugin_by_id(plugin_id)
+        except Exception:
+            continue
+
+        if not hasattr(plugin, "validate_links"):
+            continue
+
+        issues.extend(plugin.validate_links(scene))
+
+    return issues
 
 def validate_model(scene) -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
@@ -281,4 +295,68 @@ def validate_model(scene) -> list[ValidationIssue]:
     issues.extend(validate_links(scene))
     issues.extend(validate_subcomp_attachments(scene))
     issues.extend(validate_plugin_links(scene))
+    return issues
+
+def model_plugin_ids(scene) -> set[str]:
+    return {
+        (getattr(node.component, "plugin_id", "") or "core").strip()
+        for node in scene.component_items()
+    }
+
+
+def validate_model_for_export(scene, plugin_id: str | None = None) -> list[ValidationIssue]:
+    """Validate that the current model is ready to export for one simulator.
+
+    This intentionally extends, rather than replaces, normal FUSE model
+    validation. A graph may be internally valid but not exportable to a
+    particular simulator/plugin. Mixed-plugin models are allowed as editable
+    FUSE projects, but export validation currently requires all components to
+    belong to the requested plugin until a hybrid exporter exists.
+    """
+    issues = validate_model(scene)
+    plugin_id = (plugin_id or getattr(scene, "active_plugin_id", "") or "").strip()
+
+    if not plugin_id:
+        issues.append(
+            ValidationIssue(
+                issue_type="export_target",
+                object_name="Project",
+                message="No active simulator target is selected for export validation.",
+            )
+        )
+        return issues
+
+    present_plugin_ids = {item for item in model_plugin_ids(scene) if item}
+    unsupported = sorted(item for item in present_plugin_ids if item != plugin_id)
+
+    if unsupported:
+        issues.append(
+            ValidationIssue(
+                issue_type="export_target",
+                object_name="Project",
+                message=(
+                    f"Export target '{plugin_id}' cannot currently export components "
+                    f"from: {', '.join(unsupported)}. Mixed-plugin FUSE models can be "
+                    "saved and edited, but need a hybrid exporter before export."
+                ),
+            )
+        )
+
+    try:
+        plugin = get_plugin_by_id(plugin_id)
+    except Exception:
+        return issues
+
+    if hasattr(plugin, "validate_export"):
+        try:
+            issues.extend(plugin.validate_export(scene))
+        except Exception as exc:
+            issues.append(
+                ValidationIssue(
+                    issue_type="export_plugin",
+                    object_name=plugin_id,
+                    message=f"Plugin export validation failed: {exc}",
+                )
+            )
+
     return issues

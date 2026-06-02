@@ -33,6 +33,13 @@ def _outline_leaf_texts(tree):
     return texts
 
 
+def _outline_has_component(tree, instance_name):
+    return any(
+        text == instance_name or text.startswith(f"{instance_name} (")
+        for text in _outline_leaf_texts(tree)
+    )
+
+
 def _component(name="CPU"):
     return ComponentDefinition(
         plugin_id="core",
@@ -83,7 +90,11 @@ def test_main_window_outline_and_dirty_state_track_component_creation(qtbot, mon
 
     assert window.is_dirty is True
     assert window.model_outline.topLevelItemCount() >= 1
-    assert node.instance_name in _outline_leaf_texts(window.model_outline)
+    assert _outline_has_component(window.model_outline, node.instance_name)
+    # qtbot closes registered widgets during teardown. Leave the window clean
+    # so the unsaved-changes closeEvent dialog is not opened in offscreen mode.
+    window.set_dirty(False)
+    window.close()
 
 
 def test_main_window_dirty_state_tracks_parameter_edits(qtbot, monkeypatch):
@@ -110,4 +121,8 @@ def test_main_window_dirty_state_tracks_parameter_edits(qtbot, monkeypatch):
 
     assert window.is_dirty is True
     assert window.model_outline.topLevelItemCount() >= 1
-    assert "RenamedCPU" in _outline_leaf_texts(window.model_outline)
+    assert _outline_has_component(window.model_outline, "RenamedCPU")
+    # qtbot closes registered widgets during teardown. Leave the window clean
+    # so the unsaved-changes closeEvent dialog is not opened in offscreen mode.
+    window.set_dirty(False)
+    window.close()
