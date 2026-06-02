@@ -12,6 +12,8 @@
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 import json
+import os
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -20,6 +22,7 @@ from fuse.core.ui.model_scene import ModelScene
 from fuse.core.ui.model_view import ModelView
 from fuse.core.model.models import ComponentDefinition, ModelLink, ModelSubcompAttachment, SCHEMA_VERSION
 from fuse.core.model.project_settings import ProjectSettings
+from fuse.core.persistence.model_serializer import finalize_project_dict, validate_serialized_project
 
 
 def now_iso() -> str:
@@ -175,6 +178,9 @@ def build_project_dict(
 
 
 def validate_project_dict(project: dict) -> None:
+    # Preserve the older, user-friendly error messages for the most common
+    # project-file failures while delegating deeper structural checks to the
+    # serializer validator.
     if not isinstance(project, dict):
         raise ValueError("Invalid project file: root must be a JSON object.")
 
@@ -189,6 +195,8 @@ def validate_project_dict(project: dict) -> None:
     if not isinstance(project.get("links"), list):
         raise ValueError("Invalid project file: missing links list.")
 
+    validate_serialized_project(project)
+
 
 def load_project_file(file_path: str | Path) -> dict:
     with Path(file_path).open("r", encoding="utf-8") as file:
@@ -199,9 +207,34 @@ def load_project_file(file_path: str | Path) -> dict:
 
 
 def save_project_file(project: dict, file_path: str | Path) -> None:
-    with Path(file_path).open("w", encoding="utf-8") as file:
-        json.dump(project, file, indent=2)
-        file.write("\n")
+    destination = Path(file_path)
+    validate_project_dict(project)
+    project = finalize_project_dict(project)
+
+    temp_name = ""
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w",
+            encoding="utf-8",
+            dir=str(destination.parent or Path(".")),
+            prefix=f".{destination.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as file:
+            temp_name = file.name
+            json.dump(project, file, indent=2)
+            file.write("\n")
+            file.flush()
+            os.fsync(file.fileno())
+
+        os.replace(temp_name, destination)
+    except Exception:
+        if temp_name:
+            try:
+                os.unlink(temp_name)
+            except OSError:
+                pass
+        raise
 
 
 def load_project_into_scene(project: dict, scene: ModelScene) -> None:

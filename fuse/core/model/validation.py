@@ -23,7 +23,9 @@ class ValidationIssue:
     message: str
     node_id: Optional[int] = None
     link_id: Optional[int] = None
+    attachment_id: Optional[int] = None
     parameter_name: Optional[str] = None
+    severity: str = "error"
 
 
 def normalize_default_value(value) -> str:
@@ -197,6 +199,7 @@ def validate_subcomp_attachments(scene) -> list[ValidationIssue]:
                 ValidationIssue(
                     issue_type="subcomp_attachment",
                     object_name=attachment.name,
+                    attachment_id=attachment.attachment_id,
                     message="SubComponent attachment parent node does not exist.",
                 )
             )
@@ -206,6 +209,7 @@ def validate_subcomp_attachments(scene) -> list[ValidationIssue]:
                 ValidationIssue(
                     issue_type="subcomp_attachment",
                     object_name=attachment.name,
+                    attachment_id=attachment.attachment_id,
                     message="SubComponent attachment child node does not exist.",
                 )
             )
@@ -217,6 +221,7 @@ def validate_subcomp_attachments(scene) -> list[ValidationIssue]:
                     issue_type="subcomp_attachment",
                     object_name=attachment.name,
                     node_id=attachment.parent_node_id,
+                    attachment_id=attachment.attachment_id,
                     parameter_name=attachment.slot_name,
                     message=(
                         f"SubComponent slot '{attachment.slot_name}' is assigned more "
@@ -233,6 +238,7 @@ def validate_subcomp_attachments(scene) -> list[ValidationIssue]:
                     issue_type="subcomp_attachment",
                     object_name=attachment.name,
                     node_id=attachment.child_node_id,
+                    attachment_id=attachment.attachment_id,
                     message="This SubComponent is assigned to more than one parent slot.",
                 )
             )

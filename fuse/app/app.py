@@ -22,9 +22,11 @@ from PySide6.QtCore import Qt, QElapsedTimer, QTimer
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QApplication,
+    QComboBox,
     QDialog,
     QDockWidget,
     QFileDialog,
+    QHBoxLayout,
     QLabel,
     QMainWindow,
     QPlainTextEdit,
@@ -61,6 +63,12 @@ OUTLINE_ROLE_KIND = Qt.UserRole
 OUTLINE_ROLE_NODE_ID = Qt.UserRole + 1
 OUTLINE_ROLE_LINK_ID = Qt.UserRole + 2
 OUTLINE_ROLE_ATTACHMENT_ID = Qt.UserRole + 3
+
+VALIDATION_ROLE_ISSUE_INDEX = Qt.UserRole
+VALIDATION_ROLE_SEVERITY = Qt.UserRole + 1
+VALIDATION_ROLE_NODE_ID = Qt.UserRole + 2
+VALIDATION_ROLE_LINK_ID = Qt.UserRole + 3
+VALIDATION_ROLE_ATTACHMENT_ID = Qt.UserRole + 4
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -99,10 +107,29 @@ class MainWindow(QMainWindow):
 
         self.properties_dock: QDockWidget | None = None
         self.model_outline_dock: QDockWidget | None = None
-        self.validation_results = QPlainTextEdit()
-        self.validation_results.setReadOnly(True)
-        self.validation_results.setPlaceholderText("Validation results will appear here.")
+        self.validation_results_panel = QWidget()
+        validation_layout = QVBoxLayout(self.validation_results_panel)
+        validation_layout.setContentsMargins(6, 6, 6, 6)
+
+        validation_toolbar = QHBoxLayout()
+        validation_toolbar.addWidget(QLabel("Show:"))
+        self.validation_filter = QComboBox()
+        self.validation_filter.addItems(["All", "Errors", "Warnings", "Info"])
+        self.validation_filter.currentTextChanged.connect(self.refresh_validation_results_view)
+        validation_toolbar.addWidget(self.validation_filter)
+        validation_toolbar.addStretch(1)
+
+        self.validation_results = QTreeWidget()
+        self.validation_results.setHeaderLabels(["Severity", "Scope", "Object", "Message", "Suggested Fix"])
+        self.validation_results.setRootIsDecorated(False)
+        self.validation_results.setAlternatingRowColors(True)
+        self.validation_results.itemDoubleClicked.connect(self.on_validation_result_activated)
+
+        validation_layout.addLayout(validation_toolbar)
+        validation_layout.addWidget(self.validation_results)
         self.validation_results_dock: QDockWidget | None = None
+        self._last_validation_issues = []
+        self._last_validation_title = ""
 
         self.scene.properties_panel = self.properties_panel
         self.scene.model_changed_callback = self.on_model_changed
@@ -249,7 +276,7 @@ class MainWindow(QMainWindow):
         """
         self.properties_dock = self.make_dock("Properties", self.properties_panel)
         self.model_outline_dock = self.make_dock("Model Outline", self.model_outline)
-        self.validation_results_dock = self.make_dock("Validation Results", self.validation_results)
+        self.validation_results_dock = self.make_dock("Validation Results", self.validation_results_panel)
 
         self.addDockWidget(Qt.RightDockWidgetArea, self.properties_dock)
         self.splitDockWidget(
@@ -969,13 +996,30 @@ class MainWindow(QMainWindow):
 
     def apply_validation_issues(self, issues):
         issues_by_node: dict[int, list[str]] = {}
+        issues_by_link: dict[int, list[str]] = {}
+        issues_by_attachment: dict[int, list[str]] = {}
 
         for issue in issues:
             if issue.node_id is not None:
                 issues_by_node.setdefault(issue.node_id, []).append(issue.message)
+            if issue.link_id is not None:
+                issues_by_link.setdefault(issue.link_id, []).append(issue.message)
+            attachment_id = getattr(issue, "attachment_id", None)
+            if attachment_id is not None:
+                issues_by_attachment.setdefault(attachment_id, []).append(issue.message)
 
         for node in self.scene.component_items():
             node.set_validation_warnings(issues_by_node.get(node.node_id, []))
+
+        for connection in self.scene.connection_items():
+            if hasattr(connection, "set_validation_warnings"):
+                connection.set_validation_warnings(issues_by_link.get(connection.link.link_id, []))
+
+        for attachment in self.scene.subcomp_attachment_items():
+            if hasattr(attachment, "set_validation_warnings"):
+                attachment.set_validation_warnings(
+                    issues_by_attachment.get(attachment.attachment.attachment_id, [])
+                )
 
         self.properties_panel.set_validation_issues(issues)
 
@@ -994,34 +1038,149 @@ class MainWindow(QMainWindow):
 
         return "\n".join(lines)
 
-    def show_validation_results(self, issues, title: str):
-        if issues:
-            lines = [title, ""]
-            for issue in issues:
-                location = issue.object_name or "Project"
-                lines.append(f"[{issue.issue_type}] {location}: {issue.message}")
-        else:
-            lines = [title, "", "No validation issues found."]
+    def issue_severity(self, issue) -> str:
+        severity = (getattr(issue, "severity", "") or "").lower()
+        if severity in {"error", "warning", "info"}:
+            return severity
+        if getattr(issue, "issue_type", "").startswith("info"):
+            return "info"
+        if getattr(issue, "issue_type", "").startswith("warning"):
+            return "warning"
+        return "error"
 
-        self.validation_results.setPlainText("\n".join(lines))
+    def issue_scope(self, issue) -> str:
+        if getattr(issue, "node_id", None) is not None:
+            return "Component"
+        if getattr(issue, "link_id", None) is not None:
+            return "Link"
+        if getattr(issue, "attachment_id", None) is not None:
+            return "SubComponent"
+        return "Project"
+
+    def issue_suggested_fix(self, issue) -> str:
+        parameter_name = getattr(issue, "parameter_name", None)
+        issue_type = getattr(issue, "issue_type", "")
+
+        if parameter_name:
+            if issue_type in {"component_parameter", "link_parameter"}:
+                return f"Set '{parameter_name}' in the Properties panel."
+            return f"Review '{parameter_name}' in the Properties panel."
+
+        if issue_type in {"component_name", "link_name"}:
+            return "Rename the object so model names are unique and non-empty."
+        if issue_type == "subcomp_attachment":
+            return "Review or remove the SubComponent attachment."
+        if issue_type == "export_target":
+            return "Select the correct target or remove unsupported simulator components."
+        if issue_type == "export_plugin":
+            return "Check the active plugin and target settings."
+
+        return "Review the affected model object."
+
+    def validation_filter_accepts(self, issue) -> bool:
+        selected = self.validation_filter.currentText().lower()
+        if selected == "all":
+            return True
+        return self.issue_severity(issue) == selected.rstrip("s")
+
+    def refresh_validation_results_view(self):
+        self.validation_results.clear()
+
+        issues = [
+            issue
+            for issue in getattr(self, "_last_validation_issues", [])
+            if self.validation_filter_accepts(issue)
+        ]
+
+        if not getattr(self, "_last_validation_issues", []):
+            item = QTreeWidgetItem(["Info", "Project", "Project", "No validation issues found.", ""])
+            item.setData(0, VALIDATION_ROLE_SEVERITY, "info")
+            self.validation_results.addTopLevelItem(item)
+        else:
+            for index, issue in enumerate(issues):
+                severity = self.issue_severity(issue)
+                item = QTreeWidgetItem(
+                    [
+                        severity.capitalize(),
+                        self.issue_scope(issue),
+                        issue.object_name or "Project",
+                        issue.message,
+                        self.issue_suggested_fix(issue),
+                    ]
+                )
+                item.setData(0, VALIDATION_ROLE_ISSUE_INDEX, index)
+                item.setData(0, VALIDATION_ROLE_SEVERITY, severity)
+                item.setData(0, VALIDATION_ROLE_NODE_ID, getattr(issue, "node_id", None))
+                item.setData(0, VALIDATION_ROLE_LINK_ID, getattr(issue, "link_id", None))
+                item.setData(0, VALIDATION_ROLE_ATTACHMENT_ID, getattr(issue, "attachment_id", None))
+                item.setToolTip(3, issue.message)
+                item.setToolTip(4, self.issue_suggested_fix(issue))
+                self.validation_results.addTopLevelItem(item)
+
+        for column in range(self.validation_results.columnCount()):
+            self.validation_results.resizeColumnToContents(column)
+
+    def show_validation_results(self, issues, title: str):
+        self._last_validation_issues = list(issues)
+        self._last_validation_title = title
+        self.refresh_validation_results_view()
+
         if self.validation_results_dock is not None:
+            self.validation_results_dock.setWindowTitle(title)
             self.validation_results_dock.show()
             self.validation_results_dock.raise_()
 
+    def focus_validation_issue(self, issue):
+        if getattr(issue, "node_id", None) is not None:
+            for node in self.scene.component_items():
+                if node.node_id == issue.node_id:
+                    self.scene.select_component(node)
+                    self.model_view.centerOn(node)
+                    return
+
+        if getattr(issue, "link_id", None) is not None:
+            connection = self.scene.find_connection_by_link_id(issue.link_id)
+            if connection is not None:
+                self.scene.select_link(connection)
+                self.model_view.centerOn(connection.path().boundingRect().center())
+                return
+
+        attachment_id = getattr(issue, "attachment_id", None)
+        if attachment_id is not None:
+            attachment = self.scene.find_subcomp_attachment_by_id(attachment_id)
+            if attachment is not None:
+                self.scene.select_subcomp_attachment(attachment)
+                self.model_view.centerOn(attachment.path().boundingRect().center())
+                return
+
+    def on_validation_result_activated(self, item, column):
+        issue_index = item.data(0, VALIDATION_ROLE_ISSUE_INDEX)
+        if issue_index is None:
+            return
+
+        filtered = [
+            issue
+            for issue in getattr(self, "_last_validation_issues", [])
+            if self.validation_filter_accepts(issue)
+        ]
+
+        if 0 <= issue_index < len(filtered):
+            self.focus_validation_issue(filtered[issue_index])
+
     def focus_first_validation_issue(self, issues):
-        first_component_issue = next(
-            (issue for issue in issues if issue.node_id is not None),
+        first_focusable_issue = next(
+            (
+                issue
+                for issue in issues
+                if getattr(issue, "node_id", None) is not None
+                or getattr(issue, "link_id", None) is not None
+                or getattr(issue, "attachment_id", None) is not None
+            ),
             None,
         )
 
-        if first_component_issue is None:
-            return
-
-        for node in self.scene.component_items():
-            if node.node_id == first_component_issue.node_id:
-                self.scene.select_component(node)
-                self.model_view.centerOn(node)
-                break
+        if first_focusable_issue is not None:
+            self.focus_validation_issue(first_focusable_issue)
 
     def validate_current_model(self) -> bool:
         issues = validate_model(self.scene)

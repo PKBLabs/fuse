@@ -284,3 +284,167 @@ def test_build_gem5_python_exports_connected_model(tmp_path):
     output = tmp_path / "model.py"
     export_gem5_python(_valid_gem5_scene(), output)
     assert output.read_text(encoding="utf-8") == text
+
+
+def test_query_gem5_metadata_runs_configured_binary_and_extracts_probe_payload(monkeypatch):
+    from fuse.plugins.community.gem5 import plugin as gem5_plugin
+    from fuse.plugins.community.gem5.plugin import query_gem5_metadata
+
+    calls = []
+
+    class Provider:
+        def run(self, command, timeout_seconds=60, env=None, cwd=None):
+            calls.append((command, timeout_seconds, env, cwd))
+            if command[-1] == "--version":
+                return CommandExecutionResult(command, 0, "gem5 version 25.1.0.1", "")
+            payload = {
+                "components": [
+                    {
+                        "item_id": "system_xbar",
+                        "display_name": "gem5.SystemXBar (Component)",
+                        "type_name": "SystemXBar",
+                        "element_name": "gem5",
+                        "category": "Interconnect",
+                        "description": "Imported SystemXBar",
+                        "raw_kind": "Component",
+                        "connectors": [
+                            {"name": "cpu_side_ports", "description": "CPU side", "interface": "response_port"}
+                        ],
+                        "properties": [
+                            {"name": "width", "description": "Width", "default_value": "16", "required": False}
+                        ],
+                    }
+                ]
+            }
+            output = f"noise\n{gem5_plugin.GEM5_METADATA_BEGIN}\n{__import__('json').dumps(payload)}\n{gem5_plugin.GEM5_METADATA_END}\n"
+            return CommandExecutionResult(command, 0, output, "")
+
+    monkeypatch.setattr(gem5_plugin, "provider_from_toolchain", lambda toolchain: Provider())
+
+    metadata = query_gem5_metadata(
+        ToolchainSettings(
+            tool_paths={"gem5Binary": "/opt/gem5/build/X86/gem5.opt"},
+            environment={"GEM5_TEST": "1"},
+        )
+    )
+
+    assert metadata["version"] == "25.1.0.1"
+    assert metadata["components"][0]["type_name"] == "SystemXBar"
+    assert calls[0][0] == ["/opt/gem5/build/X86/gem5.opt", "--version"]
+    assert calls[1][0][0] == "/opt/gem5/build/X86/gem5.opt"
+    assert calls[1][0][1].endswith("_fuse_gem5_probe.py")
+    assert calls[1][2] == {"GEM5_TEST": "1"}
+
+
+def test_query_gem5_metadata_rejects_non_local_toolchain():
+    from fuse.plugins.community.gem5.plugin import query_gem5_metadata
+
+    with pytest.raises(RuntimeError, match="local toolchains only"):
+        query_gem5_metadata(ToolchainSettings(backend="ssh", host="hpc"))
+
+
+def test_import_metadata_for_toolchain_persists_live_catalog_and_details(monkeypatch, tmp_path):
+    from fuse.core.persistence.database import get_connection
+    from fuse.plugins.community.gem5 import plugin as gem5_plugin
+
+    monkeypatch.setenv("FUSE_DB_PATH", str(tmp_path / "app.db"))
+    plugin = Gem5Plugin()
+    with get_connection() as conn:
+        plugin.initialize_database(conn)
+        conn.commit()
+
+    monkeypatch.setattr(
+        gem5_plugin,
+        "query_gem5_metadata",
+        lambda toolchain: {
+            "version": "25.1.0.1",
+            "build_isa": "X86",
+            "components": [
+                {
+                    "item_id": "system_xbar",
+                    "display_name": "gem5.SystemXBar (Component)",
+                    "type_name": "SystemXBar",
+                    "element_name": "gem5",
+                    "category": "Interconnect",
+                    "description": "Imported SystemXBar from a live gem5 install.",
+                    "raw_kind": "Component",
+                    "connectors": [
+                        {"name": "cpu_side_ports", "description": "CPU side", "interface": "response_port"},
+                        {"name": "mem_side_ports", "description": "Memory side", "interface": "request_port"},
+                    ],
+                    "properties": [
+                        {"name": "width", "description": "Crossbar width", "default_value": "16", "required": False}
+                    ],
+                },
+                {
+                    "item_id": "custom_cpu",
+                    "display_name": "gem5.CustomCPU (Component)",
+                    "type_name": "CustomCPU",
+                    "element_name": "gem5",
+                    "category": "CPU",
+                    "description": "Imported CPU that is not in the built-in fallback catalog.",
+                    "raw_kind": "Component",
+                    "connectors": [
+                        {"name": "icache_port", "description": "I side", "interface": "request_port"}
+                    ],
+                    "properties": [],
+                },
+            ],
+        },
+    )
+
+    settings = PluginProjectSettings(
+        plugin_id="gem5",
+        framework_version="25.1.0.1",
+        target_label="Live gem5",
+        toolchain=ToolchainSettings(tool_paths={"gem5Binary": "/opt/gem5/gem5.opt"}),
+    )
+    plugin.import_metadata_for_toolchain(settings)
+
+    live_target = next(target for target in plugin.list_targets() if target.display_name == "Live gem5")
+    items = plugin.load_palette_items(target_id=live_target.target_id)
+    assert {item.item_id for item in items} == {"custom_cpu", "system_xbar"}
+    assert any(item.type_name == "CustomCPU" for item in items)
+
+    details = plugin.load_item_details("system_xbar", target_id=live_target.target_id)
+    assert [connector.name for connector in details.connectors] == ["cpu_side_ports", "mem_side_ports"]
+    assert details.connectors[0].interface == "response_port"
+    assert {prop.name: prop.default_value for prop in details.properties} == {"width": "16"}
+
+
+def test_import_metadata_replaces_previous_live_catalog_for_same_target(monkeypatch, tmp_path):
+    from fuse.core.persistence.database import get_connection
+    from fuse.plugins.community.gem5 import plugin as gem5_plugin
+
+    monkeypatch.setenv("FUSE_DB_PATH", str(tmp_path / "app.db"))
+    plugin = Gem5Plugin()
+    with get_connection() as conn:
+        plugin.initialize_database(conn)
+        conn.commit()
+
+    payloads = [
+        {
+            "version": "25.1.0.1",
+            "components": [
+                {"item_id": "old", "type_name": "Old", "display_name": "gem5.Old", "connectors": [], "properties": []}
+            ],
+        },
+        {
+            "version": "25.1.0.1",
+            "components": [
+                {"item_id": "new", "type_name": "New", "display_name": "gem5.New", "connectors": [], "properties": []}
+            ],
+        },
+    ]
+    monkeypatch.setattr(gem5_plugin, "query_gem5_metadata", lambda toolchain: payloads.pop(0))
+    settings = PluginProjectSettings(
+        plugin_id="gem5",
+        framework_version="25.1.0.1",
+        toolchain=ToolchainSettings(tool_paths={"gem5Binary": "/opt/gem5/gem5.opt"}),
+    )
+
+    plugin.import_metadata_for_toolchain(settings)
+    plugin.import_metadata_for_toolchain(settings)
+
+    live_target = next(target for target in plugin.list_targets() if target.display_name.startswith("gem5 25.1.0.1"))
+    assert [item.item_id for item in plugin.load_palette_items(target_id=live_target.target_id)] == ["new"]
