@@ -13,7 +13,7 @@
 | Component drag metadata | drag payload serialization/deserialization | `fuse/tests/test_component_definition_drag.py` |
 | Model-view drop | drag/drop creation and drop coordinate conversion | `fuse/tests/test_model_view_component_drop.py` |
 | Component instances | unique default names, outline/callbacks, dirty state | `fuse/tests/test_component_instance_naming_outline_dirty.py` |
-| Undo/redo and unsaved indicator | component creation/deletion/property edit history, action enabled state, dirty indicator | `fuse/tests/test_undo_redo_history.py` |
+| Undo/redo and unsaved indicator | component/link/subcomponent attachment creation and deletion, property edit history, canvas movement, drag coalescing, redo clearing, history bounds, action enabled state, dirty indicator | `fuse/tests/test_undo_redo_history.py` |
 | Properties panel | parameter display, input validation, write-back, dirty state | `fuse/tests/test_properties_panel_parameter_editing.py` |
 | Project I/O | `.fse` save/load, validation, endpoint latencies, plugin metadata, subcomponent attachments, legacy compatibility | `fuse/tests/test_project_io.py` |
 | Model roundtrip | save/load components and links | `fuse/tests/test_fuse_model_roundtrip.py` |
@@ -43,7 +43,7 @@
 | Required parameter validation | `test_validation.py`, `test_properties_panel_parameter_editing.py` |
 | Writing component parameter updates back to model | `test_properties_panel_parameter_editing.py` |
 | Dirty state after edits | `test_component_instance_naming_outline_dirty.py`, `test_properties_panel_parameter_editing.py`, `test_undo_redo_history.py` |
-| Undo/redo for editing actions | `test_undo_redo_history.py` |
+| Undo/redo for component, link, subcomponent attachment, property, and layout edits | `test_undo_redo_history.py` |
 | Unsaved status-bar indicator | `test_undo_redo_history.py` |
 | Validation results panel filters and object navigation | `test_validation_results_panel.py` |
 | Universal validation highlighting hooks for components, links, and subcomponent attachments | `test_validation_results_panel.py`, `test_validation_core_extended.py` |

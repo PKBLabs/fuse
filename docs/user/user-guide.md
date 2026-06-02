@@ -164,7 +164,9 @@ Deleting a component also deletes normal links attached to that component, subco
 
 ## Undo, redo, and unsaved changes
 
-Use **Edit -> Undo** or **Ctrl+Z** to undo the most recent model edit. Use **Edit -> Redo** or **Ctrl+Shift+Z** to restore an edit that was undone. Undo/redo covers the current editing session and is intended for normal model-editing actions such as component creation, deletion, property changes, link changes, subcomponent attachment changes, and layout moves.
+Use **Edit -> Undo** or **Ctrl+Z** to undo the most recent model edit. Use **Edit -> Redo** or **Ctrl+Shift+Z** to restore an edit that was undone. Undo/redo covers the current editing session and is intended for normal model-editing actions such as component creation, deletion, property changes, link changes, subcomponent attachment changes, and layout moves. Interactive drag movement is recorded as one undoable layout change instead of a separate history entry for every intermediate mouse position.
+
+Creating a new edit after undoing clears the redo stack, matching common editor behavior. The edit history is bounded so very long editing sessions do not grow without limit.
 
 When the model has unsaved changes, FUSE shows an asterisk in the window title and an **Unsaved** indicator in the status bar. Saving the project clears the indicator. New/Open/Exit prompts still protect unsaved changes.
 

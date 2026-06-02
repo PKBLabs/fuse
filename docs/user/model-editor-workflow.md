@@ -140,7 +140,7 @@ When a drop occurs, FUSE:
 5. Adds the instance to the scene/model outline.
 6. Marks the model as changed/dirty.
 
-The **Edit -> Undo** and **Edit -> Redo** actions track model-editing changes such as component creation, deletion, property edits, link edits, subcomponent attachment edits, and canvas layout changes. Use **Ctrl+Z** to undo the last recorded edit and **Ctrl+Shift+Z** to redo an edit that was undone. FUSE keeps a bounded edit history for the current project session and clears the redo stack when a new edit is made after undoing.
+The **Edit -> Undo** and **Edit -> Redo** actions track model-editing changes such as component creation, deletion, property edits, link edits, subcomponent attachment edits, and canvas layout changes. Use **Ctrl+Z** to undo the last recorded edit and **Ctrl+Shift+Z** to redo an edit that was undone. FUSE keeps a bounded edit history for the current project session and clears the redo stack when a new edit is made after undoing. Component drags are coalesced into one history entry so a single mouse drag can be undone with one **Undo** action.
 
 Example default names:
 

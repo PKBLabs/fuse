@@ -70,6 +70,8 @@ class ModelScene(QGraphicsScene):
         # hundreds of ItemPositionHasChanged events per second. During drag we
         # use cheap preview routing, then do one full reroute on release.
         self._dragging_node = False
+        self._drag_changed = False
+        self._drag_start_positions: dict[int, tuple[float, float]] = {}
         self._reroute_timer = QTimer()
         self._reroute_timer.setSingleShot(True)
         self._reroute_timer.setInterval(250)
@@ -240,6 +242,11 @@ class ModelScene(QGraphicsScene):
 
     def begin_node_drag(self):
         self._dragging_node = True
+        self._drag_changed = False
+        self._drag_start_positions = {
+            node.node_id: (node.pos().x(), node.pos().y())
+            for node in self.component_items()
+        }
         self._reroute_timer.stop()
 
     def end_node_drag(self, node: Optional["ComponentNodeItem"] = None):
@@ -257,6 +264,18 @@ class ModelScene(QGraphicsScene):
         if node is not None:
             self.reroute_links_affected_by_node(node)
             self.update_subcomp_attachments_for_node(node)
+
+        changed = self._drag_changed
+        if node is not None:
+            start = self._drag_start_positions.get(node.node_id)
+            if start is not None:
+                changed = changed or (node.pos().x(), node.pos().y()) != start
+
+        self._drag_changed = False
+        self._drag_start_positions = {}
+
+        if changed:
+            self.notify_model_changed()
 
     def request_reroute_all_links(self):
         """
