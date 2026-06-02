@@ -70,6 +70,10 @@ VALIDATION_ROLE_NODE_ID = Qt.UserRole + 2
 VALIDATION_ROLE_LINK_ID = Qt.UserRole + 3
 VALIDATION_ROLE_ATTACHMENT_ID = Qt.UserRole + 4
 
+UNSAVED_CHOICE_SAVE = "save"
+UNSAVED_CHOICE_DISCARD = "discard"
+UNSAVED_CHOICE_CANCEL = "cancel"
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -693,10 +697,14 @@ class MainWindow(QMainWindow):
         # Backward-compatible alias for older tests/callers.
         self.on_model_changed()
 
-    def confirm_discard_unsaved_changes(self, action_name: str) -> bool:
-        if not self.is_dirty:
-            return True
+    def prompt_for_unsaved_changes(self, action_name: str) -> str:
+        """Ask the user how to handle dirty model state before a destructive action.
 
+        Returns one of UNSAVED_CHOICE_SAVE, UNSAVED_CHOICE_DISCARD, or
+        UNSAVED_CHOICE_CANCEL. Keeping this as a small separate method makes the
+        New/Open/Exit lifecycle behavior testable without opening modal dialogs
+        in headless/offscreen test runs.
+        """
         message = QMessageBox(self)
         message.setIcon(QMessageBox.Warning)
         message.setWindowTitle("Unsaved Changes")
@@ -708,11 +716,26 @@ class MainWindow(QMainWindow):
         message.exec()
 
         clicked = message.clickedButton()
-        if clicked == cancel_button:
-            return False
+        if clicked == save_button:
+            return UNSAVED_CHOICE_SAVE
         if clicked == discard_button:
+            return UNSAVED_CHOICE_DISCARD
+        return UNSAVED_CHOICE_CANCEL
+
+    def confirm_discard_unsaved_changes(self, action_name: str) -> bool:
+        if not self.is_dirty:
             return True
-        return self.save_model()
+
+        choice = self.prompt_for_unsaved_changes(action_name)
+        if choice == UNSAVED_CHOICE_CANCEL:
+            return False
+        if choice == UNSAVED_CHOICE_DISCARD:
+            return True
+        if choice == UNSAVED_CHOICE_SAVE:
+            return self.save_model()
+
+        # Unknown responses are treated as cancel to avoid accidental data loss.
+        return False
 
     def new_project(self):
         if not self.confirm_discard_unsaved_changes("new"):
@@ -730,10 +753,16 @@ class MainWindow(QMainWindow):
 
         self.project_settings = dialog.settings()
         self.project_name = self.project_settings.project_name or "Untitled FUSE Project"
+        self.project_settings.project_name = self.project_name
         self.scene.clear_model()
         self.properties_panel.set_validation_issues([])
         self.properties_panel.show_empty()
-        self.set_current_project_path(None)
+        # Clear the associated file path for a new unsaved project without
+        # resetting the project name chosen in Project Settings.
+        self.current_project_path = None
+        self.set_dirty(self.is_dirty)
+        self.project_name = self.project_settings.project_name or "Untitled FUSE Project"
+        self.project_settings.project_name = self.project_name
         self.apply_project_settings_to_ui()
         self.update_model_outline()
         self.reset_undo_history(mark_clean=True)

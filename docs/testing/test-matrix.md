@@ -95,3 +95,7 @@ Before tagging a release:
 4. Confirm SST Integration Tests pass on the release-prep PR or run them manually on `develop`.
 5. Confirm gem5 Integration Tests pass on the release-prep PR or run them manually on `develop`.
 6. Confirm README testing badges are green for the intended branch/event.
+
+## Project lifecycle prompt coverage
+
+The Qt test suite includes non-modal tests for project lifecycle behavior so headless/offscreen runs do not hang on real message boxes. These tests cover Save As extension handling, Save As failure recovery, dirty New/Open/Exit prompt choices, cancelled prompts, failed save-before-open/new behavior, and close-event accept/ignore behavior.

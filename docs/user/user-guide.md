@@ -247,3 +247,9 @@ The About dialog shows version, edition, licensing, copyright, and plugin policy
 - [Properties and Validation](properties-and-validation.md)
 - [Project Files](project-files.md)
 - [Component Metadata Reference](../reference/component-metadata.md)
+
+## Unsaved changes and project lifecycle actions
+
+The model title and status bar indicate when the current project has unsaved changes. FUSE clears this dirty state after a successful save or after opening/creating a clean project.
+
+When a dirty model is open, New, Open, and Exit actions present a save prompt. Failed saves do not discard work, and cancelling the prompt leaves the current model unchanged.

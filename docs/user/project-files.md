@@ -252,3 +252,15 @@ my_model.sst.json  # generated SST JSON configuration
 ```
 
 Do not hand-edit generated simulator exports and expect FUSE to load them as projects. Reopen the `.fse` file, edit the model in FUSE, and export again.
+
+## Project lifecycle prompts
+
+FUSE protects unsaved work during project lifecycle actions. When the current model is dirty and the user starts a New, Open, or Exit action, FUSE asks whether to save first, continue without saving, or cancel the requested action.
+
+The choices behave as follows:
+
+- **Save & New/Open/Exit** saves the current `.fse` project first. If saving fails or the user cancels Save As, the requested action is cancelled and the model remains open.
+- **Don't Save** discards the unsaved changes and continues with the requested action.
+- **Cancel** leaves the current model open without saving or discarding changes.
+
+Save As appends the `.fse` extension when the user omits it. If Save As fails, FUSE restores the previously active project path and leaves the model marked as unsaved.
