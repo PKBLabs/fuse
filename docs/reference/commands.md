@@ -85,6 +85,27 @@ PYTHONPATH="$(pwd)/.." .venv/bin/python -m fuse.plugins.community.sst.get_sstinf
 PYTHONPATH="$(pwd)/.." .venv/bin/python -m fuse.plugins.community.sst.audit_sst_icon_mapping --help
 ```
 
+
+## Validate exported SST JSON
+
+Check that an exported SST JSON file is syntactically valid JSON:
+
+```bash
+python -m json.tool path/to/model.sst.json >/dev/null
+```
+
+Ask SST to initialize the exported configuration without running a full simulation:
+
+```bash
+sst --run-mode=init path/to/model.sst.json
+```
+
+Run the exported model when it is expected to terminate quickly:
+
+```bash
+sst path/to/model.sst.json
+```
+
 ## Build simulator CI images locally
 
 SST 15 example:

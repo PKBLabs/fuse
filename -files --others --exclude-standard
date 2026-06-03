@@ -1,0 +1,18 @@
+ docs/INDEX.md                             |   3 [32m+[m
+ docs/plugins/sst/sst-plugin.md            |   2 [32m+[m
+ docs/reference/commands.md                |  21 [32m+++++++[m
+ docs/reference/fse-format.md              |  33 [32m+++++++++[m[31m-[m
+ docs/testing/test-matrix.md               |  52 [32m++++++++++++++[m[31m-[m
+ docs/user/model-editor-workflow.md        |  53 [32m++++++++++++[m[31m----[m
+ docs/user/user-guide.md                   |  23 [32m+++++++[m
+ fuse/app/app.py                           |  48 [32m+++++++++++++[m[31m-[m
+ fuse/app/project_settings_dialog.py       |  52 [32m+++++++++++++++[m
+ fuse/core/model/project_settings.py       |  28 [32m+++++++++[m
+ fuse/core/persistence/model_serializer.py |   6 [32m++[m
+ fuse/core/persistence/project_io.py       |   5 [32m+[m[31m-[m
+ fuse/core/ui/component_palette.py         | 163 [32m++++++++++++++++++++++++++++++++++++++++++++[m[31m---[m
+ fuse/core/ui/graphics_items.py            |  19 [32m+++++[m[31m-[m
+ fuse/core/ui/model_view.py                | 522 [32m+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++[m[31m------------------[m
+ fuse/tests/test_component_palette.py      |  93 [32m++++++++++++++++++++++++++[m[31m-[m
+ fuse/tests/test_project_settings.py       |  18 [32m++++++[m
+ 17 files changed, 1046 insertions(+), 95 deletions(-)

@@ -41,12 +41,16 @@ The `.fse` format is FUSE's editable project format. It is not the same as simul
 
 ## `projectSettings`
 
-`projectSettings` stores per-project plugin settings.
+`projectSettings` stores per-project plugin settings and user-facing catalog preferences.
 
 ```json
 {
   "projectName": "My Model",
   "activePluginId": "sst",
+  "preferredComponentSortingMode": "Alphabetical",
+  "preferredComponentGroupingMode": "Element",
+  "autoExpandAllComponentTree": false,
+  "componentCatalogExpanded": false,
   "plugins": {
     "sst": {
       "enabled": true,
@@ -75,6 +79,15 @@ The `.fse` format is FUSE's editable project format. It is not the same as simul
 ```
 
 Toolchain settings must not contain passwords, private keys, or passphrases.
+
+Catalog preference fields are editor/user-experience settings:
+
+| Field | Meaning |
+|---|---|
+| `preferredComponentSortingMode` | Default component catalog sorting mode, such as `Alphabetical` or `Catalog Order`. |
+| `preferredComponentGroupingMode` | Default component catalog grouping mode when no compatibility context is active, such as `Element`, `Function`, `Recent`, or `Flat`. |
+| `autoExpandAllComponentTree` | Whether the component catalog should expand all groups whenever it is rebuilt. |
+| `componentCatalogExpanded` | Last explicit Expand/Collapse All state for the component catalog. |
 
 ## `activeTarget`
 
@@ -173,7 +186,7 @@ Each link entry describes one point-to-point connection.
 
 ## `editor`
 
-Stores editor-specific information such as scene rectangle and view center.
+Stores editor-specific information such as scene rectangle, view center, zoom, interaction mode, and floating toolbar position.
 
 ```json
 {
@@ -186,11 +199,25 @@ Stores editor-specific information such as scene rectangle and view center.
   "viewCenter": {
     "x": 500,
     "y": 500
+  },
+  "zoomPercent": 100.0,
+  "mode": "select",
+  "toolbarPosition": {
+    "x": 12,
+    "y": 12
   }
 }
 ```
 
-The `editor` block is not simulator model data.
+| Field | Meaning |
+|---|---|
+| `sceneRect` | Model-scene workspace bounds used by the editor. |
+| `viewCenter` | Scene coordinate centered in the visible model view. |
+| `zoomPercent` | Model view zoom percentage restored when the project is reopened. |
+| `mode` | Current model-view interaction mode, usually `select` or `multiselect`. |
+| `toolbarPosition` | Floating model-view toolbar position in viewport coordinates. |
+
+The `editor` block is not simulator model data. It should not be interpreted by simulator exporters as topology, timing, or configuration input.
 
 ## Compatibility
 

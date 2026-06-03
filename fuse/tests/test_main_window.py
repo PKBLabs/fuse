@@ -38,3 +38,70 @@ def test_main_window_constructs_and_closes(qtbot, tmp_path, monkeypatch):
     qtbot.wait(50)
 
     assert not window.isVisible()
+
+def test_available_components_panel_is_dockable(qtbot, tmp_path, monkeypatch):
+    db_path = tmp_path / "test_app.db"
+
+    monkeypatch.setenv("FUSE_DB_PATH", str(db_path))
+    monkeypatch.setenv("QT_QPA_PLATFORM", os.environ.get("QT_QPA_PLATFORM", "offscreen"))
+
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QDockWidget
+    from fuse.app.app import MainWindow
+
+    window = MainWindow()
+    qtbot.addWidget(window)
+    window.show()
+    qtbot.wait(100)
+
+    assert window.centralWidget() is window.model_view
+    assert isinstance(window.component_palette_dock, QDockWidget)
+    assert window.component_palette_dock.windowTitle() == "Available Components"
+    assert window.component_palette_dock.widget() is window.component_palette_panel
+    assert window.palette.parent() is window.component_palette_panel
+    assert window.dockWidgetArea(window.component_palette_dock) == Qt.LeftDockWidgetArea
+    assert window.component_palette_dock.features() & QDockWidget.DockWidgetMovable
+    assert window.component_palette_dock.features() & QDockWidget.DockWidgetFloatable
+    assert window.component_palette_dock.titleBarWidget() is None
+
+    window.component_palette_dock.setFloating(True)
+    qtbot.wait(50)
+    assert window.component_palette_dock.titleBarWidget() is not None
+    window.component_palette_dock.setFloating(False)
+    qtbot.wait(50)
+    assert window.component_palette_dock.titleBarWidget() is None
+
+    assert window.component_palette_dock.toggleViewAction() in window.view_menu.actions()
+
+    window.close()
+
+
+def test_docks_use_native_title_bars_until_floating(qtbot, tmp_path, monkeypatch):
+    db_path = tmp_path / "test_app.db"
+
+    monkeypatch.setenv("FUSE_DB_PATH", str(db_path))
+    monkeypatch.setenv("QT_QPA_PLATFORM", os.environ.get("QT_QPA_PLATFORM", "offscreen"))
+
+    from fuse.app.app import MainWindow
+
+    window = MainWindow()
+    qtbot.addWidget(window)
+    window.show()
+    qtbot.wait(100)
+
+    assert window.component_palette_dock.titleBarWidget() is None
+    assert window.properties_dock.titleBarWidget() is None
+    assert window.model_outline_dock.titleBarWidget() is None
+    assert window.validation_results_dock.titleBarWidget() is None
+
+    window.properties_dock.setFloating(True)
+    qtbot.wait(50)
+    floating_title_bar = window.properties_dock.titleBarWidget()
+    assert floating_title_bar is not None
+    assert floating_title_bar.__class__.__name__ == "FloatingDockTitleBar"
+
+    window.properties_dock.setFloating(False)
+    qtbot.wait(50)
+    assert window.properties_dock.titleBarWidget() is None
+
+    window.close()

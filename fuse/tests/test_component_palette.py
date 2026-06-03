@@ -59,3 +59,110 @@ def test_component_palette_load_components_does_not_crash(qtbot):
     palette.load_components()
 
     assert palette is not None
+
+def test_component_palette_search_filters_known_component_fields(qtbot, monkeypatch):
+    from fuse.core.model.models import ComponentDefinition
+    from fuse.core.ui.component_palette import ComponentPalette
+
+    definitions = [
+        ComponentDefinition(
+            plugin_id="sst",
+            component_id="1",
+            element="miranda",
+            name="Generator",
+            category="PROCESSOR COMPONENT",
+            functionality="traffic generator",
+            description="Synthetic CPU workload source",
+        ),
+        ComponentDefinition(
+            plugin_id="gem5",
+            component_id="2",
+            element="mem",
+            name="DDR3_1600_8x8",
+            category="Memory",
+            functionality="DRAM",
+            description="Main memory controller",
+        ),
+    ]
+
+    monkeypatch.setattr(
+        "fuse.core.ui.component_palette.load_component_definitions",
+        lambda *args, **kwargs: definitions,
+    )
+
+    palette = ComponentPalette()
+    qtbot.addWidget(palette)
+    palette.load_components()
+
+    palette.component_search.setText("dram")
+
+    assert palette.tree.topLevelItemCount() == 1
+    simulator_item = palette.tree.topLevelItem(0)
+    assert simulator_item.text(0) == "Gem5"
+
+
+def test_component_palette_returns_to_preferred_grouping_after_selection_clears(qtbot, monkeypatch):
+    from fuse.core.model.models import ComponentDefinition
+    from fuse.core.ui.component_palette import ComponentPalette
+
+    definitions = [
+        ComponentDefinition(
+            plugin_id="sst",
+            component_id="1",
+            element="core",
+            name="CPU",
+            category="Processor",
+        ),
+    ]
+
+    monkeypatch.setattr(
+        "fuse.core.ui.component_palette.load_component_definitions",
+        lambda *args, **kwargs: definitions,
+    )
+    monkeypatch.setattr(
+        "fuse.core.ui.component_palette.load_subcomp_connector_metadata_for_component",
+        lambda *args, **kwargs: [],
+    )
+
+    palette = ComponentPalette()
+    qtbot.addWidget(palette)
+    palette.set_project_preferences(grouping_mode="Flat", sorting_mode="Alphabetical")
+    palette.load_components()
+
+    class Node:
+        component = definitions[0]
+
+    palette.set_compatibility_context(Node())
+    assert palette.view_selector.currentText() == palette.VIEW_COMPATIBLE
+
+    palette.clear_compatibility_context()
+    assert palette.view_selector.currentText() == palette.VIEW_FLAT
+
+
+def test_component_palette_expand_collapse_preference_persists_through_callback(qtbot):
+    from fuse.core.ui.component_palette import ComponentPalette
+
+    palette = ComponentPalette()
+    qtbot.addWidget(palette)
+    captured = []
+    palette.preferences_changed_callback = captured.append
+
+    palette.expand_all_tree.setChecked(True)
+
+    assert captured[-1]["component_catalog_expanded"] is True
+
+
+def test_component_palette_places_search_and_view_controls_below_frequently_used(qtbot):
+    from fuse.core.ui.component_palette import ComponentPalette
+
+    palette = ComponentPalette()
+    qtbot.addWidget(palette)
+
+    layout = palette.layout()
+
+    assert layout.itemAt(0).widget() is palette.quick_section
+    assert layout.itemAt(1).widget() is palette.frequent_divider
+    assert layout.itemAt(2).layout() is not None
+    assert layout.itemAt(3).widget() is palette.component_search
+    assert layout.itemAt(4).layout() is not None
+    assert layout.itemAt(5).widget() is palette.tree

@@ -30,6 +30,8 @@ Project Settings define:
 - Target version/catalog for each enabled plugin.
 - Local or remote SSH execution environment.
 - Tool paths for enabled simulator/framework toolchains.
+- Preferred component catalog sorting and grouping behavior.
+- Whether the component catalog should auto-expand by default.
 
 Project-specific settings are saved in the `.fse` file. This lets one project target SST 15.1.2 while another targets SST 16.0.0 or gem5 25.1.0.1.
 
@@ -58,6 +60,12 @@ The palette can show the active catalog in several views:
 
 The **A-Z** checkbox controls catalog sorting. When it is enabled, groups and entries are sorted alphabetically. Component sorting uses the component element, whether the entry is a component or subcomponent, and the component name. When it is disabled, entries keep the order returned by the active plugin/catalog.
 
+The search field above the catalog filters the tree as you type. Search terms are matched against known metadata including component name, display name, element/library, category, function, description, interface, plugin ID, target label, and framework version. Multiple search terms must all match the component metadata.
+
+The **Expand/Collapse All** checkbox expands or collapses the current catalog tree. The checkbox state is stored in the project so a project can reopen with the user's preferred catalog expansion state. **Auto Expand All Component Tree** in Project Settings can force the catalog to expand whenever it is rebuilt.
+
+Project Settings also stores preferred grouping and sorting modes. When a model component is actively selected, FUSE may temporarily switch the catalog to compatible-component mode. When the selection is cleared, the catalog returns to the preferred grouping and sorting behavior.
+
 Palette entries show tooltips when you hover over them. A component tooltip includes the display name, description, function, interface, and category when that metadata is available. Gem5 entries use imported or inferred functionality such as System, Processor, Interconnect, Memory, Memory Hierarchy, Device, or SimObject to keep live catalogs navigable.
 
 ### Frequently used and recent components
@@ -80,6 +88,21 @@ Usage state is stored in local user settings. It is a convenience feature and is
 When the component is dropped, FUSE converts the drop location into model coordinates, creates a component instance, assigns a unique default instance name, adds the node to the model, and marks the project dirty.
 
 A component instance appears as an architecture icon with ports. The exact ports come from plugin-provided item details. If no ports are available, FUSE may use fallback ports so the component remains usable.
+
+## Navigating the canvas
+
+The model canvas is a zoomable and pannable workspace. The light grid behind the model is a visual organization aid only; it is not exported to simulators.
+
+The floating model-view toolbar provides:
+
+- **Select/Move** for normal component, port, link, and background interactions.
+- **Multiselect** for rectangular marquee selection.
+- **Undo** and **Redo** shortcuts.
+- A zoom percentage selector and **Zoom In** / **Zoom Out** buttons.
+
+In **Select/Move** mode, dragging empty canvas background pans the view. Dragging a component or subcomponent moves only that item. The mouse wheel zooms the view, and keyboard zoom shortcuts mirror common desktop zoom behavior.
+
+FUSE saves editor viewport state in `.fse` files, including zoom percentage, interaction mode, toolbar position, and the current view center. This state restores the editing workspace when the project is reopened, but it is not simulator topology and does not affect simulator export.
 
 ## Selecting a component
 

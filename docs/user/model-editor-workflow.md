@@ -116,6 +116,16 @@ Use the palette view selector to choose how the catalog is organized:
 
 Use the **A-Z** checkbox to control sorting. When enabled, catalog groups and component entries are sorted alphabetically. When disabled, the palette preserves plugin/catalog order. Hover over a palette entry to see metadata such as display name, description, function, interface, and category.
 
+Project Settings also includes preferred catalog behavior:
+
+- **Preferred Component Grouping Mode** selects the default catalog organization when no model component is selected.
+- **Preferred Component Sorting Mode** selects whether the catalog defaults to alphabetical order or plugin/catalog order.
+- **Auto Expand All Component Tree** controls whether the catalog opens with all groups expanded.
+
+When a component is selected in the model view, the catalog may temporarily switch to **Compatible SubComponents** so the user can quickly find valid children for the selected component's slots. Clearing the selection returns the catalog to the project's preferred grouping and sorting behavior.
+
+Use the search field above the catalog to filter known components as you type. Search checks component names, display names, framework elements, categories, inferred functions, descriptions, interfaces, plugin identifiers, target labels, and framework versions. Use **Expand/Collapse All** above the tree to expand or collapse the current catalog hierarchy; that state is stored with the project.
+
 For SST, metadata is imported from `sst-info` into the local database. If the palette is empty, check that:
 
 - SST Core and SST Elements are installed.
@@ -142,6 +152,15 @@ When a drop occurs, FUSE:
 
 The **Edit -> Undo** and **Edit -> Redo** actions track model-editing changes such as component creation, deletion, property edits, link edits, subcomponent attachment edits, and canvas layout changes. Use **Ctrl+Z** to undo the last recorded edit and **Ctrl+Shift+Z** to redo an edit that was undone. FUSE keeps a bounded edit history for the current project session and clears the redo stack when a new edit is made after undoing. Component drags are coalesced into one history entry so a single mouse drag can be undone with one **Undo** action.
 
+The model view also includes a floating canvas toolbar. It can be dragged within the model view and provides quick access to:
+
+- **Select/Move** for normal component selection, link selection, port clicks, component movement, and empty-space panning.
+- **Multiselect** for rectangular marquee selection.
+- **Undo** and **Redo**.
+- A zoom percentage selector plus **Zoom In** and **Zoom Out**.
+
+The toolbar position, zoom level, interaction mode, and current view center are editor state. They are saved in `.fse` files and restored when a project is reopened. They are not simulator model data and do not change exported simulator topology.
+
 Example default names:
 
 ```text
@@ -153,7 +172,19 @@ SystemXBar_1
 
 The base name comes from the component type. FUSE increments a numeric suffix until the instance name is unique in the model.
 
-## 6. Understand drag/drop placement
+## 6. Navigate the model canvas
+
+Use the model canvas as a zoomable and pannable workspace.
+
+- Use the floating toolbar's zoom controls, the zoom percentage field, the mouse wheel, or keyboard zoom shortcuts to zoom in and out.
+- Drag empty canvas background in **Select/Move** mode to pan the view.
+- Drag a component or subcomponent to move only that item rather than panning the whole model.
+- Use **Multiselect** mode to draw a rectangular marquee around multiple items.
+- The light grid is only a visual alignment aid; it does not change model coordinates or exported simulator output.
+
+Hit testing is view-aware. Component, port, and link selection should continue to work when the view is zoomed in or out. Ports are prioritized near link endpoints so connecting and selecting ports remains practical even when links overlap a port location.
+
+## 7. Understand drag/drop placement
 
 FUSE stores component positions in model-scene coordinates, not screen coordinates. This is important because the view can pan, zoom, or resize while the model coordinate system remains stable.
 
@@ -174,7 +205,7 @@ The saved `.fse` project stores the resulting scene position:
 
 When the project is reopened, FUSE restores the component to that model coordinate. The `.fse` serializer also stores format/version metadata, model counts, plugin identities, component properties, ports/link references, subcomponent attachment references, and editor layout data so users can continue editing after reopening the project.
 
-## 7. Select and inspect components
+## 8. Select and inspect components
 
 Click a component instance on the canvas. Hover over the component to see its tooltip, including instance/type metadata and validation warnings when present. Hover over ports to see the port name and availability.
 
@@ -208,7 +239,7 @@ Parameters
   associativity 8
 ```
 
-## 8. Edit component properties
+## 9. Edit component properties
 
 To edit a component value:
 
@@ -237,7 +268,7 @@ Example saved parameters:
 
 Changing a property marks the model dirty so the user can save the updated project.
 
-## 9. Parameter validation while editing
+## 10. Parameter validation while editing
 
 The properties panel validates basic inputs before accepting edits.
 
@@ -252,7 +283,7 @@ Current validation includes:
 
 If an entered value is invalid, FUSE warns the user and restores the previous value.
 
-## 10. Connect ports
+## 11. Connect ports
 
 FUSE currently supports point-to-point links.
 
@@ -278,7 +309,7 @@ one port -> at most one link
 
 If either selected port is already connected, FUSE rejects the new connection and shows a message.
 
-## 11. Select and edit links
+## 12. Select and edit links
 
 Click a link line to inspect it. Hover over a link to see its tooltip, including the link name, source endpoint, target endpoint, source latency, and target latency. Right-click a link and choose **Remove Link** to delete it.
 
@@ -313,13 +344,13 @@ Editable link fields include:
 
 Links can also be deleted from the model outline context menu, from the properties panel delete button, or by pressing **Delete**/**Backspace** while the link is selected.
 
-## 12. Delete model objects
+## 13. Delete model objects
 
 FUSE supports deletion from both the canvas and the model outline. Select a component, subcomponent, link, or subcomponent attachment and press **Delete** or **Backspace**, or use the relevant right-click/context-menu remove action. The properties panel also exposes a delete button for selected links and subcomponent attachments.
 
 When a component is deleted, FUSE also removes attached normal links, subcomponent attachment edges involving that component, and recursively attached child subcomponents. When a link is deleted, it is removed from both endpoint ports so those ports can be reused.
 
-## 13. Validate the model
+## 14. Validate the model
 
 FUSE validates common model correctness rules before save/export operations.
 
@@ -338,7 +369,7 @@ When validation finds problems:
 
 Fix the listed issues, then validate/save again.
 
-## 14. Save the project
+## 15. Save the project
 
 Use:
 
@@ -369,7 +400,7 @@ A project file stores the model and project settings, including:
 
 Project files do **not** store entire plugin catalogs. Catalogs are regenerated from plugin metadata, imported toolchain data, or built-in plugin records.
 
-## 15. Export simulator-specific output
+## 16. Export simulator-specific output
 
 When a plugin supports export, use the appropriate export action from the application menu.
 
@@ -395,7 +426,7 @@ FUSE .fse project
 - Keep `.fse` project files separate from generated simulator export files.
 - Revalidate after switching framework targets.
 
-## 15. Save/load and `.fse` serialization
+## 17. Save/load and `.fse` serialization
 
 The `.fse` file is the editable FUSE project format. It is distinct from simulator export formats such as SST JSON or gem5 Python. A saved `.fse` project preserves:
 
