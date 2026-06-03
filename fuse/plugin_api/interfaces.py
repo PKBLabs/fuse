@@ -15,6 +15,33 @@ from dataclasses import dataclass, field
 from typing import Protocol
 
 
+
+
+@dataclass
+class ExportFormat:
+    """Plugin-owned export format advertised to the core UI.
+
+    Core code can list or invoke these formats without knowing simulator-
+    specific schemas such as SST JSON or gem5 Python.
+    """
+
+    format_id: str
+    display_name: str
+    file_filter: str
+    default_suffix: str
+    description: str = ""
+
+
+@dataclass
+class ExportResult:
+    """Result returned by a plugin export operation."""
+
+    output_path: str
+    format_id: str
+    message: str = ""
+    report_path: str = ""
+    warnings: list = field(default_factory=list)
+
 @dataclass
 class FrameworkTarget:
     plugin_id: str
@@ -192,6 +219,19 @@ class FusePlugin(Protocol):
         item_id: str,
         target_id: str | None = None,
     ) -> ItemDetails:
+        ...
+
+    def export_formats(self) -> list[ExportFormat]:
+        ...
+
+    def export_model(
+        self,
+        scene,
+        output_path: str,
+        format_id: str = "",
+        *,
+        plugin_settings=None,
+    ) -> ExportResult:
         ...
 
     def validate_toolchain(self, plugin_settings) -> tuple[bool, str]:

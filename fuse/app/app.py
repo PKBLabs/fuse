@@ -47,6 +47,7 @@ from fuse.app.splash import create_splash_screen
 from fuse.core.app_info import APP_NAME, ORG_NAME
 from fuse.core.model.project_settings import ProjectSettings
 from fuse.core.model.validation import validate_model, validate_model_for_export
+from fuse.core.plugin_runtime.manager import get_plugin_by_id
 from fuse.core.persistence.db_access import ensure_database_ready, load_framework_targets
 from fuse.core.persistence.project_io import (
     build_project_dict,
@@ -871,7 +872,7 @@ class MainWindow(QMainWindow):
             )
             return
 
-        if not self.validate_model_before_save():
+        if not self.validate_current_model_for_export():
             return
 
         file_path, _ = QFileDialog.getSaveFileName(
@@ -890,11 +891,15 @@ class MainWindow(QMainWindow):
             file_path += ".json"
 
         try:
-            from fuse.plugins.community.sst.export_json import export_sst_json
+            plugin = get_plugin_by_id("sst")
+            if not hasattr(plugin, "export_model"):
+                raise RuntimeError("The SST plugin does not provide an export_model implementation.")
 
-            export_sst_json(
+            result = plugin.export_model(
                 scene=self.scene,
                 output_path=file_path,
+                format_id="sst.json",
+                plugin_settings=active,
             )
 
         except Exception as error:
@@ -905,10 +910,11 @@ class MainWindow(QMainWindow):
             )
             return
 
-        self.statusBar().showMessage(
-            f"Exported SST JSON to {file_path}",
-            5000,
-        )
+        message = result.message or f"Exported SST JSON to {file_path}"
+        if getattr(result, "report_path", ""):
+            message += f" Report: {result.report_path}"
+
+        self.statusBar().showMessage(message, 5000)
 
 
     def export_gem5_python(self):
@@ -1236,10 +1242,23 @@ class MainWindow(QMainWindow):
         self.apply_validation_issues(issues)
         self.show_validation_results(issues, f"Export validation for {target_label}")
 
-        if issues:
-            self.focus_first_validation_issue(issues)
-            self.statusBar().showMessage(f"Export validation found {len(issues)} issue(s)", 5000)
+        errors = [issue for issue in issues if self.issue_severity(issue) == "error"]
+        warnings = [issue for issue in issues if self.issue_severity(issue) == "warning"]
+
+        if errors:
+            self.focus_first_validation_issue(errors)
+            self.statusBar().showMessage(
+                f"Export validation found {len(errors)} error(s) and {len(warnings)} warning(s)",
+                5000,
+            )
             return False
+
+        if warnings:
+            self.statusBar().showMessage(
+                f"Export validation passed with {len(warnings)} warning(s)",
+                5000,
+            )
+            return True
 
         self.statusBar().showMessage("Export validation passed", 5000)
         return True

@@ -13,10 +13,13 @@
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 from dataclasses import dataclass
 import os
+from pathlib import Path
 import shutil
 
 from fuse.plugin_api.interfaces import (
     ConnectorDefinition,
+    ExportFormat,
+    ExportResult,
     FrameworkTarget,
     ItemDetails,
     LinkCompatibilityResult,
@@ -379,6 +382,61 @@ class SSTPlugin:
                 f"SubComponent provides: {subcomponent_iface}"
             ),
         )
+
+    def export_formats(self) -> list[ExportFormat]:
+        return [
+            ExportFormat(
+                format_id="sst.json",
+                display_name="SST JSON",
+                file_filter="SST JSON (*.json);;All Files (*)",
+                default_suffix=".sst.json",
+                description="Runnable SST JSON configuration generated from an SST-only FUSE model.",
+            )
+        ]
+
+    def export_model(
+        self,
+        scene,
+        output_path: str,
+        format_id: str = "sst.json",
+        *,
+        plugin_settings=None,
+    ) -> ExportResult:
+        if format_id not in ("", "sst.json"):
+            raise ValueError(f"Unsupported SST export format: {format_id}")
+
+        from fuse.plugins.community.sst.export_json import export_sst_json, validate_sst_json_export
+
+        output = Path(output_path)
+        report = validate_sst_json_export(scene)
+        report_path = ""
+        if report.warnings:
+            report_path = str(output.with_suffix(".export-report.json"))
+
+        export_sst_json(
+            scene=scene,
+            output_path=output,
+            report_path=report_path or None,
+        )
+
+        warning_count = len(report.warnings)
+        if warning_count:
+            message = f"Exported SST JSON with {warning_count} warning(s)."
+        else:
+            message = "Exported SST JSON."
+
+        return ExportResult(
+            output_path=str(output),
+            format_id="sst.json",
+            message=message,
+            report_path=report_path,
+            warnings=list(report.warnings),
+        )
+
+    def validate_export(self, scene) -> list:
+        from fuse.plugins.community.sst.export_json import validate_sst_json_export
+
+        return validate_sst_json_export(scene).issues
 
     def validate_toolchain(self, plugin_settings) -> tuple[bool, str]:
         expected_version = getattr(plugin_settings, "framework_version", "") or ""
