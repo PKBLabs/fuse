@@ -24,6 +24,7 @@ from PySide6.QtGui import QDrag, QIcon
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
@@ -223,6 +224,11 @@ class ComponentPalette(QWidget):
         self.quick_layout.addWidget(self.frequent_label)
         self.quick_layout.addWidget(self.frequent_grid_widget)
 
+        self.frequent_divider = QFrame()
+        self.frequent_divider.setFrameShape(QFrame.HLine)
+        self.frequent_divider.setFrameShadow(QFrame.Sunken)
+        self.frequent_divider.setObjectName("frequentComponentDivider")
+
         controls = QHBoxLayout()
         controls.setContentsMargins(0, 0, 0, 0)
         controls.addWidget(QLabel("View:"))
@@ -243,9 +249,10 @@ class ComponentPalette(QWidget):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.quick_section)
+        layout.addWidget(self.frequent_divider)
         layout.addLayout(controls)
         layout.addWidget(self.component_search)
-        layout.addWidget(self.quick_section)
         layout.addLayout(expand_row)
         layout.addWidget(self.tree, 1)
 
@@ -842,8 +849,10 @@ class ComponentPalette(QWidget):
 
         frequent_components = self.frequent_components()
 
-        self.frequent_label.setVisible(bool(frequent_components))
-        self.frequent_grid_widget.setVisible(bool(frequent_components))
+        has_frequent_components = bool(frequent_components)
+        self.frequent_label.setVisible(has_frequent_components)
+        self.frequent_grid_widget.setVisible(has_frequent_components)
+        self.frequent_divider.setVisible(has_frequent_components)
 
         for index, component in enumerate(frequent_components):
             self.frequent_grid.addWidget(

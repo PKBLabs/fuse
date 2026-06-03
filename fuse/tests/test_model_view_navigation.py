@@ -25,6 +25,48 @@ def test_model_view_zoom_controls_update_transform(qtbot):
     assert view.zoom_percent == 100.0
 
 
+
+
+def test_model_view_zoom_is_capped_at_200_percent(qtbot):
+    scene = ModelScene()
+    view = ModelView(scene)
+    qtbot.addWidget(view)
+
+    view.set_zoom_percent(400.0)
+
+    assert view.zoom_percent == 200.0
+    assert view.nearest_zoom_level(1) == 200.0
+    assert view.toolbar.zoom_selector.findText("400%") == -1
+
+
+def test_model_view_anchor_zoom_keeps_cursor_scene_position_stable(qtbot):
+    scene = ModelScene()
+    view = ModelView(scene)
+    qtbot.addWidget(view)
+    view.resize(800, 600)
+    view.show()
+    qtbot.waitExposed(view)
+    view.centerOn(900.0, 600.0)
+
+    cursor_position = QPoint(610, 430)
+    scene_before = view.mapToScene(cursor_position)
+
+    view.set_zoom_percent(200.0, cursor_position)
+
+    scene_after = view.mapToScene(cursor_position)
+    assert abs(scene_after.x() - scene_before.x()) <= 1.0
+    assert abs(scene_after.y() - scene_before.y()) <= 1.0
+
+
+
+def test_model_view_grid_is_coarse_at_normal_zoom(qtbot):
+    scene = ModelScene()
+    view = ModelView(scene)
+    qtbot.addWidget(view)
+
+    assert view.GRID_SPACING == 200.0
+
+
 def test_model_view_select_and_multiselect_modes_toggle_drag_behavior(qtbot):
     scene = ModelScene()
     view = ModelView(scene)

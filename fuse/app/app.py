@@ -18,7 +18,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from PySide6.QtCore import Qt, QElapsedTimer, QTimer
+from PySide6.QtCore import Qt, QElapsedTimer, QPoint, QTimer
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QApplication,
@@ -33,8 +33,9 @@ from PySide6.QtWidgets import (
     QMenu,
     QMenuBar,
     QMessageBox,
-    QSplitter,
     QStatusBar,
+    QStyle,
+    QToolButton,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
@@ -75,6 +76,122 @@ UNSAVED_CHOICE_SAVE = "save"
 UNSAVED_CHOICE_DISCARD = "discard"
 UNSAVED_CHOICE_CANCEL = "cancel"
 
+
+class FloatingDockTitleBar(QWidget):
+    def __init__(self, dock: QDockWidget, title: str):
+        super().__init__(dock)
+        self.dock = dock
+        self.drag_start_global_position: QPoint | None = None
+        self.drag_start_dock_position: QPoint | None = None
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(6, 2, 4, 2)
+        layout.setSpacing(4)
+
+        self.title_label = QLabel(title)
+        self.title_label.setObjectName("floatingDockTitleLabel")
+        layout.addWidget(self.title_label, 1)
+
+        self.dock_button = QToolButton(self)
+        self.dock_button.setObjectName("floatingDockButton")
+        self.dock_button.setAutoRaise(True)
+        self.dock_button.setToolTip("Dock this panel")
+        self.dock_button.setIcon(self.style().standardIcon(QStyle.SP_TitleBarNormalButton))
+        self.dock_button.clicked.connect(self.dock_panel)
+        layout.addWidget(self.dock_button)
+
+        self.close_button = QToolButton(self)
+        self.close_button.setObjectName("floatingDockCloseButton")
+        self.close_button.setAutoRaise(True)
+        self.close_button.setToolTip("Close this panel")
+        self.close_button.setIcon(self.style().standardIcon(QStyle.SP_TitleBarCloseButton))
+        self.close_button.clicked.connect(self.dock.close)
+        layout.addWidget(self.close_button)
+
+        self.setStyleSheet(
+            """
+            FloatingDockTitleBar {
+                background: palette(window);
+                border-bottom: 1px solid palette(mid);
+            }
+            QLabel#floatingDockTitleLabel {
+                font-weight: 600;
+            }
+            QToolButton#floatingDockButton, QToolButton#floatingDockCloseButton {
+                padding: 0px;
+            }
+            """
+        )
+
+    def dock_panel(self) -> None:
+        self.dock.setFloating(False)
+
+    def global_position_from_event(self, event) -> QPoint:
+        if hasattr(event, "globalPosition"):
+            return event.globalPosition().toPoint()
+        return event.globalPos()
+
+    def start_system_window_move(self) -> bool:
+        window_handle = self.dock.windowHandle()
+        if window_handle is None:
+            return False
+
+        try:
+            return bool(window_handle.startSystemMove())
+        except RuntimeError:
+            return False
+
+    def begin_manual_window_move(self, event) -> None:
+        self.drag_start_global_position = self.global_position_from_event(event)
+        self.drag_start_dock_position = self.dock.pos()
+
+    def move_floating_dock_from_drag(self, global_position: QPoint) -> bool:
+        if (
+            not self.dock.isFloating()
+            or self.drag_start_global_position is None
+            or self.drag_start_dock_position is None
+        ):
+            return False
+
+        delta = global_position - self.drag_start_global_position
+        self.dock.move(self.drag_start_dock_position + delta)
+        return True
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton and self.dock.isFloating():
+            self.begin_manual_window_move(event)
+            if self.start_system_window_move():
+                self.drag_start_global_position = None
+                self.drag_start_dock_position = None
+            event.accept()
+            return
+
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if (
+            event.buttons() & Qt.LeftButton
+            and self.move_floating_dock_from_drag(self.global_position_from_event(event))
+        ):
+            event.accept()
+            return
+
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        self.drag_start_global_position = None
+        self.drag_start_dock_position = None
+        super().mouseReleaseEvent(event)
+
+    def mouseDoubleClickEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.dock_panel()
+            event.accept()
+            return
+
+        super().mouseDoubleClickEvent(event)
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -112,6 +229,8 @@ class MainWindow(QMainWindow):
         )
         self.model_outline.itemClicked.connect(self.on_model_outline_item_clicked)
 
+        self.component_palette_panel: QWidget | None = None
+        self.component_palette_dock: QDockWidget | None = None
         self.properties_dock: QDockWidget | None = None
         self.model_outline_dock: QDockWidget | None = None
         self.validation_results_panel = QWidget()
@@ -166,6 +285,7 @@ class MainWindow(QMainWindow):
         file_menu = menu_bar.addMenu("File")
         edit_menu = menu_bar.addMenu("Edit")
         view_menu = menu_bar.addMenu("View")
+        self.view_menu = view_menu
         tools_menu = menu_bar.addMenu("Tools")
         help_menu = menu_bar.addMenu("Help")
 
@@ -246,24 +366,17 @@ class MainWindow(QMainWindow):
         view_menu.addAction(zoom_out_action)
 
     def setup_layout(self):
-        left_panel = QWidget()
-        left_layout = QVBoxLayout(left_panel)
-        left_layout.setContentsMargins(8, 8, 8, 8)
-        left_layout.addWidget(QLabel("Available Components"))
-        left_layout.addWidget(self.palette)
+        self.component_palette_panel = QWidget()
+        palette_layout = QVBoxLayout(self.component_palette_panel)
+        palette_layout.setContentsMargins(8, 8, 8, 8)
+        palette_layout.addWidget(self.palette)
 
-        splitter = QSplitter(Qt.Horizontal)
-        splitter.setChildrenCollapsible(False)
-        splitter.addWidget(left_panel)
-        splitter.addWidget(self.model_view)
-        splitter.setStretchFactor(0, 1)
-        splitter.setStretchFactor(1, 4)
-        splitter.setSizes([320, 980])
+        self.setCentralWidget(self.model_view)
 
-        self.setCentralWidget(splitter)
-
-    def make_dock(self, title: str, widget: QWidget) -> QDockWidget:
+    def make_dock(self, title: str, widget: QWidget, object_name: str = "") -> QDockWidget:
         dock = QDockWidget(title, self)
+        if object_name:
+            dock.setObjectName(object_name)
         dock.setWidget(widget)
         dock.setAllowedAreas(
             Qt.LeftDockWidgetArea
@@ -276,7 +389,26 @@ class MainWindow(QMainWindow):
             | QDockWidget.DockWidgetFloatable
             | QDockWidget.DockWidgetClosable
         )
+        dock.topLevelChanged.connect(
+            lambda floating, current_dock=dock, current_title=title: self.on_dock_top_level_changed(
+                current_dock,
+                current_title,
+                floating,
+            )
+        )
         return dock
+
+    def on_dock_top_level_changed(
+        self,
+        dock: QDockWidget,
+        title: str,
+        floating: bool,
+    ) -> None:
+        if floating:
+            dock.setTitleBarWidget(FloatingDockTitleBar(dock, title))
+            return
+
+        dock.setTitleBarWidget(None)
 
     def setup_docks(self):
         """
@@ -288,10 +420,20 @@ class MainWindow(QMainWindow):
 
         Users can still resize, move, float, or close these docks.
         """
-        self.properties_dock = self.make_dock("Properties", self.properties_panel)
-        self.model_outline_dock = self.make_dock("Model Outline", self.model_outline)
-        self.validation_results_dock = self.make_dock("Validation Results", self.validation_results_panel)
+        self.component_palette_dock = self.make_dock(
+            "Available Components",
+            self.component_palette_panel,
+            "availableComponentsDock",
+        )
+        self.properties_dock = self.make_dock("Properties", self.properties_panel, "propertiesDock")
+        self.model_outline_dock = self.make_dock("Model Outline", self.model_outline, "modelOutlineDock")
+        self.validation_results_dock = self.make_dock(
+            "Validation Results",
+            self.validation_results_panel,
+            "validationResultsDock",
+        )
 
+        self.addDockWidget(Qt.LeftDockWidgetArea, self.component_palette_dock)
         self.addDockWidget(Qt.RightDockWidgetArea, self.properties_dock)
         self.splitDockWidget(
             self.properties_dock,
@@ -310,12 +452,21 @@ class MainWindow(QMainWindow):
         self.addDockWidget(Qt.BottomDockWidgetArea, self.validation_results_dock)
         self.validation_results_dock.hide()
 
-        # Give the right dock column a reasonable initial width.
+        # Give the dock columns reasonable initial widths.
         self.resizeDocks(
-            [self.properties_dock],
-            [360],
+            [self.component_palette_dock, self.properties_dock],
+            [340, 360],
             Qt.Horizontal,
         )
+
+        self.add_dock_view_actions()
+
+    def add_dock_view_actions(self) -> None:
+        self.view_menu.addSeparator()
+        self.view_menu.addAction(self.component_palette_dock.toggleViewAction())
+        self.view_menu.addAction(self.properties_dock.toggleViewAction())
+        self.view_menu.addAction(self.model_outline_dock.toggleViewAction())
+        self.view_menu.addAction(self.validation_results_dock.toggleViewAction())
 
     def setup_status_bar(self):
         status = QStatusBar(self)

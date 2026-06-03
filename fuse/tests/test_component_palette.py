@@ -150,3 +150,19 @@ def test_component_palette_expand_collapse_preference_persists_through_callback(
     palette.expand_all_tree.setChecked(True)
 
     assert captured[-1]["component_catalog_expanded"] is True
+
+
+def test_component_palette_places_search_and_view_controls_below_frequently_used(qtbot):
+    from fuse.core.ui.component_palette import ComponentPalette
+
+    palette = ComponentPalette()
+    qtbot.addWidget(palette)
+
+    layout = palette.layout()
+
+    assert layout.itemAt(0).widget() is palette.quick_section
+    assert layout.itemAt(1).widget() is palette.frequent_divider
+    assert layout.itemAt(2).layout() is not None
+    assert layout.itemAt(3).widget() is palette.component_search
+    assert layout.itemAt(4).layout() is not None
+    assert layout.itemAt(5).widget() is palette.tree

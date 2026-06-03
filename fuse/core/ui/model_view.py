@@ -87,7 +87,7 @@ class FloatingModelToolbar(QFrame):
         layout.addWidget(self.make_separator())
 
         self.zoom_selector = QComboBox(self)
-        self.zoom_selector.addItems(["12.5%", "25%", "50%", "100%", "200%", "400%", "800%", "1100%", "1600%", "2300%"])
+        self.zoom_selector.addItems(["12.5%", "25%", "50%", "100%", "200%"])
         self.zoom_selector.setEditable(True)
         self.zoom_selector.setCurrentText("100%")
         self.zoom_selector.currentTextChanged.connect(self.on_zoom_text_changed)
@@ -168,7 +168,8 @@ class FloatingModelToolbar(QFrame):
 
 
 class ModelView(QGraphicsView):
-    ZOOM_LEVELS = [12.5, 25.0, 50.0, 100.0, 200.0, 400.0, 800.0, 1100.0, 1600.0, 2300.0]
+    ZOOM_LEVELS = [12.5, 25.0, 50.0, 100.0, 200.0]
+    GRID_SPACING = 200.0
 
     def __init__(self, scene: ModelScene):
         super().__init__(scene)
@@ -357,20 +358,33 @@ class ModelView(QGraphicsView):
     def zoom_out(self) -> None:
         self.set_zoom_percent(self.nearest_zoom_level(-1))
 
-    def set_zoom_percent(self, percent: float) -> None:
+    def set_zoom_percent(self, percent: float, anchor_view_position: QPoint | None = None) -> None:
         bounded = max(self.ZOOM_LEVELS[0], min(self.ZOOM_LEVELS[-1], float(percent)))
+        if anchor_view_position is not None:
+            anchor_scene_position = self.mapToScene(anchor_view_position)
+        else:
+            anchor_scene_position = None
+
         self.zoom_percent = bounded
         scale_factor = bounded / 100.0
         self.resetTransform()
         self.scale(scale_factor, scale_factor)
+
+        if anchor_view_position is not None and anchor_scene_position is not None:
+            shifted_anchor = self.mapFromScene(anchor_scene_position)
+            delta = shifted_anchor - anchor_view_position
+            self.horizontalScrollBar().setValue(self.horizontalScrollBar().value() + delta.x())
+            self.verticalScrollBar().setValue(self.verticalScrollBar().value() + delta.y())
+
         self.toolbar.set_zoom_percent(bounded)
         self.notify_editor_state_changed()
 
     def wheelEvent(self, event):
+        anchor_position = event.position().toPoint()
         if event.angleDelta().y() > 0:
-            self.zoom_in()
+            self.set_zoom_percent(self.nearest_zoom_level(1), anchor_position)
         elif event.angleDelta().y() < 0:
-            self.zoom_out()
+            self.set_zoom_percent(self.nearest_zoom_level(-1), anchor_position)
         event.accept()
 
     def mousePressEvent(self, event):
@@ -408,7 +422,7 @@ class ModelView(QGraphicsView):
 
     def drawBackground(self, painter: QPainter, rect):
         super().drawBackground(painter, rect)
-        grid_spacing = 25.0
+        grid_spacing = self.GRID_SPACING
         left = int(rect.left() // grid_spacing) * grid_spacing
         top = int(rect.top() // grid_spacing) * grid_spacing
 
