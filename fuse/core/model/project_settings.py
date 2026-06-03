@@ -125,6 +125,10 @@ class PluginProjectSettings:
 class ProjectSettings:
     project_name: str = "Untitled FUSE Project"
     active_plugin_id: str = ""
+    preferred_component_sorting_mode: str = "Alphabetical"
+    preferred_component_grouping_mode: str = "Element"
+    auto_expand_all_component_tree: bool = False
+    component_catalog_expanded: bool = False
     plugins: dict[str, PluginProjectSettings] = field(default_factory=dict)
 
     def active_plugin_settings(self) -> PluginProjectSettings | None:
@@ -141,6 +145,10 @@ class ProjectSettings:
         return {
             "projectName": self.project_name,
             "activePluginId": self.active_plugin_id,
+            "preferredComponentSortingMode": self.preferred_component_sorting_mode,
+            "preferredComponentGroupingMode": self.preferred_component_grouping_mode,
+            "autoExpandAllComponentTree": self.auto_expand_all_component_tree,
+            "componentCatalogExpanded": self.component_catalog_expanded,
             "plugins": {
                 plugin_id: settings.to_dict()
                 for plugin_id, settings in self.plugins.items()
@@ -161,6 +169,26 @@ class ProjectSettings:
             project_name=data.get("projectName", data.get("project_name", "Untitled FUSE Project"))
             or "Untitled FUSE Project",
             active_plugin_id=data.get("activePluginId", data.get("active_plugin_id", "")) or "",
+            preferred_component_sorting_mode=data.get(
+                "preferredComponentSortingMode",
+                data.get("preferred_component_sorting_mode", "Alphabetical"),
+            ) or "Alphabetical",
+            preferred_component_grouping_mode=data.get(
+                "preferredComponentGroupingMode",
+                data.get("preferred_component_grouping_mode", "Element"),
+            ) or "Element",
+            auto_expand_all_component_tree=bool(
+                data.get(
+                    "autoExpandAllComponentTree",
+                    data.get("auto_expand_all_component_tree", False),
+                )
+            ),
+            component_catalog_expanded=bool(
+                data.get(
+                    "componentCatalogExpanded",
+                    data.get("component_catalog_expanded", False),
+                )
+            ),
             plugins=plugins,
         )
 

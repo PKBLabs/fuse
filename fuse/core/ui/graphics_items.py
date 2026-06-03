@@ -65,6 +65,7 @@ def _safe_int(value, default: int = 1) -> int:
 
 class PortItem(QGraphicsEllipseItem):
     RADIUS = 5.0
+    HIT_RADIUS = 10.0
     EDGE_GAP = 4.0
     LABEL_GAP = 8.0
     LABEL_SCALE = 1.0
@@ -106,12 +107,12 @@ class PortItem(QGraphicsEllipseItem):
         if self.interface:
             tooltip += f"\nInterface: {self.interface}"
         self.setToolTip(tooltip)
-        self.setZValue(10)
+        self.setZValue(30)
 
         self.label = QGraphicsTextItem(name, node)
         self.label.setDefaultTextColor(QColor("#333333"))
         self.label.setScale(self.LABEL_SCALE)
-        self.label.setZValue(11)
+        self.label.setZValue(31)
 
         self.update_label_position()
 
@@ -160,6 +161,20 @@ class PortItem(QGraphicsEllipseItem):
 
     def scene_center(self) -> QPointF:
         return self.mapToScene(self.boundingRect().center())
+
+    def shape(self) -> QPainterPath:
+        """Return a forgiving hit target without changing the visible port size."""
+        path = QPainterPath()
+        path.addEllipse(
+            -self.HIT_RADIUS,
+            -self.HIT_RADIUS,
+            self.HIT_RADIUS * 2.0,
+            self.HIT_RADIUS * 2.0,
+        )
+        return path
+
+    def contains(self, point) -> bool:
+        return self.shape().contains(point)
 
     def is_connected(self) -> bool:
         """Each SST port may participate in at most one link."""

@@ -287,6 +287,12 @@ def validate_serialized_project(project: Any, *, strict_references: bool = True)
     if editor is not None and _expect_object(issues, editor, "editor"):
         _expect_numeric_mapping(issues, editor.get("sceneRect"), "editor.sceneRect", ("x", "y", "width", "height"))
         _expect_numeric_mapping(issues, editor.get("viewCenter"), "editor.viewCenter", ("x", "y"))
+        if "zoomPercent" in editor and not isinstance(editor.get("zoomPercent"), (int, float)):
+            _issue(issues, "editor.zoomPercent", "must be numeric")
+        if "mode" in editor:
+            _expect_stringish(issues, editor.get("mode"), "editor.mode")
+        if "toolbarPosition" in editor:
+            _expect_numeric_mapping(issues, editor.get("toolbarPosition"), "editor.toolbarPosition", ("x", "y"))
 
     project_settings = project.get("projectSettings", {})
     if project_settings is not None and not isinstance(project_settings, dict):

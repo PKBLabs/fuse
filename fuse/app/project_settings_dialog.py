@@ -132,6 +132,30 @@ class ProjectSettingsDialog(QDialog):
         )
         general_form.addRow("Active framework/plugin:", self.active_plugin_combo)
 
+        self.preferred_component_grouping_combo = QComboBox(self)
+        self.preferred_component_grouping_combo.addItems(
+            ["Element", "Function", "Recent", "Flat"]
+        )
+        general_form.addRow(
+            "Preferred Component Grouping Mode:",
+            self.preferred_component_grouping_combo,
+        )
+
+        self.preferred_component_sorting_combo = QComboBox(self)
+        self.preferred_component_sorting_combo.addItems(["Alphabetical", "Catalog Order"])
+        general_form.addRow(
+            "Preferred Component Sorting Mode:",
+            self.preferred_component_sorting_combo,
+        )
+
+        self.auto_expand_component_tree_combo = QComboBox(self)
+        self.auto_expand_component_tree_combo.addItem("Off", False)
+        self.auto_expand_component_tree_combo.addItem("On", True)
+        general_form.addRow(
+            "Auto Expand All Component Tree:",
+            self.auto_expand_component_tree_combo,
+        )
+
         active_index = self.active_plugin_combo.findData(
             self._settings.active_plugin_id or "sst"
         )
@@ -366,6 +390,24 @@ class ProjectSettingsDialog(QDialog):
         if active_index >= 0:
             self.active_plugin_combo.setCurrentIndex(active_index)
 
+        grouping_index = self.preferred_component_grouping_combo.findText(
+            settings.preferred_component_grouping_mode or "Element"
+        )
+        if grouping_index >= 0:
+            self.preferred_component_grouping_combo.setCurrentIndex(grouping_index)
+
+        sorting_index = self.preferred_component_sorting_combo.findText(
+            settings.preferred_component_sorting_mode or "Alphabetical"
+        )
+        if sorting_index >= 0:
+            self.preferred_component_sorting_combo.setCurrentIndex(sorting_index)
+
+        auto_expand_index = self.auto_expand_component_tree_combo.findData(
+            bool(settings.auto_expand_all_component_tree)
+        )
+        if auto_expand_index >= 0:
+            self.auto_expand_component_tree_combo.setCurrentIndex(auto_expand_index)
+
         toolchain = self._initial_shared_toolchain(settings)
 
         self.backend_ssh.setChecked(toolchain.backend == "ssh")
@@ -584,6 +626,16 @@ class ProjectSettingsDialog(QDialog):
     def apply_to_internal_settings(self) -> ProjectSettings:
         self._settings.project_name = (
             self.project_name_edit.text().strip() or "Untitled FUSE Project"
+        )
+
+        self._settings.preferred_component_grouping_mode = (
+            self.preferred_component_grouping_combo.currentText() or "Element"
+        )
+        self._settings.preferred_component_sorting_mode = (
+            self.preferred_component_sorting_combo.currentText() or "Alphabetical"
+        )
+        self._settings.auto_expand_all_component_tree = bool(
+            self.auto_expand_component_tree_combo.currentData()
         )
 
         requested_active_plugin = self.active_plugin_combo.currentData() or ""

@@ -132,3 +132,21 @@ def test_project_settings_defaults_are_stable_for_missing_or_empty_data():
     assert ProjectSettings.from_dict(None).project_name == "Untitled FUSE Project"
     assert ToolchainSettings.from_dict(None).backend == "local"
     assert PluginProjectSettings.from_dict("x", None).target_id == ""
+
+
+def test_project_settings_component_catalog_preferences_round_trip():
+    settings = ProjectSettings(
+        project_name="Catalog Preferences",
+        active_plugin_id="sst",
+        preferred_component_sorting_mode="Catalog Order",
+        preferred_component_grouping_mode="Function",
+        auto_expand_all_component_tree=True,
+        component_catalog_expanded=True,
+    )
+
+    restored = ProjectSettings.from_dict(settings.to_dict())
+
+    assert restored.preferred_component_sorting_mode == "Catalog Order"
+    assert restored.preferred_component_grouping_mode == "Function"
+    assert restored.auto_expand_all_component_tree is True
+    assert restored.component_catalog_expanded is True

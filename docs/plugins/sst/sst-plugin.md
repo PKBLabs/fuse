@@ -161,6 +161,8 @@ Validation checks that `sst-info` can run and that its version is compatible wit
 
 ## SST JSON export
 
+See [SST JSON Export Guide](sst-json-export-guide.md) for the full export workflow, validation requirements, expected JSON shape, verification steps, and known limitations.
+
 The SST plugin can export the active model to SST JSON configuration format.
 
 The `.fse` file remains the editable FUSE project. The SST JSON file is a generated simulator artifact.

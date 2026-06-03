@@ -15,6 +15,7 @@ This documentation is organized by audience and topic.
 
 ## Developer documentation
 
+- [v0.6.0 release notes draft](releases/v0.6.0.md)
 - [Development guide](developer/development-guide.md)
 - [Codebase tour](developer/codebase-tour.md)
 - [Resource and icon guide](developer/resources-and-icons.md)
@@ -64,3 +65,5 @@ This documentation is organized by audience and topic.
 - [Example: write a simple plugin](examples/write-a-plugin.md)
 - [Example: component definitions](examples/component-definitions.md)
 - [Example: troubleshoot validation issues](examples/validation-walkthrough.md)
+
+- [SST JSON Export Guide](plugins/sst/sst-json-export-guide.md)

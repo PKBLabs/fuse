@@ -169,10 +169,7 @@ def build_project_dict(
                 "width": scene.sceneRect().width(),
                 "height": scene.sceneRect().height(),
             },
-            "viewCenter": {
-                "x": model_view.mapToScene(model_view.viewport().rect().center()).x(),
-                "y": model_view.mapToScene(model_view.viewport().rect().center()).y(),
-            },
+            **model_view.editor_state(),
         },
     }
 

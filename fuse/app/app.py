@@ -101,6 +101,8 @@ class MainWindow(QMainWindow):
         self.palette = ComponentPalette()
         self.scene = ModelScene()
         self.model_view = ModelView(self.scene)
+        self.model_view.undo_callback = self.undo
+        self.model_view.redo_callback = self.redo
         self.properties_panel = PropertiesPanel()
         self.model_outline = QTreeWidget()
         self.model_outline.setHeaderHidden(True)
@@ -143,6 +145,7 @@ class MainWindow(QMainWindow):
         self.scene.component_favorite_requested_callback = self.on_component_favorite_requested
         self.scene.selection_changed_callback = self.on_scene_selection_changed
         self.properties_panel.property_changed_callback = self.on_property_changed
+        self.palette.preferences_changed_callback = self.on_component_palette_preferences_changed
 
         self.setup_menu_bar()
         self.setup_layout()
@@ -233,8 +236,14 @@ class MainWindow(QMainWindow):
 
         edit_menu.addAction(self.undo_action)
         edit_menu.addAction(self.redo_action)
-        view_menu.addAction(QAction("Zoom In", self))
-        view_menu.addAction(QAction("Zoom Out", self))
+        zoom_in_action = QAction("Zoom In", self)
+        zoom_in_action.setShortcut("Ctrl++")
+        zoom_in_action.triggered.connect(self.model_view.zoom_in)
+        zoom_out_action = QAction("Zoom Out", self)
+        zoom_out_action.setShortcut("Ctrl+-")
+        zoom_out_action.triggered.connect(self.model_view.zoom_out)
+        view_menu.addAction(zoom_in_action)
+        view_menu.addAction(zoom_out_action)
 
     def setup_layout(self):
         left_panel = QWidget()
@@ -349,6 +358,13 @@ class MainWindow(QMainWindow):
         self.apply_project_settings_to_ui()
 
     def apply_project_settings_to_ui(self):
+        self.palette.set_project_preferences(
+            grouping_mode=self.project_settings.preferred_component_grouping_mode,
+            sorting_mode=self.project_settings.preferred_component_sorting_mode,
+            auto_expand_all=self.project_settings.auto_expand_all_component_tree,
+            catalog_expanded=self.project_settings.component_catalog_expanded,
+        )
+
         active = self.project_settings.active_plugin_settings()
 
         if active is None or not active.enabled:
@@ -408,6 +424,21 @@ class MainWindow(QMainWindow):
 
     def on_component_added(self, node):
         self.update_model_outline()
+
+    def on_component_palette_preferences_changed(self, preferences: dict) -> None:
+        self.project_settings.preferred_component_grouping_mode = str(
+            preferences.get("preferred_component_grouping_mode", "Element")
+        )
+        self.project_settings.preferred_component_sorting_mode = str(
+            preferences.get("preferred_component_sorting_mode", "Alphabetical")
+        )
+        self.project_settings.auto_expand_all_component_tree = bool(
+            preferences.get("auto_expand_all_component_tree", False)
+        )
+        self.project_settings.component_catalog_expanded = bool(
+            preferences.get("component_catalog_expanded", False)
+        )
+        self.mark_dirty()
 
     def on_scene_selection_changed(self, node):
         if node is None:
@@ -598,7 +629,15 @@ class MainWindow(QMainWindow):
     def history_signature(self, snapshot: dict | None = None) -> str:
         if snapshot is None:
             snapshot = self.history_snapshot()
-        return json.dumps(snapshot, sort_keys=True, separators=(",", ":"))
+
+        comparable = copy.deepcopy(snapshot)
+        # Editor viewport state is persisted in .fse files and restored from
+        # history snapshots, but it should not make an otherwise identical model
+        # look dirty. QGraphicsView also normalizes some viewport coordinates
+        # through integer scroll bars, so excluding this section prevents harmless
+        # restore drift from breaking undo/redo cleanliness checks.
+        comparable.pop("editor", None)
+        return json.dumps(comparable, sort_keys=True, separators=(",", ":"))
 
     def reset_undo_history(self, mark_clean: bool = True):
         snapshot = self.history_snapshot()
@@ -646,6 +685,7 @@ class MainWindow(QMainWindow):
             self.properties_panel.set_validation_issues([])
             self.properties_panel.show_empty()
             self.apply_project_settings_to_ui()
+            self.model_view.apply_editor_state(snapshot.get("editor", {}))
             self.update_model_outline()
             self._last_history_signature = self.history_signature(snapshot)
         finally:
@@ -770,6 +810,7 @@ class MainWindow(QMainWindow):
         self.properties_panel.set_validation_issues([])
         self.properties_panel.show_empty()
         self.apply_project_settings_to_ui()
+        self.model_view.apply_editor_state({})
         self.update_model_outline()
         self.reset_undo_history(mark_clean=True)
         self.statusBar().showMessage("New project created", 3000)
@@ -1010,6 +1051,7 @@ class MainWindow(QMainWindow):
         self.set_current_project_path(file_path)
 
         self.apply_project_settings_to_ui()
+        self.model_view.apply_editor_state(project.get("editor", {}))
         self.update_model_outline()
         self.reset_undo_history(mark_clean=True)
 

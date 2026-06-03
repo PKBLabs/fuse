@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QMenu,
     QScrollArea,
     QToolButton,
@@ -166,6 +167,9 @@ class ComponentPalette(QWidget):
     VIEW_RECENT = "Recent"
     VIEW_COMPATIBLE = "Compatible SubComponents"
 
+    SORT_ALPHABETICAL = "Alphabetical"
+    SORT_CATALOG_ORDER = "Catalog Order"
+
     def __init__(self):
         super().__init__()
 
@@ -174,6 +178,11 @@ class ComponentPalette(QWidget):
 
         self.components: list[ComponentDefinition] = []
         self.compatibility_context_node = None
+        self.preferred_grouping_mode = self.VIEW_ELEMENT
+        self.preferred_sorting_mode = self.SORT_ALPHABETICAL
+        self.auto_expand_all_component_tree = False
+        self.component_catalog_expanded = False
+        self.preferences_changed_callback = None
 
         self.view_selector = QComboBox()
         self.view_selector.addItems(
@@ -185,11 +194,11 @@ class ComponentPalette(QWidget):
                 self.VIEW_FLAT,
             ]
         )
-        self.view_selector.currentTextChanged.connect(self.populate_tree)
+        self.view_selector.currentTextChanged.connect(self.on_view_selector_changed)
 
         self.sort_alphabetically = QCheckBox("A-Z")
         self.sort_alphabetically.setChecked(True)
-        self.sort_alphabetically.stateChanged.connect(self.populate_tree)
+        self.sort_alphabetically.stateChanged.connect(self.on_sorting_changed)
         self.recent_component_ids: list[str] = []
         self.frequent_component_counts: dict[str, int] = {}
         self.pinned_frequent_component_ids: set[str] = set()
@@ -200,6 +209,10 @@ class ComponentPalette(QWidget):
         self.quick_section = QWidget()
         self.quick_layout = QVBoxLayout(self.quick_section)
         self.quick_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.component_search = QLineEdit()
+        self.component_search.setPlaceholderText("Search components...")
+        self.component_search.textChanged.connect(self.populate_tree)
 
         self.frequent_label = QLabel("Frequently Used")
         self.frequent_grid_widget = QWidget()
@@ -216,12 +229,24 @@ class ComponentPalette(QWidget):
         controls.addWidget(self.view_selector, 1)
         controls.addWidget(self.sort_alphabetically)
 
+        expand_row = QHBoxLayout()
+        expand_row.setContentsMargins(0, 0, 0, 0)
+        expand_row.addStretch(1)
+        self.expand_all_tree = QCheckBox("Expand/Collapse All")
+        self.expand_all_tree.setToolTip(
+            "Checked expands all component catalog groups. Unchecked collapses the catalog."
+        )
+        self.expand_all_tree.toggled.connect(self.on_expand_all_toggled)
+        expand_row.addWidget(self.expand_all_tree)
+
         self.tree = ComponentTree(self)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addLayout(controls)
+        layout.addWidget(self.component_search)
         layout.addWidget(self.quick_section)
+        layout.addLayout(expand_row)
         layout.addWidget(self.tree, 1)
 
     def set_active_target(self, plugin_id: str | None, target_id: str | None):
@@ -229,16 +254,86 @@ class ComponentPalette(QWidget):
         self.active_target_id = target_id
         self.load_components()
 
+    def set_project_preferences(
+        self,
+        grouping_mode: str = VIEW_ELEMENT,
+        sorting_mode: str = SORT_ALPHABETICAL,
+        auto_expand_all: bool = False,
+        catalog_expanded: bool = False,
+    ) -> None:
+        self.preferred_grouping_mode = self.normalized_grouping_mode(grouping_mode)
+        self.preferred_sorting_mode = self.normalized_sorting_mode(sorting_mode)
+        self.auto_expand_all_component_tree = bool(auto_expand_all)
+        self.component_catalog_expanded = bool(catalog_expanded)
+
+        self.sort_alphabetically.blockSignals(True)
+        self.sort_alphabetically.setChecked(
+            self.preferred_sorting_mode == self.SORT_ALPHABETICAL
+        )
+        self.sort_alphabetically.blockSignals(False)
+
+        if self.compatibility_context_node is None:
+            self.view_selector.blockSignals(True)
+            self.view_selector.setCurrentText(self.preferred_grouping_mode)
+            self.view_selector.blockSignals(False)
+
+        self.expand_all_tree.blockSignals(True)
+        self.expand_all_tree.setChecked(
+            self.auto_expand_all_component_tree or self.component_catalog_expanded
+        )
+        self.expand_all_tree.blockSignals(False)
+
+        self.populate_tree()
+
+    def normalized_grouping_mode(self, grouping_mode: str) -> str:
+        allowed = {self.VIEW_ELEMENT, self.VIEW_FUNCTION, self.VIEW_RECENT, self.VIEW_FLAT}
+        return grouping_mode if grouping_mode in allowed else self.VIEW_ELEMENT
+
+    def normalized_sorting_mode(self, sorting_mode: str) -> str:
+        allowed = {self.SORT_ALPHABETICAL, self.SORT_CATALOG_ORDER}
+        return sorting_mode if sorting_mode in allowed else self.SORT_ALPHABETICAL
+
+    def preference_snapshot(self) -> dict[str, object]:
+        return {
+            "preferred_component_grouping_mode": self.preferred_grouping_mode,
+            "preferred_component_sorting_mode": self.preferred_sorting_mode,
+            "auto_expand_all_component_tree": self.auto_expand_all_component_tree,
+            "component_catalog_expanded": self.component_catalog_expanded,
+        }
+
+    def emit_preferences_changed(self) -> None:
+        if self.preferences_changed_callback is not None:
+            self.preferences_changed_callback(self.preference_snapshot())
+
+    def on_view_selector_changed(self) -> None:
+        if self.view_selector.currentText() != self.VIEW_COMPATIBLE:
+            self.preferred_grouping_mode = self.normalized_grouping_mode(
+                self.view_selector.currentText()
+            )
+            self.emit_preferences_changed()
+
+        self.populate_tree()
+
+    def on_expand_all_toggled(self, checked: bool) -> None:
+        self.component_catalog_expanded = bool(checked)
+        self.apply_tree_expansion()
+        self.emit_preferences_changed()
+
     def set_compatibility_context(self, node):
         self.compatibility_context_node = node
 
         if node is not None:
+            self.view_selector.blockSignals(True)
             self.view_selector.setCurrentText(self.VIEW_COMPATIBLE)
+            self.view_selector.blockSignals(False)
 
         self.populate_tree()
 
     def clear_compatibility_context(self):
         self.compatibility_context_node = None
+        self.view_selector.blockSignals(True)
+        self.view_selector.setCurrentText(self.preferred_grouping_mode)
+        self.view_selector.blockSignals(False)
         self.populate_tree()
 
     def load_components(self):
@@ -273,7 +368,22 @@ class ComponentPalette(QWidget):
         self.populate_tree()
         self.refresh_quick_sections()
 
+    def on_sorting_changed(self) -> None:
+        self.preferred_sorting_mode = (
+            self.SORT_ALPHABETICAL
+            if self.sort_alphabetically.isChecked()
+            else self.SORT_CATALOG_ORDER
+        )
+        self.emit_preferences_changed()
+        self.populate_tree()
+
     def sorted_components(self, components: list[ComponentDefinition]) -> list[ComponentDefinition]:
+        self.preferred_sorting_mode = (
+            self.SORT_ALPHABETICAL
+            if self.sort_alphabetically.isChecked()
+            else self.SORT_CATALOG_ORDER
+        )
+
         if not self.sort_alphabetically.isChecked():
             return list(components)
 
@@ -302,7 +412,44 @@ class ComponentPalette(QWidget):
         else:
             self.populate_element_tree()
 
-        self.tree.expandToDepth(1)
+        self.apply_tree_expansion()
+
+    def apply_tree_expansion(self) -> None:
+        if self.auto_expand_all_component_tree or self.component_catalog_expanded:
+            self.tree.expandAll()
+        else:
+            self.tree.collapseAll()
+
+    def filtered_components(
+        self,
+        components: list[ComponentDefinition] | None = None,
+    ) -> list[ComponentDefinition]:
+        candidates = list(self.components if components is None else components)
+        query = self.component_search.text().strip().lower()
+
+        if not query:
+            return candidates
+
+        tokens = [token for token in query.split() if token]
+
+        def matches(component: ComponentDefinition) -> bool:
+            text = " ".join(
+                [
+                    str(component.name or ""),
+                    str(component.display_name or ""),
+                    str(component.element or ""),
+                    str(component.category or ""),
+                    str(component.functionality or ""),
+                    str(component.description or ""),
+                    str(component.iface or ""),
+                    str(component.plugin_id or ""),
+                    str(component.target_label or ""),
+                    str(component.framework_version or ""),
+                ]
+            ).lower()
+            return all(token in text for token in tokens)
+
+        return [component for component in candidates if matches(component)]
 
     def populate_recent_tree(self):
         recent = self.recent_components()
@@ -407,7 +554,7 @@ class ComponentPalette(QWidget):
         return names
 
     def populate_element_tree(self):
-        by_simulator = self.components_by_simulator()
+        by_simulator = self.components_by_simulator(self.filtered_components())
 
         for simulator_name in self.sorted_group_names(by_simulator):
             simulator_item = self.make_group_item(simulator_name)
@@ -460,7 +607,7 @@ class ComponentPalette(QWidget):
         return "Other"
 
     def populate_function_tree(self):
-        by_simulator = self.components_by_simulator()
+        by_simulator = self.components_by_simulator(self.filtered_components())
 
         for simulator_name in self.sorted_group_names(by_simulator):
             simulator_item = self.make_group_item(simulator_name)
@@ -491,7 +638,7 @@ class ComponentPalette(QWidget):
                             self.make_component_item(component, subcomponents_group, prefix="↳ ")
 
     def populate_flat_tree(self):
-        by_simulator = self.components_by_simulator()
+        by_simulator = self.components_by_simulator(self.filtered_components())
 
         for simulator_name in self.sorted_group_names(by_simulator):
             simulator_item = self.make_group_item(simulator_name)
@@ -527,7 +674,7 @@ class ComponentPalette(QWidget):
 
         compatible_subcomponents = [
             component
-            for component in self.components
+            for component in self.filtered_components()
             if int(component.is_subcomp or 0)
                and (component.iface or "").strip() in required_interfaces
         ]
@@ -609,7 +756,7 @@ class ComponentPalette(QWidget):
 
         compatible_components = []
 
-        for component in self.components:
+        for component in self.filtered_components():
             if component.is_subcomp:
                 continue
 
