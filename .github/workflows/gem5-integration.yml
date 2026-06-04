@@ -2,39 +2,6 @@ name: gem5 Integration Tests
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 9 * * 1"
-  pull_request:
-    branches:
-      - develop
-    paths:
-      - "fuse/plugins/community/gem5/**"
-      - "fuse/core/persistence/**"
-      - "fuse/core/plugin_runtime/**"
-      - "fuse/core/ui/**"
-      - "fuse/core/model/**"
-      - "fuse/app/**"
-      - "fuse/core/toolchains/**"
-      - "fuse/plugin_api/**"
-      - "fuse/requirements*.txt"
-      - ".github/workflows/gem5-integration.yml"
-      - "docker/gem5-ci/**"
-  push:
-    branches:
-      - main
-      - develop
-    paths:
-      - "fuse/plugins/community/gem5/**"
-      - "fuse/core/persistence/**"
-      - "fuse/core/plugin_runtime/**"
-      - "fuse/core/ui/**"
-      - "fuse/core/model/**"
-      - "fuse/app/**"
-      - "fuse/core/toolchains/**"
-      - "fuse/plugin_api/**"
-      - "fuse/requirements*.txt"
-      - ".github/workflows/gem5-integration.yml"
-      - "docker/gem5-ci/**"
 
 permissions:
   contents: read
