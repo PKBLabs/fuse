@@ -147,3 +147,24 @@ The SST export documentation now defines the expected JSON contract, validation 
 | Unsupported SST features captured | `docs/plugins/sst/sst-json-export-guide.md` |
 | Golden-style export tests | `fuse/plugins/community/sst/tests/test_sst_export_json.py` |
 | Live SST acceptance tests | `fuse/plugins/community/sst/tests/test_sst_live_integration.py` |
+
+## v0.7.0 SST plugin backend conformance coverage
+
+The v0.7.0 SST external-validation tests are backend-only and live entirely inside the SST plugin. They are intended for developer, CI, and release validation rather than normal user workflows.
+
+| Requirement | Coverage |
+|---|---|
+| SST-specific acceptance logic remains plugin-owned | `fuse/plugins/community/sst/external_validation/`, `fuse/plugins/community/sst/tests/test_sst_external_validation.py` |
+| External validation is skipped by default | `FUSE_ENABLE_SST_EXT_TESTS` gate in the SST plugin runner |
+| Fixture metadata is validated | `SSTExternalValidationMetadata.validation_errors()` tests |
+| JSON syntax is validated | `python -m json.tool` stage in generated fixture acceptance tests |
+| SST JSON export-readiness is checked before export | generated fixture acceptance tests call SST export validation before writing JSON |
+| Expected top-level SST JSON sections are checked | generated fixture acceptance tests compare emitted sections to fixture expectations |
+| Real SST init can be run when explicitly enabled | `run_mode="init"`, `sst --run-mode=init`, and `sst_ext` tests |
+| Real SST runtime smoke checks can be run when explicitly enabled | `run_mode="run"`, runtime argument, stdout/stderr, and output-file checks |
+| SST element/component dependencies are checked before real execution | `sst-info` element and component availability checks |
+| SST version bounds can skip incompatible fixtures | min/max SST version checks in the runner |
+| Optional `sst-ext-tests` root is recognized without vendoring | `SST_EXT_TESTS_ROOT` validation helper |
+| Representative FUSE-generated fixtures exist | `minimal_two_component_link`, `explicit_latency_parameters`, `subcomponent_slot_assignment`, `simple_element_example_init` |
+
+Default release verification should continue to run dependency-light tests plus normal `sst_live` tests. The `sst_ext` suite is optional and should be enabled for SST-focused release candidates or CI environments that provide real SST/SST Elements installations.

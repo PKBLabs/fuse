@@ -15,6 +15,7 @@ This documentation is organized by audience and topic.
 
 ## Developer documentation
 
+- [v0.7.0 release notes draft](releases/v0.7.0.md)
 - [v0.6.0 release notes draft](releases/v0.6.0.md)
 - [Development guide](developer/development-guide.md)
 - [Codebase tour](developer/codebase-tour.md)
@@ -37,6 +38,7 @@ This documentation is organized by audience and topic.
 - [SST plugin](plugins/sst/sst-plugin.md)
 - [SST database schema](plugins/sst/sst-database-schema.md)
 - [SST import workflow](plugins/sst/sst-import-workflow.md)
+- [SST external validation harness](plugins/sst/sst-external-validation.md)
 - [gem5 plugin](plugins/gem5/gem5-plugin.md)
 
 ## Testing and CI

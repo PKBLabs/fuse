@@ -178,7 +178,7 @@ FUSE .fse project
 
 Export maps component instances and links into the SST JSON structure expected by SST's JSON configuration flow.
 
-## Live tests
+## Live and external validation tests
 
 Tests requiring real SST Core/SST Elements should be marked:
 
@@ -192,6 +192,14 @@ The GitHub Actions SST integration workflow runs these tests in prebuilt images:
 ghcr.io/pkblabs/fuse-sst-ci:sst-15.1.2
 ghcr.io/pkblabs/fuse-sst-ci:sst-16.0.0
 ```
+
+The SST plugin also owns a backend-only external validation harness for FUSE-generated SST JSON acceptance fixtures. These tests are marked:
+
+```python
+@pytest.mark.sst_ext
+```
+
+They are skipped by default unless explicitly enabled for release or CI validation. See [SST External Validation Harness](sst-external-validation.md).
 
 ## Limitations
 

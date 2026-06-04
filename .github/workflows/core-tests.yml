@@ -54,9 +54,9 @@ jobs:
 
       - name: Show pytest configuration
         run: |
-          python -m pytest --markers | grep -E "sst_live|gem5_live"
+          python -m pytest --markers | grep -E "sst_live|gem5_live|sst_ext"
           python -m pytest --trace-config -q 2>&1 | grep -E "rootdir|configfile" || true
 
       - name: Run fast test suite
         run: |
-          python -m pytest -q -m "not sst_live and not gem5_live"
+          python -m pytest -q -m "not sst_live and not gem5_live and not sst_ext"
