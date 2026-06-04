@@ -14,6 +14,9 @@ import sys
 
 import pytest
 
+from fuse.plugins.community.sst.external_validation.fixtures import (
+    generated_acceptance_fixtures,
+)
 from fuse.plugins.community.sst.external_validation.metadata import (
     SSTExternalValidationMetadata,
 )
@@ -24,6 +27,7 @@ from fuse.plugins.community.sst.external_validation.runner import (
     external_validation_enabled,
     parse_version_tuple,
     run_command,
+    run_generated_fixture_acceptance,
     run_generated_fixture_suite,
     run_json_syntax_check,
     run_metadata_validation_check,
@@ -165,8 +169,7 @@ def test_external_acceptance_runs_json_and_sst_init_when_enabled(tmp_path, monke
     assert calls[1][0:2] == ["/usr/bin/sst", "--run-mode=init"]
 
 
-@pytest.mark.sst_ext
-def test_sst_external_acceptance_marker_is_backend_only(tmp_path):
+def test_sst_external_acceptance_skips_when_backend_gate_is_disabled(tmp_path):
     json_path = tmp_path / "model.sst.json"
     json_path.write_text("{}", encoding="utf-8")
     metadata = SSTExternalValidationMetadata(name="marker_smoke")
@@ -178,6 +181,41 @@ def test_sst_external_acceptance_marker_is_backend_only(tmp_path):
     )
 
     assert results[0].skipped is True
+
+
+def format_fixture_acceptance_failure(acceptance):
+    lines = [
+        f"SST external validation fixture failed: {acceptance.metadata.name}",
+        f"output_path: {acceptance.output_path}",
+        f"export_can_export: {acceptance.export_can_export}",
+        (
+            "expected_top_level_sections_present: "
+            f"{acceptance.expected_top_level_sections_present}"
+        ),
+    ]
+    for result in acceptance.results:
+        status = "SKIP" if result.skipped else "PASS" if result.ok else "FAIL"
+        lines.append(f"{status} {result.stage}: {result.message}")
+        if result.command:
+            lines.append("  command: " + " ".join(result.command))
+        if result.stdout:
+            lines.append("  stdout: " + result.stdout.strip())
+        if result.stderr:
+            lines.append("  stderr: " + result.stderr.strip())
+
+    return "\n".join(lines)
+
+
+@pytest.mark.sst_ext
+@pytest.mark.parametrize(
+    "fixture",
+    generated_acceptance_fixtures(),
+    ids=lambda fixture: fixture.metadata.name,
+)
+def test_generated_acceptance_fixture_passes_backend_validation(fixture, tmp_path):
+    acceptance = run_generated_fixture_acceptance(fixture, tmp_path)
+
+    assert acceptance.ok, format_fixture_acceptance_failure(acceptance)
 
 
 def test_minimal_two_component_fixture_exports_expected_contract(tmp_path):
