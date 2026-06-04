@@ -9,23 +9,33 @@
 # version.
 """Backend-only SST external validation helpers owned by the SST plugin."""
 
+from fuse.plugins.community.sst.external_validation.fixtures import (
+    SSTExternalValidationFixture,
+    minimal_two_component_link_fixture,
+)
 from fuse.plugins.community.sst.external_validation.metadata import (
     SSTExternalValidationMetadata,
 )
 from fuse.plugins.community.sst.external_validation.runner import (
     SSTExternalValidationResult,
+    SSTFixtureAcceptanceResult,
     external_validation_enabled,
     find_executable,
+    run_generated_fixture_acceptance,
     run_json_syntax_check,
     run_sst_external_acceptance,
     run_sst_init_check,
 )
 
 __all__ = [
+    "SSTExternalValidationFixture",
     "SSTExternalValidationMetadata",
     "SSTExternalValidationResult",
+    "SSTFixtureAcceptanceResult",
     "external_validation_enabled",
     "find_executable",
+    "minimal_two_component_link_fixture",
+    "run_generated_fixture_acceptance",
     "run_json_syntax_check",
     "run_sst_external_acceptance",
     "run_sst_init_check",

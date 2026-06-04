@@ -161,3 +161,144 @@ def test_sst_external_acceptance_marker_is_backend_only(tmp_path):
     )
 
     assert results[0].skipped is True
+
+
+def test_minimal_two_component_fixture_exports_expected_contract(tmp_path):
+    import json
+
+    from fuse.plugins.community.sst.external_validation.fixtures import (
+        minimal_two_component_link_fixture,
+    )
+    from fuse.plugins.community.sst.external_validation.runner import (
+        run_generated_fixture_acceptance,
+    )
+
+    fixture = minimal_two_component_link_fixture()
+    acceptance = run_generated_fixture_acceptance(
+        fixture,
+        tmp_path,
+        environ={},
+    )
+
+    assert acceptance.ok is True
+    assert acceptance.output_path.exists()
+    assert acceptance.export_can_export is True
+    assert acceptance.expected_top_level_sections_present is True
+    assert [result.stage for result in acceptance.results] == [
+        "export_validation",
+        "export_json",
+        "json_syntax",
+        "sst_json_contract",
+        "sst_runtime",
+    ]
+    assert acceptance.results[-1].skipped is True
+
+    data = json.loads(acceptance.output_path.read_text(encoding="utf-8"))
+
+    assert list(data.keys()) == list(fixture.expected_top_level_sections)
+    assert [component["name"] for component in data["components"]] == [
+        "source0",
+        "target0",
+    ]
+    assert [link["name"] for link in data["links"]] == ["link_source_target"]
+    assert data["components"][0]["params"] == {"clock": "1GHz"}
+    assert data["links"][0]["left"] == {
+        "component": "source0",
+        "port": "out",
+        "latency": "1ns",
+    }
+    assert data["links"][0]["right"] == {
+        "component": "target0",
+        "port": "in",
+        "latency": "1ns",
+    }
+
+
+def test_generated_fixture_acceptance_can_run_sst_init_when_enabled(tmp_path, monkeypatch):
+    import subprocess
+    from dataclasses import replace
+
+    from fuse.plugins.community.sst.external_validation.fixtures import (
+        minimal_two_component_link_fixture,
+    )
+    from fuse.plugins.community.sst.external_validation.runner import (
+        ENABLE_EXTERNAL_VALIDATION_ENV,
+        run_generated_fixture_acceptance,
+    )
+
+    calls = []
+
+    def fake_run(command, text, stdout, stderr, timeout, check):
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    fixture = minimal_two_component_link_fixture()
+    fixture = replace(
+        fixture,
+        metadata=replace(fixture.metadata, run_mode="init"),
+    )
+
+    acceptance = run_generated_fixture_acceptance(
+        fixture,
+        tmp_path,
+        environ={ENABLE_EXTERNAL_VALIDATION_ENV: "1"},
+        sst_binary="/usr/bin/sst",
+    )
+
+    assert acceptance.ok is True
+    assert [result.stage for result in acceptance.results] == [
+        "export_validation",
+        "export_json",
+        "json_syntax",
+        "sst_json_contract",
+        "sst_init",
+    ]
+    assert calls[0][1:3] == ["-m", "json.tool"]
+    assert calls[1][0:2] == ["/usr/bin/sst", "--run-mode=init"]
+
+
+def test_generated_fixture_acceptance_reports_export_validation_errors(tmp_path):
+    from fuse.plugins.community.sst.external_validation.fixtures import (
+        SSTExternalValidationFixture,
+        SSTExternalValidationScene,
+        make_fixture_component,
+        make_fixture_node,
+    )
+    from fuse.plugins.community.sst.external_validation.metadata import (
+        SSTExternalValidationMetadata,
+    )
+    from fuse.plugins.community.sst.external_validation.runner import (
+        run_generated_fixture_acceptance,
+    )
+
+    component = make_fixture_component(
+        component_id="broken",
+        element="fuseExternalValidation",
+        name="Broken",
+    )
+    first = make_fixture_node(
+        node_id=1,
+        instance_name="duplicate",
+        component=component,
+        ports=("out",),
+    )
+    second = make_fixture_node(
+        node_id=2,
+        instance_name="duplicate",
+        component=component,
+        ports=("in",),
+    )
+    fixture = SSTExternalValidationFixture(
+        metadata=SSTExternalValidationMetadata(name="broken_duplicate_names"),
+        scene=SSTExternalValidationScene([first, second]),
+    )
+
+    acceptance = run_generated_fixture_acceptance(fixture, tmp_path, environ={})
+
+    assert acceptance.ok is False
+    assert acceptance.output_path.exists() is False
+    assert acceptance.export_can_export is False
+    assert acceptance.failed_results[0].stage == "export_validation"
+    assert "unique" in acceptance.failed_results[0].message

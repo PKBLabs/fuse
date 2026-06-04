@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import json
 import os
 from pathlib import Path
 import shutil
@@ -23,6 +24,37 @@ from fuse.plugins.community.sst.external_validation.metadata import (
 
 
 ENABLE_EXTERNAL_VALIDATION_ENV = "FUSE_ENABLE_SST_EXT_TESTS"
+
+
+@dataclass(frozen=True)
+class SSTFixtureAcceptanceResult:
+    """Structured backend acceptance result for one generated SST fixture."""
+
+    metadata: SSTExternalValidationMetadata
+    output_path: Path
+    export_can_export: bool
+    expected_top_level_sections_present: bool
+    results: tuple[SSTExternalValidationResult, ...]
+
+    @property
+    def ok(self) -> bool:
+        return (
+            self.export_can_export
+            and self.expected_top_level_sections_present
+            and all(result.ok or result.skipped for result in self.results)
+        )
+
+    @property
+    def failed_results(self) -> tuple[SSTExternalValidationResult, ...]:
+        return tuple(result for result in self.results if result.failed)
+
+
+def successful_stage_result(stage: str, message: str) -> SSTExternalValidationResult:
+    return SSTExternalValidationResult(ok=True, stage=stage, message=message)
+
+
+def failed_stage_result(stage: str, message: str) -> SSTExternalValidationResult:
+    return SSTExternalValidationResult(ok=False, stage=stage, message=message)
 
 
 @dataclass(frozen=True)
@@ -217,3 +249,130 @@ def run_sst_external_acceptance(
         )
 
     return results
+
+
+def run_generated_fixture_acceptance(
+    fixture,
+    output_dir: str | Path,
+    *,
+    environ: dict[str, str] | None = None,
+    sst_binary: str | None = None,
+) -> SSTFixtureAcceptanceResult:
+    """Export and validate one SST plugin-owned generated acceptance fixture.
+
+    Phase 2 always runs the FUSE export-readiness check, real SST JSON export,
+    and JSON syntax validation. Real SST init is still gated by
+    FUSE_ENABLE_SST_EXT_TESTS so normal unit tests remain lightweight.
+    """
+    from fuse.plugins.community.sst.export_json import (
+        export_sst_json,
+        validate_sst_json_export,
+    )
+
+    output_directory = Path(output_dir)
+    output_directory.mkdir(parents=True, exist_ok=True)
+    output_path = output_directory / fixture.output_filename
+
+    results: list[SSTExternalValidationResult] = []
+    report = validate_sst_json_export(fixture.scene)
+
+    if report.can_export:
+        results.append(
+            successful_stage_result(
+                "export_validation",
+                "SST export validation completed successfully.",
+            )
+        )
+    else:
+        messages = "; ".join(str(getattr(issue, "message", issue)) for issue in report.errors)
+        results.append(
+            failed_stage_result(
+                "export_validation",
+                f"SST export validation failed: {messages}",
+            )
+        )
+        return SSTFixtureAcceptanceResult(
+            metadata=fixture.metadata,
+            output_path=output_path,
+            export_can_export=False,
+            expected_top_level_sections_present=False,
+            results=tuple(results),
+        )
+
+    export_sst_json(fixture.scene, output_path)
+    results.append(
+        successful_stage_result(
+            "export_json",
+            f"Exported generated SST fixture to {output_path}.",
+        )
+    )
+
+    json_result = run_json_syntax_check(
+        output_path,
+        timeout_seconds=min(max(fixture.metadata.timeout_seconds, 1), 30),
+    )
+    results.append(json_result)
+
+    expected_sections_present = False
+    if json_result.ok:
+        data = json.loads(output_path.read_text(encoding="utf-8"))
+        expected_sections = tuple(getattr(fixture, "expected_top_level_sections", ()) or ())
+        expected_sections_present = all(section in data for section in expected_sections)
+        if expected_sections_present:
+            results.append(
+                successful_stage_result(
+                    "sst_json_contract",
+                    "Exported SST JSON contains expected top-level sections.",
+                )
+            )
+        else:
+            missing = [section for section in expected_sections if section not in data]
+            results.append(
+                failed_stage_result(
+                    "sst_json_contract",
+                    f"Exported SST JSON is missing top-level section(s): {', '.join(missing)}.",
+                )
+            )
+
+    if fixture.metadata.run_mode == "init":
+        if external_validation_enabled(environ):
+            results.append(
+                run_sst_init_check(
+                    output_path,
+                    sst_binary=sst_binary,
+                    timeout_seconds=fixture.metadata.timeout_seconds,
+                    expected_return_code=fixture.metadata.expected_return_code,
+                )
+            )
+        else:
+            results.append(
+                SSTExternalValidationResult(
+                    ok=False,
+                    skipped=True,
+                    stage="sst_init",
+                    message=(
+                        f"Set {ENABLE_EXTERNAL_VALIDATION_ENV}=1 to run real SST "
+                        "init checks for generated fixtures."
+                    ),
+                )
+            )
+    else:
+        results.append(
+            SSTExternalValidationResult(
+                ok=False,
+                skipped=True,
+                stage="sst_runtime",
+                message=(
+                    f"Fixture run mode '{fixture.metadata.run_mode}' is validated "
+                    "through export and JSON syntax only in this phase."
+                ),
+            )
+        )
+
+    return SSTFixtureAcceptanceResult(
+        metadata=fixture.metadata,
+        output_path=output_path,
+        export_can_export=report.can_export,
+        expected_top_level_sections_present=expected_sections_present,
+        results=tuple(results),
+    )
