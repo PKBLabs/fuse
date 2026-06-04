@@ -419,7 +419,7 @@ def test_simple_element_example_init_fixture_skips_real_sst_when_disabled(tmp_pa
 
 
 
-def test_simple_element_example_init_fixture_exports_required_parameters(tmp_path):
+def test_simple_element_example_init_fixture_exports_init_safe_component(tmp_path):
     import json
 
     from fuse.plugins.community.sst.external_validation.fixtures import (
@@ -440,9 +440,8 @@ def test_simple_element_example_init_fixture_exports_required_parameters(tmp_pat
     data = json.loads(acceptance.output_path.read_text(encoding="utf-8"))
     assert data["components"] == [
         {
-            "name": "example0",
-            "type": "simpleElementExample.example0",
-            "params": {"eventsToSend": "0"},
+            "name": "basic_clocks0",
+            "type": "simpleElementExample.basicClocks",
         }
     ]
 
@@ -461,7 +460,7 @@ def test_simple_element_example_init_fixture_checks_elements_before_sst_init(
 
     def fake_run(command, text, stdout, stderr, timeout, check):
         calls.append(command)
-        return subprocess.CompletedProcess(command, 0, stdout="Component: example0", stderr="")
+        return subprocess.CompletedProcess(command, 0, stdout="Component: basicClocks", stderr="")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
     monkeypatch.setattr(
