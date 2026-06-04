@@ -25,7 +25,6 @@ from fuse.plugins.community.sst.external_validation.metadata import (
 
 SST_JSON_TOP_LEVEL_SECTIONS = (
     "program_options",
-    "shared_params",
     "statistics_options",
     "components",
     "statistics_group",
@@ -183,19 +182,21 @@ def minimal_two_component_link_fixture() -> SSTExternalValidationFixture:
 def simple_element_example_init_fixture() -> SSTExternalValidationFixture:
     """Build a real-SST init fixture using SST Elements' simple example library.
 
-    This fixture is only exercised against a real SST installation when the
-    backend external validation gate is explicitly enabled and sst-info can
-    see the simpleElementExample element library.
+    This fixture uses ``simpleElementExample.basicClocks`` because it has no
+    required links and can initialize under real SST with default parameters.
+    It is only exercised when the backend external validation gate is
+    explicitly enabled and sst-info can see the simpleElementExample element
+    library.
     """
     component = make_fixture_component(
-        component_id="simple-example0",
+        component_id="simple-basic-clocks",
         element="simpleElementExample",
-        name="example0",
+        name="basicClocks",
     )
 
     node = make_fixture_node(
         node_id=1,
-        instance_name="example0",
+        instance_name="basic_clocks0",
         component=component,
         ports=(),
         parameters={},
@@ -205,10 +206,10 @@ def simple_element_example_init_fixture() -> SSTExternalValidationFixture:
         name="simple_element_example_init",
         description=(
             "FUSE-generated SST init fixture for the SST Elements "
-            "simpleElementExample.example0 component."
+            "simpleElementExample.basicClocks component."
         ),
         required_elements=("simpleElementExample",),
-        required_components=("example0",),
+        required_components=("basicClocks",),
         run_mode="init",
         timeout_seconds=60,
         expected_return_code=0,
@@ -217,7 +218,7 @@ def simple_element_example_init_fixture() -> SSTExternalValidationFixture:
     return SSTExternalValidationFixture(
         metadata=metadata,
         scene=SSTExternalValidationScene([node], []),
-        expected_component_names=("example0",),
+        expected_component_names=("basic_clocks0",),
         expected_link_names=(),
     )
 

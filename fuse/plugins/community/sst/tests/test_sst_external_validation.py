@@ -418,6 +418,33 @@ def test_simple_element_example_init_fixture_skips_real_sst_when_disabled(tmp_pa
     assert acceptance.results[-1].skipped is True
 
 
+
+def test_simple_element_example_init_fixture_exports_init_safe_component(tmp_path):
+    import json
+
+    from fuse.plugins.community.sst.external_validation.fixtures import (
+        simple_element_example_init_fixture,
+    )
+    from fuse.plugins.community.sst.external_validation.runner import (
+        run_generated_fixture_acceptance,
+    )
+
+    fixture = simple_element_example_init_fixture()
+    acceptance = run_generated_fixture_acceptance(
+        fixture,
+        tmp_path,
+        environ={},
+    )
+
+    assert acceptance.ok is True
+    data = json.loads(acceptance.output_path.read_text(encoding="utf-8"))
+    assert data["components"] == [
+        {
+            "name": "basic_clocks0",
+            "type": "simpleElementExample.basicClocks",
+        }
+    ]
+
 def test_simple_element_example_init_fixture_checks_elements_before_sst_init(
     tmp_path, monkeypatch
 ):
@@ -433,7 +460,7 @@ def test_simple_element_example_init_fixture_checks_elements_before_sst_init(
 
     def fake_run(command, text, stdout, stderr, timeout, check):
         calls.append(command)
-        return subprocess.CompletedProcess(command, 0, stdout="Component: example0", stderr="")
+        return subprocess.CompletedProcess(command, 0, stdout="Component: basicClocks", stderr="")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
     monkeypatch.setattr(

@@ -1,18 +1,21 @@
-name: Core Tests
+name: Develop CI
 
 on:
+  workflow_dispatch:
   pull_request:
+    branches:
+      - develop
   push:
     branches:
-      - main
       - develop
 
 permissions:
   contents: read
+  packages: read
 
 jobs:
   core-tests:
-    name: Core and dependency-light tests
+    name: Tier 1 / Core and dependency-light tests
     runs-on: ubuntu-24.04
 
     defaults:
@@ -60,3 +63,183 @@ jobs:
       - name: Run fast test suite
         run: |
           python -m pytest -q -m "not sst_live and not gem5_live and not sst_ext"
+
+  gem5-live:
+    name: Tier 2 / gem5 ${{ matrix.gem5.version }} live integration tests
+    needs: core-tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    strategy:
+      fail-fast: false
+      matrix:
+        gem5:
+          - version: "25.1.0.1"
+            image: "ghcr.io/pkblabs/fuse-gem5-ci:gem5-v25.1.0.1"
+          - version: "24.1.0.3"
+            image: "ghcr.io/pkblabs/fuse-gem5-ci:gem5-v24.1.0.3"
+
+    container:
+      image: ${{ matrix.gem5.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    defaults:
+      run:
+        shell: bash
+        working-directory: fuse
+
+    env:
+      QT_QPA_PLATFORM: offscreen
+      FUSE_SPLASH_MS: "0"
+      FUSE_TEST_AUTOCLOSE_MS: "100"
+      FUSE_GEM5_VERSION: ${{ matrix.gem5.version }}
+      GEM5_ROOT: /opt/gem5
+      GEM5_BINARY: /opt/gem5/build/X86/gem5.opt
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Verify gem5 installation
+        run: |
+          echo "$GEM5_ROOT"
+          echo "$GEM5_BINARY"
+          test -x "$GEM5_BINARY"
+          ldd "$GEM5_BINARY" | tee /tmp/gem5-ldd.txt
+          if grep -q "not found" /tmp/gem5-ldd.txt; then
+            echo "Missing gem5 runtime shared libraries:"
+            grep "not found" /tmp/gem5-ldd.txt
+            exit 1
+          fi
+          "$GEM5_BINARY" --help > /tmp/gem5-help.txt 2>&1
+          head -40 /tmp/gem5-help.txt
+
+      - name: Create Python virtual environment
+        run: |
+          rm -rf /tmp/fuse-venv
+          python3 -m venv /tmp/fuse-venv
+          /tmp/fuse-venv/bin/python -m pip install --upgrade pip
+          /tmp/fuse-venv/bin/python -m pip install -r requirements-dev.txt
+
+      - name: Run live gem5 tests
+        run: |
+          /tmp/fuse-venv/bin/python -m pytest -q -m "gem5_live"
+
+  sst-live:
+    name: Tier 2 / SST ${{ matrix.sst.version }} live integration tests
+    needs: core-tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    strategy:
+      fail-fast: false
+      matrix:
+        sst:
+          - version: "15.1.2"
+            image: "ghcr.io/pkblabs/fuse-sst-ci:sst-15.1.2"
+          - version: "16.0.0"
+            image: "ghcr.io/pkblabs/fuse-sst-ci:sst-16.0.0"
+
+    container:
+      image: ${{ matrix.sst.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    defaults:
+      run:
+        shell: bash
+        working-directory: fuse
+
+    env:
+      QT_QPA_PLATFORM: offscreen
+      FUSE_SPLASH_MS: "0"
+      FUSE_TEST_AUTOCLOSE_MS: "100"
+      FUSE_SST_VERSION: ${{ matrix.sst.version }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Verify SST installation
+        run: |
+          which sst
+          which sst-info
+          sst --version || true
+          sst-info --version || true
+          sst-info > /tmp/sst-info.txt
+          head -100 /tmp/sst-info.txt
+
+      - name: Create Python virtual environment
+        run: |
+          rm -rf /tmp/fuse-venv
+          python3 -m venv /tmp/fuse-venv
+          /tmp/fuse-venv/bin/python -m pip install --upgrade pip
+          /tmp/fuse-venv/bin/python -m pip install -r requirements-dev.txt
+
+      - name: Run live SST tests
+        run: |
+          /tmp/fuse-venv/bin/python -m pytest -q -m "sst_live"
+
+  sst-external-validation:
+    name: Tier 2 / SST ${{ matrix.sst.version }} external validation tests
+    needs: core-tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    strategy:
+      fail-fast: false
+      matrix:
+        sst:
+          - version: "15.1.2"
+            image: "ghcr.io/pkblabs/fuse-sst-ext-ci:sst-15.1.2"
+          - version: "16.0.0"
+            image: "ghcr.io/pkblabs/fuse-sst-ext-ci:sst-16.0.0"
+
+    container:
+      image: ${{ matrix.sst.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    defaults:
+      run:
+        shell: bash
+        working-directory: fuse
+
+    env:
+      QT_QPA_PLATFORM: offscreen
+      FUSE_SPLASH_MS: "0"
+      FUSE_TEST_AUTOCLOSE_MS: "100"
+      FUSE_SST_VERSION: ${{ matrix.sst.version }}
+      FUSE_ENABLE_SST_EXT_TESTS: "1"
+      SST_EXT_TESTS_ROOT: /opt/sst-ext-tests
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Verify SST external validation image
+        run: |
+          which sst
+          which sst-info
+          sst --version || true
+          sst-info --version || true
+          test -d "$SST_EXT_TESTS_ROOT"
+          test -f /opt/sst-ext-tests-revision.txt
+          echo "sst-ext-tests revision: $(cat /opt/sst-ext-tests-revision.txt)"
+          sst-info simpleElementExample > /tmp/simpleElementExample-info.txt
+          head -80 /tmp/simpleElementExample-info.txt
+
+      - name: Create Python virtual environment
+        run: |
+          rm -rf /tmp/fuse-venv
+          python3 -m venv /tmp/fuse-venv
+          /tmp/fuse-venv/bin/python -m pip install --upgrade pip
+          /tmp/fuse-venv/bin/python -m pip install -r requirements-dev.txt
+
+      - name: Run SST external validation tests
+        run: |
+          /tmp/fuse-venv/bin/python -m pytest -q -m "sst_ext"

@@ -2,39 +2,6 @@ name: SST External Validation Tests
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 10 * * 1"
-  pull_request:
-    branches:
-      - develop
-    paths:
-      - "fuse/plugins/community/sst/**"
-      - "fuse/core/persistence/**"
-      - "fuse/core/model/**"
-      - "fuse/plugin_api/**"
-      - "fuse/pytest.ini"
-      - "fuse/requirements*.txt"
-      - "docs/plugins/sst/**"
-      - "docs/testing/test-matrix.md"
-      - ".github/workflows/sst-external-validation.yml"
-      - ".github/workflows/build-sst-ext-ci-image.yml"
-      - "docker/sst-ext-ci/**"
-  push:
-    branches:
-      - main
-      - develop
-    paths:
-      - "fuse/plugins/community/sst/**"
-      - "fuse/core/persistence/**"
-      - "fuse/core/model/**"
-      - "fuse/plugin_api/**"
-      - "fuse/pytest.ini"
-      - "fuse/requirements*.txt"
-      - "docs/plugins/sst/**"
-      - "docs/testing/test-matrix.md"
-      - ".github/workflows/sst-external-validation.yml"
-      - ".github/workflows/build-sst-ext-ci-image.yml"
-      - "docker/sst-ext-ci/**"
 
 permissions:
   contents: read

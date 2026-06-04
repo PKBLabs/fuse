@@ -2,39 +2,6 @@ name: SST Integration Tests
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 8 * * 1"
-  pull_request:
-    branches:
-      - develop
-    paths:
-      - "fuse/plugins/community/sst/**"
-      - "fuse/core/persistence/**"
-      - "fuse/core/plugin_runtime/**"
-      - "fuse/core/ui/**"
-      - "fuse/core/model/**"
-      - "fuse/app/**"
-      - "fuse/core/toolchains/**"
-      - "fuse/plugin_api/**"
-      - "fuse/requirements*.txt"
-      - ".github/workflows/sst-integration.yml"
-      - "docker/sst-ci/**"
-  push:
-    branches:
-      - main
-      - develop
-    paths:
-      - "fuse/plugins/community/sst/**"
-      - "fuse/core/persistence/**"
-      - "fuse/core/plugin_runtime/**"
-      - "fuse/core/ui/**"
-      - "fuse/core/model/**"
-      - "fuse/app/**"
-      - "fuse/core/toolchains/**"
-      - "fuse/plugin_api/**"
-      - "fuse/requirements*.txt"
-      - ".github/workflows/sst-integration.yml"
-      - "docker/sst-ci/**"
 
 permissions:
   contents: read
