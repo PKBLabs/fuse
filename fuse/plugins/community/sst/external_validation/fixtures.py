@@ -13,7 +13,11 @@ from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Any
 
-from fuse.core.model.models import ComponentDefinition, ModelLink
+from fuse.core.model.models import (
+    ComponentDefinition,
+    ModelLink,
+    ModelSubcompAttachment,
+)
 from fuse.plugins.community.sst.external_validation.metadata import (
     SSTExternalValidationMetadata,
 )
@@ -53,10 +57,15 @@ class SSTExternalValidationFixture:
 class SSTExternalValidationScene:
     """Minimal scene protocol needed by the SST JSON exporter."""
 
-    def __init__(self, nodes: list[object], links: list[ModelLink] | None = None):
+    def __init__(
+        self,
+        nodes: list[object],
+        links: list[ModelLink] | None = None,
+        attachments: list[ModelSubcompAttachment] | None = None,
+    ):
         self.nodes = list(nodes)
         self.links = list(links or [])
-        self.subcomp_attachments: list[object] = []
+        self.subcomp_attachments = list(attachments or [])
 
     def component_items(self) -> list[object]:
         return list(self.nodes)
@@ -69,6 +78,8 @@ def make_fixture_component(
     name: str,
     target_id: str = "1",
     framework_version: str = "15.0.0",
+    is_subcomp: int = 0,
+    iface: str = "",
 ) -> ComponentDefinition:
     return ComponentDefinition(
         plugin_id="sst",
@@ -78,7 +89,9 @@ def make_fixture_component(
         component_id=component_id,
         element=element,
         name=name,
+        is_subcomp=is_subcomp,
         category="External Validation",
+        iface=iface,
         display_name_override=f"{element}.{name}",
     )
 
@@ -195,6 +208,7 @@ def simple_element_example_init_fixture() -> SSTExternalValidationFixture:
             "simpleElementExample.example0 component."
         ),
         required_elements=("simpleElementExample",),
+        required_components=("example0",),
         run_mode="init",
         timeout_seconds=60,
         expected_return_code=0,
@@ -208,9 +222,142 @@ def simple_element_example_init_fixture() -> SSTExternalValidationFixture:
     )
 
 
+def explicit_latency_parameters_fixture() -> SSTExternalValidationFixture:
+    """Build a JSON fixture covering typed params and asymmetric latencies."""
+    cpu_component = make_fixture_component(
+        component_id="external-param-source",
+        element="fuseExternalValidation",
+        name="ParamSource",
+    )
+    cache_component = make_fixture_component(
+        component_id="external-param-target",
+        element="fuseExternalValidation",
+        name="ParamTarget",
+    )
+
+    cpu = make_fixture_node(
+        node_id=10,
+        instance_name="param_source0",
+        component=cpu_component,
+        ports=("cache",),
+        parameters={
+            "clock": "2GHz",
+            "enabled": True,
+            "max_reqs": 16,
+            "empty_parameter": "",
+        },
+    )
+    cache = make_fixture_node(
+        node_id=11,
+        instance_name="param_target0",
+        component=cache_component,
+        ports=("cpu",),
+        parameters={"clock": "1GHz"},
+    )
+
+    link = ModelLink(
+        link_id=10,
+        name="link_param_source_target",
+        source_node_id=cpu.node_id,
+        source_component_name=cpu.instance_name,
+        source_port="cache",
+        target_node_id=cache.node_id,
+        target_component_name=cache.instance_name,
+        target_port="cpu",
+        source_latency="250ps",
+        target_latency="2ns",
+        plugin_id="sst",
+    )
+
+    metadata = SSTExternalValidationMetadata(
+        name="explicit_latency_parameters",
+        description=(
+            "Synthetic FUSE-generated SST JSON acceptance fixture covering "
+            "typed component parameters, empty parameter omission, and "
+            "asymmetric endpoint latencies."
+        ),
+        run_mode="json",
+        timeout_seconds=60,
+        expected_return_code=0,
+        external_suite_tags=("json", "parameters", "latency"),
+    )
+
+    return SSTExternalValidationFixture(
+        metadata=metadata,
+        scene=SSTExternalValidationScene([cpu, cache], [link]),
+        expected_component_names=("param_source0", "param_target0"),
+        expected_link_names=("link_param_source_target",),
+    )
+
+
+def subcomponent_slot_assignment_fixture() -> SSTExternalValidationFixture:
+    """Build a JSON fixture covering native SST SubComponent nesting."""
+    parent_component = make_fixture_component(
+        component_id="external-parent",
+        element="fuseExternalValidation",
+        name="Parent",
+    )
+    child_component = make_fixture_component(
+        component_id="external-child-subcomponent",
+        element="fuseExternalValidation",
+        name="ChildSubComponent",
+        is_subcomp=1,
+        iface="FUSE::ExternalValidation::Slot",
+    )
+
+    parent = make_fixture_node(
+        node_id=20,
+        instance_name="parent0",
+        component=parent_component,
+        ports=(),
+        parameters={"clock": "1GHz"},
+    )
+    child = make_fixture_node(
+        node_id=21,
+        instance_name="slot_child0",
+        component=child_component,
+        ports=(),
+        parameters={"mode": "test"},
+    )
+
+    attachment = ModelSubcompAttachment(
+        attachment_id=20,
+        name="attach_parent0_slot_child0",
+        parent_node_id=parent.node_id,
+        parent_component_name=parent.instance_name,
+        slot_name="backend_slot",
+        child_node_id=child.node_id,
+        child_component_name=child.instance_name,
+        required_interface="FUSE::ExternalValidation::Slot",
+        provided_interface="FUSE::ExternalValidation::Slot",
+        plugin_id="sst",
+    )
+
+    metadata = SSTExternalValidationMetadata(
+        name="subcomponent_slot_assignment",
+        description=(
+            "Synthetic FUSE-generated SST JSON acceptance fixture covering "
+            "native SST SubComponent nesting and slot-name export."
+        ),
+        run_mode="json",
+        timeout_seconds=60,
+        expected_return_code=0,
+        external_suite_tags=("json", "subcomponent", "slot"),
+    )
+
+    return SSTExternalValidationFixture(
+        metadata=metadata,
+        scene=SSTExternalValidationScene([parent, child], attachments=[attachment]),
+        expected_component_names=("parent0",),
+        expected_link_names=(),
+    )
+
+
 def generated_acceptance_fixtures() -> tuple[SSTExternalValidationFixture, ...]:
     """Return v0.7.0 backend acceptance fixtures owned by the SST plugin."""
     return (
         minimal_two_component_link_fixture(),
+        explicit_latency_parameters_fixture(),
+        subcomponent_slot_assignment_fixture(),
         simple_element_example_init_fixture(),
     )

@@ -19,13 +19,21 @@ from fuse.plugins.community.sst.external_validation.metadata import (
 )
 from fuse.plugins.community.sst.external_validation.runner import (
     ENABLE_EXTERNAL_VALIDATION_ENV,
+    SST_EXT_TESTS_ROOT_ENV,
+    compare_versions,
     external_validation_enabled,
+    parse_version_tuple,
     run_command,
+    run_generated_fixture_suite,
     run_json_syntax_check,
+    run_metadata_validation_check,
+    run_sst_component_availability_check,
     run_sst_element_availability_check,
     run_sst_external_acceptance,
     run_sst_init_check,
     run_sst_runtime_check,
+    run_sst_version_check,
+    validate_external_suite_root,
 )
 
 
@@ -36,6 +44,7 @@ def test_sst_external_validation_metadata_round_trips():
             "description": "Minimal FUSE-generated SST link model",
             "min_sst_version": "15.0.0",
             "required_elements": ["simpleElementExample"],
+            "required_components": ["example0"],
             "run_mode": "init",
             "timeout_seconds": 12,
             "expected_return_code": 0,
@@ -44,7 +53,9 @@ def test_sst_external_validation_metadata_round_trips():
 
     assert metadata.name == "minimal_link_model"
     assert metadata.required_elements == ("simpleElementExample",)
+    assert metadata.required_components == ("example0",)
     assert metadata.to_mapping()["timeout_seconds"] == 12
+    assert metadata.validation_errors() == ()
 
 
 def test_sst_external_validation_enabled_reads_explicit_environment_flag():
@@ -144,7 +155,11 @@ def test_external_acceptance_runs_json_and_sst_init_when_enabled(tmp_path, monke
         sst_binary="/usr/bin/sst",
     )
 
-    assert [result.stage for result in results] == ["json_syntax", "sst_init"]
+    assert [result.stage for result in results] == [
+        "fixture_metadata",
+        "json_syntax",
+        "sst_init",
+    ]
     assert all(result.ok for result in results)
     assert calls[0][1:3] == ["-m", "json.tool"]
     assert calls[1][0:2] == ["/usr/bin/sst", "--run-mode=init"]
@@ -187,6 +202,7 @@ def test_minimal_two_component_fixture_exports_expected_contract(tmp_path):
     assert acceptance.export_can_export is True
     assert acceptance.expected_top_level_sections_present is True
     assert [result.stage for result in acceptance.results] == [
+        "fixture_metadata",
         "export_validation",
         "export_json",
         "json_syntax",
@@ -251,6 +267,7 @@ def test_generated_fixture_acceptance_can_run_sst_init_when_enabled(tmp_path, mo
 
     assert acceptance.ok is True
     assert [result.stage for result in acceptance.results] == [
+        "fixture_metadata",
         "export_validation",
         "export_json",
         "json_syntax",
@@ -378,7 +395,7 @@ def test_simple_element_example_init_fixture_checks_elements_before_sst_init(
 
     def fake_run(command, text, stdout, stderr, timeout, check):
         calls.append(command)
-        return subprocess.CompletedProcess(command, 0, stdout="ok", stderr="")
+        return subprocess.CompletedProcess(command, 0, stdout="Component: example0", stderr="")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
     monkeypatch.setattr(
@@ -396,16 +413,19 @@ def test_simple_element_example_init_fixture_checks_elements_before_sst_init(
 
     assert acceptance.ok is True
     assert [result.stage for result in acceptance.results] == [
+        "fixture_metadata",
         "export_validation",
         "export_json",
         "json_syntax",
         "sst_json_contract",
         "sst_elements",
+        "sst_components",
         "sst_init",
     ]
     assert calls[0][1:3] == ["-m", "json.tool"]
     assert calls[1] == ["/usr/bin/sst-info", "simpleElementExample"]
-    assert calls[2][0:2] == ["/usr/bin/sst", "--run-mode=init"]
+    assert calls[2] == ["/usr/bin/sst-info", "simpleElementExample"]
+    assert calls[3][0:2] == ["/usr/bin/sst", "--run-mode=init"]
 
 
 def test_generated_acceptance_fixture_registry_contains_json_and_init_fixtures():
@@ -417,10 +437,101 @@ def test_generated_acceptance_fixture_registry_contains_json_and_init_fixtures()
 
     assert [fixture.metadata.name for fixture in fixtures] == [
         "minimal_two_component_link",
+        "explicit_latency_parameters",
+        "subcomponent_slot_assignment",
         "simple_element_example_init",
     ]
-    assert [fixture.metadata.run_mode for fixture in fixtures] == ["json", "init"]
+    assert [fixture.metadata.run_mode for fixture in fixtures] == [
+        "json",
+        "json",
+        "json",
+        "init",
+    ]
 
+
+
+def test_explicit_latency_parameters_fixture_exports_typed_params_and_endpoint_latencies(tmp_path):
+    import json
+
+    from fuse.plugins.community.sst.external_validation.fixtures import (
+        explicit_latency_parameters_fixture,
+    )
+    from fuse.plugins.community.sst.external_validation.runner import (
+        run_generated_fixture_acceptance,
+    )
+
+    fixture = explicit_latency_parameters_fixture()
+    acceptance = run_generated_fixture_acceptance(fixture, tmp_path, environ={})
+
+    assert acceptance.ok is True
+    assert acceptance.export_can_export is True
+    assert acceptance.expected_top_level_sections_present is True
+
+    data = json.loads(acceptance.output_path.read_text(encoding="utf-8"))
+    components = {component["name"]: component for component in data["components"]}
+
+    assert fixture.metadata.external_suite_tags == ("json", "parameters", "latency")
+    assert sorted(components) == ["param_source0", "param_target0"]
+    assert components["param_source0"]["params"] == {
+        "clock": "2GHz",
+        "enabled": True,
+        "max_reqs": 16,
+    }
+    assert "empty_parameter" not in components["param_source0"]["params"]
+    assert data["links"] == [
+        {
+            "name": "link_param_source_target",
+            "noCut": False,
+            "nonlocal": False,
+            "left": {
+                "component": "param_source0",
+                "port": "cache",
+                "latency": "250ps",
+            },
+            "right": {
+                "component": "param_target0",
+                "port": "cpu",
+                "latency": "2ns",
+            },
+        }
+    ]
+
+
+def test_subcomponent_slot_assignment_fixture_exports_nested_subcomponent(tmp_path):
+    import json
+
+    from fuse.plugins.community.sst.external_validation.fixtures import (
+        subcomponent_slot_assignment_fixture,
+    )
+    from fuse.plugins.community.sst.external_validation.runner import (
+        run_generated_fixture_acceptance,
+    )
+
+    fixture = subcomponent_slot_assignment_fixture()
+    acceptance = run_generated_fixture_acceptance(fixture, tmp_path, environ={})
+
+    assert acceptance.ok is True
+    assert acceptance.export_can_export is True
+    assert acceptance.expected_top_level_sections_present is True
+
+    data = json.loads(acceptance.output_path.read_text(encoding="utf-8"))
+
+    assert fixture.metadata.external_suite_tags == ("json", "subcomponent", "slot")
+    assert len(data["components"]) == 1
+    assert data["components"][0] == {
+        "name": "parent0",
+        "type": "fuseExternalValidation.Parent",
+        "params": {"clock": "1GHz"},
+        "subcomponents": [
+            {
+                "name": "slot_child0",
+                "type": "fuseExternalValidation.ChildSubComponent",
+                "params": {"mode": "test"},
+                "slot_name": "backend_slot",
+            }
+        ],
+    }
+    assert data["links"] == []
 
 
 def test_sst_external_validation_metadata_includes_runtime_expectations():
@@ -533,6 +644,7 @@ def test_generated_fixture_acceptance_can_run_runtime_when_enabled(tmp_path, mon
 
     assert acceptance.ok is True
     assert [result.stage for result in acceptance.results] == [
+        "fixture_metadata",
         "export_validation",
         "export_json",
         "json_syntax",
@@ -541,3 +653,132 @@ def test_generated_fixture_acceptance_can_run_runtime_when_enabled(tmp_path, mon
     ]
     assert calls[0][1:3] == ["-m", "json.tool"]
     assert calls[1] == ["/usr/bin/sst", "--stop-at=1ns", str(acceptance.output_path)]
+
+
+def test_sst_external_validation_metadata_rejects_invalid_combinations():
+    metadata = SSTExternalValidationMetadata(
+        name="bad_json_runtime",
+        run_mode="json",
+        runtime_args=("--stop-at=1ns",),
+    )
+
+    errors = metadata.validation_errors()
+
+    assert any("JSON-only" in error for error in errors)
+
+
+def test_sst_external_validation_metadata_rejects_unknown_run_mode():
+    metadata = SSTExternalValidationMetadata(name="bad_mode", run_mode="profile")
+
+    result = run_metadata_validation_check(metadata)
+
+    assert result.failed is True
+    assert "run_mode" in result.message
+
+
+def test_sst_external_validation_metadata_requires_component_elements():
+    metadata = SSTExternalValidationMetadata(
+        name="component_without_element",
+        required_components=("example0",),
+    )
+
+    assert any("required_components" in error for error in metadata.validation_errors())
+
+
+def test_sst_version_parser_and_comparison_tolerate_banner_text():
+    assert parse_version_tuple("SST-Core Version 15.0.1") == (15, 0, 1)
+    assert compare_versions("15.0.1", "15.0.0") == 1
+    assert compare_versions("15.0", "15.0.0") == 0
+    assert compare_versions("14.1.0", "15.0.0") == -1
+
+
+def test_sst_version_check_skips_when_version_is_outside_fixture_bounds(monkeypatch):
+    def fake_run(command, text, stdout, stderr, timeout, check):
+        return subprocess.CompletedProcess(command, 0, stdout="SST-Core Version 14.0.0", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    metadata = SSTExternalValidationMetadata(
+        name="needs_newer_sst",
+        min_sst_version="15.0.0",
+    )
+
+    result = run_sst_version_check(metadata, sst_binary="/usr/bin/sst")
+
+    assert result.skipped is True
+    assert "older than" in result.message
+
+
+def test_sst_component_availability_checks_required_components(monkeypatch):
+    calls = []
+
+    def fake_run(command, text, stdout, stderr, timeout, check):
+        calls.append(command)
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout="Component: example0\nComponent: example1",
+            stderr="",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    metadata = SSTExternalValidationMetadata(
+        name="simple_component",
+        required_elements=("simpleElementExample",),
+        required_components=("example0",),
+    )
+
+    result = run_sst_component_availability_check(
+        metadata,
+        sst_info_binary="/usr/bin/sst-info",
+    )
+
+    assert result.ok is True
+    assert result.stage == "sst_components"
+    assert calls == [["/usr/bin/sst-info", "simpleElementExample"]]
+
+
+def test_sst_component_availability_skips_when_required_component_is_missing(monkeypatch):
+    def fake_run(command, text, stdout, stderr, timeout, check):
+        return subprocess.CompletedProcess(command, 0, stdout="Component: other", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    metadata = SSTExternalValidationMetadata(
+        name="missing_component",
+        required_elements=("simpleElementExample",),
+        required_components=("example0",),
+    )
+
+    result = run_sst_component_availability_check(
+        metadata,
+        sst_info_binary="/usr/bin/sst-info",
+    )
+
+    assert result.skipped is True
+    assert "example0" in result.message
+
+
+def test_external_suite_root_validation_is_optional(tmp_path):
+    missing = validate_external_suite_root({})
+    assert missing.skipped is True
+
+    available = validate_external_suite_root({SST_EXT_TESTS_ROOT_ENV: str(tmp_path)})
+    assert available.ok is True
+
+    unavailable = validate_external_suite_root({SST_EXT_TESTS_ROOT_ENV: str(tmp_path / "missing")})
+    assert unavailable.failed is True
+
+
+def test_generated_fixture_suite_report_summarizes_results(tmp_path):
+    from fuse.plugins.community.sst.external_validation.fixtures import (
+        minimal_two_component_link_fixture,
+    )
+
+    report = run_generated_fixture_suite(
+        (minimal_two_component_link_fixture(),),
+        tmp_path,
+        environ={},
+    )
+
+    assert report.to_mapping()["total"] == 1
+    assert report.to_mapping()["passed"] == 1
+    assert report.results[0].metadata.name == "minimal_two_component_link"
