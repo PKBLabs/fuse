@@ -442,7 +442,7 @@ def test_simple_element_example_init_fixture_exports_required_parameters(tmp_pat
         {
             "name": "example0",
             "type": "simpleElementExample.example0",
-            "params": {"eventsToSend": 0},
+            "params": {"eventsToSend": "0"},
         }
     ]
 

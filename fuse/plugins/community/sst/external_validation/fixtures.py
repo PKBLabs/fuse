@@ -198,7 +198,7 @@ def simple_element_example_init_fixture() -> SSTExternalValidationFixture:
         instance_name="example0",
         component=component,
         ports=(),
-        parameters={"eventsToSend": 0},
+        parameters={"eventsToSend": "0"},
     )
 
     metadata = SSTExternalValidationMetadata(
