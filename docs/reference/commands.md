@@ -59,6 +59,19 @@ SST live tests:
 .venv/bin/python -m pytest -q -m "sst_live"
 ```
 
+SST plugin external-validation tests:
+
+```bash
+.venv/bin/python -m pytest -q -m "sst_ext"
+```
+
+Enable real SST init/runtime stages for the backend-only SST plugin acceptance harness:
+
+```bash
+FUSE_ENABLE_SST_EXT_TESTS=1 \
+  .venv/bin/python -m pytest -q -m "sst_ext"
+```
+
 gem5 live tests:
 
 ```bash

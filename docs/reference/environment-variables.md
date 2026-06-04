@@ -33,6 +33,28 @@ Forces the SST plugin to rerun `sst-info` even if a successful run already exist
 FUSE_REFRESH_SSTINFO=1 ./scripts/setup_dev.sh
 ```
 
+
+## `FUSE_ENABLE_SST_EXT_TESTS`
+
+Enables backend-only SST plugin external validation stages that require real SST tooling.
+
+```bash
+FUSE_ENABLE_SST_EXT_TESTS=1 QT_QPA_PLATFORM=offscreen \
+  .venv/bin/python -m pytest -q -m "sst_ext"
+```
+
+When unset, SST plugin external-validation tests still exercise fixture export and JSON checks, but real SST init/runtime stages are skipped.
+
+## `SST_EXT_TESTS_ROOT`
+
+Optional path to a local `sst-ext-tests` checkout for developer diagnostics/interoperability. FUSE does not vendor or require this repository for normal tests.
+
+```bash
+SST_EXT_TESTS_ROOT=/path/to/sst-ext-tests \
+  FUSE_ENABLE_SST_EXT_TESTS=1 \
+  QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q -m "sst_ext"
+```
+
 ## `FUSE_SPLASH_MS`
 
 Controls minimum splash screen duration in milliseconds.

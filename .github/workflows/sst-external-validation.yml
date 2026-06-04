@@ -1,0 +1,102 @@
+name: SST External Validation Tests
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 10 * * 1"
+  pull_request:
+    branches:
+      - develop
+    paths:
+      - "fuse/plugins/community/sst/**"
+      - "fuse/core/persistence/**"
+      - "fuse/core/model/**"
+      - "fuse/plugin_api/**"
+      - "fuse/pytest.ini"
+      - "fuse/requirements*.txt"
+      - "docs/plugins/sst/**"
+      - "docs/testing/test-matrix.md"
+      - ".github/workflows/sst-external-validation.yml"
+      - ".github/workflows/build-sst-ext-ci-image.yml"
+      - "docker/sst-ext-ci/**"
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - "fuse/plugins/community/sst/**"
+      - "fuse/core/persistence/**"
+      - "fuse/core/model/**"
+      - "fuse/plugin_api/**"
+      - "fuse/pytest.ini"
+      - "fuse/requirements*.txt"
+      - "docs/plugins/sst/**"
+      - "docs/testing/test-matrix.md"
+      - ".github/workflows/sst-external-validation.yml"
+      - ".github/workflows/build-sst-ext-ci-image.yml"
+      - "docker/sst-ext-ci/**"
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  sst-external-validation:
+    name: SST ${{ matrix.sst.version }} external validation tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    strategy:
+      fail-fast: false
+      matrix:
+        sst:
+          - version: "15.1.2"
+            image: "ghcr.io/pkblabs/fuse-sst-ext-ci:sst-15.1.2"
+          - version: "16.0.0"
+            image: "ghcr.io/pkblabs/fuse-sst-ext-ci:sst-16.0.0"
+
+    container:
+      image: ${{ matrix.sst.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    defaults:
+      run:
+        shell: bash
+        working-directory: fuse
+
+    env:
+      QT_QPA_PLATFORM: offscreen
+      FUSE_SPLASH_MS: "0"
+      FUSE_TEST_AUTOCLOSE_MS: "100"
+      FUSE_SST_VERSION: ${{ matrix.sst.version }}
+      FUSE_ENABLE_SST_EXT_TESTS: "1"
+      SST_EXT_TESTS_ROOT: /opt/sst-ext-tests
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Verify SST external validation image
+        run: |
+          which sst
+          which sst-info
+          sst --version || true
+          sst-info --version || true
+          test -d "$SST_EXT_TESTS_ROOT"
+          test -f /opt/sst-ext-tests-revision.txt
+          echo "sst-ext-tests revision: $(cat /opt/sst-ext-tests-revision.txt)"
+          sst-info simpleElementExample > /tmp/simpleElementExample-info.txt
+          head -80 /tmp/simpleElementExample-info.txt
+
+      - name: Create Python virtual environment
+        run: |
+          rm -rf /tmp/fuse-venv
+          python3 -m venv /tmp/fuse-venv
+          /tmp/fuse-venv/bin/python -m pip install --upgrade pip
+          /tmp/fuse-venv/bin/python -m pip install -r requirements-dev.txt
+
+      - name: Run SST external validation tests
+        run: |
+          /tmp/fuse-venv/bin/python -m pytest -q -m "sst_ext"
