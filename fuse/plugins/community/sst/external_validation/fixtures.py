@@ -25,7 +25,6 @@ from fuse.plugins.community.sst.external_validation.metadata import (
 
 SST_JSON_TOP_LEVEL_SECTIONS = (
     "program_options",
-    "shared_params",
     "statistics_options",
     "components",
     "statistics_group",

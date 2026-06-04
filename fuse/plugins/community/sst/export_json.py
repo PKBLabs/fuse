@@ -734,12 +734,19 @@ def build_sst_json_dict(
 
     data: dict[str, Any] = {
         "program_options": program_options or {},
-        "shared_params": shared_params or [],
-        "statistics_options": statistics_options or {},
-        "components": components,
-        "statistics_group": statistics_group or [],
-        "links": links,
     }
+
+    if shared_params:
+        data["shared_params"] = shared_params
+
+    data.update(
+        {
+            "statistics_options": statistics_options or {},
+            "components": components,
+            "statistics_group": statistics_group or [],
+            "links": links,
+        }
+    )
 
     if include_metadata:
         data["metadata"] = {

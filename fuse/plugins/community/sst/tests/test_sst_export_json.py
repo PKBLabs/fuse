@@ -78,12 +78,12 @@ def test_build_sst_json_exports_components(qtbot, monkeypatch):
 
     assert list(data.keys()) == [
         "program_options",
-        "shared_params",
         "statistics_options",
         "components",
         "statistics_group",
         "links",
     ]
+    assert "shared_params" not in data
 
     assert len(data["components"]) == 1
 
