@@ -190,6 +190,157 @@ def run_sst_init_check(
     )
 
 
+
+
+
+def run_sst_runtime_check(
+    json_path: str | Path,
+    *,
+    sst_binary: str | None = None,
+    timeout_seconds: int = 60,
+    expected_return_code: int = 0,
+    runtime_args: Sequence[str] = (),
+    expected_stdout_fragments: Sequence[str] = (),
+    expected_stderr_fragments: Sequence[str] = (),
+) -> SSTExternalValidationResult:
+    path = Path(json_path)
+
+    if not path.exists():
+        return SSTExternalValidationResult(
+            ok=False,
+            stage="sst_runtime",
+            message=f"SST JSON file does not exist: {path}",
+        )
+
+    executable = sst_binary or find_executable("sst")
+
+    if executable is None:
+        return SSTExternalValidationResult(
+            ok=False,
+            stage="sst_runtime",
+            message="sst executable was not found in PATH.",
+            skipped=True,
+        )
+
+    command = [executable, *[str(arg) for arg in runtime_args], str(path)]
+    result = run_command(
+        command,
+        stage="sst_runtime",
+        timeout_seconds=timeout_seconds,
+        expected_return_code=expected_return_code,
+    )
+
+    if not result.ok:
+        return result
+
+    missing_stdout = [
+        fragment
+        for fragment in expected_stdout_fragments
+        if str(fragment) not in result.stdout
+    ]
+    missing_stderr = [
+        fragment
+        for fragment in expected_stderr_fragments
+        if str(fragment) not in result.stderr
+    ]
+
+    if missing_stdout or missing_stderr:
+        details: list[str] = []
+        if missing_stdout:
+            details.append(
+                "stdout missing expected fragment(s): " + ", ".join(missing_stdout)
+            )
+        if missing_stderr:
+            details.append(
+                "stderr missing expected fragment(s): " + ", ".join(missing_stderr)
+            )
+        return SSTExternalValidationResult(
+            ok=False,
+            stage="sst_runtime",
+            message="; ".join(details),
+            command=result.command,
+            return_code=result.return_code,
+            stdout=result.stdout,
+            stderr=result.stderr,
+        )
+
+    return result
+
+def run_sst_element_availability_check(
+    required_elements: Sequence[str],
+    *,
+    sst_info_binary: str | None = None,
+    timeout_seconds: int = 30,
+) -> SSTExternalValidationResult:
+    """Check that required SST element libraries are visible to SST.
+
+    Missing element libraries make a fixture ineligible on the current test
+    machine, not invalid as a FUSE export. Treat those cases as skipped so
+    release/CI logs distinguish environment gaps from model failures.
+    """
+    elements = tuple(str(element).strip() for element in required_elements if str(element).strip())
+
+    if not elements:
+        return SSTExternalValidationResult(
+            ok=True,
+            stage="sst_elements",
+            message="No SST element-library requirements declared.",
+        )
+
+    executable = sst_info_binary or find_executable("sst-info")
+
+    if executable is None:
+        return SSTExternalValidationResult(
+            ok=False,
+            skipped=True,
+            stage="sst_elements",
+            message="sst-info executable was not found in PATH.",
+        )
+
+    missing: list[str] = []
+    stdout_chunks: list[str] = []
+    stderr_chunks: list[str] = []
+    commands: list[str] = []
+
+    for element in elements:
+        command = [executable, element]
+        result = run_command(
+            command,
+            stage="sst_elements",
+            timeout_seconds=timeout_seconds,
+            expected_return_code=0,
+        )
+        commands.extend(result.command)
+        stdout_chunks.append(result.stdout)
+        stderr_chunks.append(result.stderr)
+
+        if not result.ok:
+            missing.append(element)
+
+    if missing:
+        return SSTExternalValidationResult(
+            ok=False,
+            skipped=True,
+            stage="sst_elements",
+            message=(
+                "Required SST element library/libraries unavailable on this "
+                f"test machine: {', '.join(missing)}."
+            ),
+            command=tuple(commands),
+            stdout="\n".join(chunk for chunk in stdout_chunks if chunk),
+            stderr="\n".join(chunk for chunk in stderr_chunks if chunk),
+        )
+
+    return SSTExternalValidationResult(
+        ok=True,
+        stage="sst_elements",
+        message=f"Required SST element library/libraries are available: {', '.join(elements)}.",
+        command=tuple(commands),
+        stdout="\n".join(chunk for chunk in stdout_chunks if chunk),
+        stderr="\n".join(chunk for chunk in stderr_chunks if chunk),
+    )
+
+
 def run_sst_external_acceptance(
     json_path: str | Path,
     metadata: SSTExternalValidationMetadata,
@@ -226,15 +377,35 @@ def run_sst_external_acceptance(
     if not json_result.ok:
         return results
 
-    if metadata.run_mode == "init":
-        results.append(
-            run_sst_init_check(
-                json_path,
-                sst_binary=sst_binary,
-                timeout_seconds=metadata.timeout_seconds,
-                expected_return_code=metadata.expected_return_code,
-            )
+    if metadata.run_mode in {"init", "run"}:
+        element_result = run_sst_element_availability_check(
+            metadata.required_elements,
+            timeout_seconds=min(max(metadata.timeout_seconds, 1), 30),
         )
+        if metadata.required_elements:
+            results.append(element_result)
+
+        if element_result.ok and metadata.run_mode == "init":
+            results.append(
+                run_sst_init_check(
+                    json_path,
+                    sst_binary=sst_binary,
+                    timeout_seconds=metadata.timeout_seconds,
+                    expected_return_code=metadata.expected_return_code,
+                )
+            )
+        elif element_result.ok:
+            results.append(
+                run_sst_runtime_check(
+                    json_path,
+                    sst_binary=sst_binary,
+                    timeout_seconds=metadata.timeout_seconds,
+                    expected_return_code=metadata.expected_return_code,
+                    runtime_args=metadata.runtime_args,
+                    expected_stdout_fragments=metadata.expected_stdout_fragments,
+                    expected_stderr_fragments=metadata.expected_stderr_fragments,
+                )
+            )
     else:
         results.append(
             SSTExternalValidationResult(
@@ -242,8 +413,8 @@ def run_sst_external_acceptance(
                 skipped=True,
                 stage="sst_runtime",
                 message=(
-                    f"Run mode '{metadata.run_mode}' is reserved for a later "
-                    "runtime acceptance phase."
+                    f"Run mode '{metadata.run_mode}' is validated through export "
+                    "and JSON syntax only."
                 ),
             )
         )
@@ -334,25 +505,45 @@ def run_generated_fixture_acceptance(
                 )
             )
 
-    if fixture.metadata.run_mode == "init":
+    if fixture.metadata.run_mode in {"init", "run"}:
         if external_validation_enabled(environ):
-            results.append(
-                run_sst_init_check(
-                    output_path,
-                    sst_binary=sst_binary,
-                    timeout_seconds=fixture.metadata.timeout_seconds,
-                    expected_return_code=fixture.metadata.expected_return_code,
-                )
+            element_result = run_sst_element_availability_check(
+                fixture.metadata.required_elements,
+                timeout_seconds=min(max(fixture.metadata.timeout_seconds, 1), 30),
             )
+            if fixture.metadata.required_elements:
+                results.append(element_result)
+
+            if element_result.ok and fixture.metadata.run_mode == "init":
+                results.append(
+                    run_sst_init_check(
+                        output_path,
+                        sst_binary=sst_binary,
+                        timeout_seconds=fixture.metadata.timeout_seconds,
+                        expected_return_code=fixture.metadata.expected_return_code,
+                    )
+                )
+            elif element_result.ok:
+                results.append(
+                    run_sst_runtime_check(
+                        output_path,
+                        sst_binary=sst_binary,
+                        timeout_seconds=fixture.metadata.timeout_seconds,
+                        expected_return_code=fixture.metadata.expected_return_code,
+                        runtime_args=fixture.metadata.runtime_args,
+                        expected_stdout_fragments=fixture.metadata.expected_stdout_fragments,
+                        expected_stderr_fragments=fixture.metadata.expected_stderr_fragments,
+                    )
+                )
         else:
             results.append(
                 SSTExternalValidationResult(
                     ok=False,
                     skipped=True,
-                    stage="sst_init",
+                    stage="sst_init" if fixture.metadata.run_mode == "init" else "sst_runtime",
                     message=(
                         f"Set {ENABLE_EXTERNAL_VALIDATION_ENV}=1 to run real SST "
-                        "init checks for generated fixtures."
+                        f"{fixture.metadata.run_mode} checks for generated fixtures."
                     ),
                 )
             )
@@ -364,7 +555,7 @@ def run_generated_fixture_acceptance(
                 stage="sst_runtime",
                 message=(
                     f"Fixture run mode '{fixture.metadata.run_mode}' is validated "
-                    "through export and JSON syntax only in this phase."
+                    "through export and JSON syntax only."
                 ),
             )
         )

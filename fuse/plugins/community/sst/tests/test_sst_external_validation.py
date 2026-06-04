@@ -22,8 +22,10 @@ from fuse.plugins.community.sst.external_validation.runner import (
     external_validation_enabled,
     run_command,
     run_json_syntax_check,
+    run_sst_element_availability_check,
     run_sst_external_acceptance,
     run_sst_init_check,
+    run_sst_runtime_check,
 )
 
 
@@ -302,3 +304,240 @@ def test_generated_fixture_acceptance_reports_export_validation_errors(tmp_path)
     assert acceptance.export_can_export is False
     assert acceptance.failed_results[0].stage == "export_validation"
     assert "unique" in acceptance.failed_results[0].message
+
+
+
+def test_sst_element_availability_skips_when_sst_info_is_unavailable(monkeypatch):
+    monkeypatch.setattr(
+        "fuse.plugins.community.sst.external_validation.runner.find_executable",
+        lambda name: None,
+    )
+
+    result = run_sst_element_availability_check(("simpleElementExample",))
+
+    assert result.skipped is True
+    assert result.stage == "sst_elements"
+    assert "sst-info executable" in result.message
+
+
+def test_sst_element_availability_checks_each_required_element(monkeypatch):
+    calls = []
+
+    def fake_run(command, text, stdout, stderr, timeout, check):
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout="element ok", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    result = run_sst_element_availability_check(
+        ("simpleElementExample", "memHierarchy"),
+        sst_info_binary="/usr/bin/sst-info",
+    )
+
+    assert result.ok is True
+    assert result.skipped is False
+    assert calls == [
+        ["/usr/bin/sst-info", "simpleElementExample"],
+        ["/usr/bin/sst-info", "memHierarchy"],
+    ]
+
+
+def test_simple_element_example_init_fixture_skips_real_sst_when_disabled(tmp_path):
+    from fuse.plugins.community.sst.external_validation.fixtures import (
+        simple_element_example_init_fixture,
+    )
+    from fuse.plugins.community.sst.external_validation.runner import (
+        run_generated_fixture_acceptance,
+    )
+
+    fixture = simple_element_example_init_fixture()
+    acceptance = run_generated_fixture_acceptance(
+        fixture,
+        tmp_path,
+        environ={},
+    )
+
+    assert acceptance.ok is True
+    assert acceptance.metadata.run_mode == "init"
+    assert acceptance.results[-1].stage == "sst_init"
+    assert acceptance.results[-1].skipped is True
+
+
+def test_simple_element_example_init_fixture_checks_elements_before_sst_init(
+    tmp_path, monkeypatch
+):
+    from fuse.plugins.community.sst.external_validation.fixtures import (
+        simple_element_example_init_fixture,
+    )
+    from fuse.plugins.community.sst.external_validation.runner import (
+        ENABLE_EXTERNAL_VALIDATION_ENV,
+        run_generated_fixture_acceptance,
+    )
+
+    calls = []
+
+    def fake_run(command, text, stdout, stderr, timeout, check):
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        "fuse.plugins.community.sst.external_validation.runner.find_executable",
+        lambda name: "/usr/bin/sst-info" if name == "sst-info" else None,
+    )
+
+    fixture = simple_element_example_init_fixture()
+    acceptance = run_generated_fixture_acceptance(
+        fixture,
+        tmp_path,
+        environ={ENABLE_EXTERNAL_VALIDATION_ENV: "1"},
+        sst_binary="/usr/bin/sst",
+    )
+
+    assert acceptance.ok is True
+    assert [result.stage for result in acceptance.results] == [
+        "export_validation",
+        "export_json",
+        "json_syntax",
+        "sst_json_contract",
+        "sst_elements",
+        "sst_init",
+    ]
+    assert calls[0][1:3] == ["-m", "json.tool"]
+    assert calls[1] == ["/usr/bin/sst-info", "simpleElementExample"]
+    assert calls[2][0:2] == ["/usr/bin/sst", "--run-mode=init"]
+
+
+def test_generated_acceptance_fixture_registry_contains_json_and_init_fixtures():
+    from fuse.plugins.community.sst.external_validation.fixtures import (
+        generated_acceptance_fixtures,
+    )
+
+    fixtures = generated_acceptance_fixtures()
+
+    assert [fixture.metadata.name for fixture in fixtures] == [
+        "minimal_two_component_link",
+        "simple_element_example_init",
+    ]
+    assert [fixture.metadata.run_mode for fixture in fixtures] == ["json", "init"]
+
+
+
+def test_sst_external_validation_metadata_includes_runtime_expectations():
+    metadata = SSTExternalValidationMetadata.from_mapping(
+        {
+            "name": "runtime_smoke",
+            "run_mode": "run",
+            "runtime_args": ["--stop-at=1ns"],
+            "expected_stdout_fragments": ["Simulation is complete"],
+            "expected_stderr_fragments": ["warning"],
+        }
+    )
+
+    assert metadata.run_mode == "run"
+    assert metadata.runtime_args == ("--stop-at=1ns",)
+    assert metadata.expected_stdout_fragments == ("Simulation is complete",)
+    assert metadata.expected_stderr_fragments == ("warning",)
+    assert metadata.to_mapping()["runtime_args"] == ["--stop-at=1ns"]
+
+
+def test_sst_runtime_check_runs_sst_with_runtime_args(tmp_path, monkeypatch):
+    json_path = tmp_path / "model.sst.json"
+    json_path.write_text("{}", encoding="utf-8")
+    calls = []
+
+    def fake_run(command, text, stdout, stderr, timeout, check):
+        calls.append(command)
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout="Simulation is complete",
+            stderr="",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    result = run_sst_runtime_check(
+        json_path,
+        sst_binary="/usr/bin/sst",
+        runtime_args=("--stop-at=1ns",),
+        expected_stdout_fragments=("Simulation is complete",),
+    )
+
+    assert result.ok is True
+    assert result.stage == "sst_runtime"
+    assert calls == [["/usr/bin/sst", "--stop-at=1ns", str(json_path)]]
+
+
+def test_sst_runtime_check_reports_missing_expected_output(tmp_path, monkeypatch):
+    json_path = tmp_path / "model.sst.json"
+    json_path.write_text("{}", encoding="utf-8")
+
+    def fake_run(command, text, stdout, stderr, timeout, check):
+        return subprocess.CompletedProcess(command, 0, stdout="different output", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    result = run_sst_runtime_check(
+        json_path,
+        sst_binary="/usr/bin/sst",
+        expected_stdout_fragments=("expected output",),
+    )
+
+    assert result.ok is False
+    assert result.failed is True
+    assert "stdout missing" in result.message
+
+
+def test_generated_fixture_acceptance_can_run_runtime_when_enabled(tmp_path, monkeypatch):
+    from dataclasses import replace
+
+    from fuse.plugins.community.sst.external_validation.fixtures import (
+        minimal_two_component_link_fixture,
+    )
+    from fuse.plugins.community.sst.external_validation.runner import (
+        ENABLE_EXTERNAL_VALIDATION_ENV,
+        run_generated_fixture_acceptance,
+    )
+
+    calls = []
+
+    def fake_run(command, text, stdout, stderr, timeout, check):
+        calls.append(command)
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout="runtime ok",
+            stderr="",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    fixture = minimal_two_component_link_fixture()
+    fixture = replace(
+        fixture,
+        metadata=replace(
+            fixture.metadata,
+            run_mode="run",
+            runtime_args=("--stop-at=1ns",),
+            expected_stdout_fragments=("runtime ok",),
+        ),
+    )
+
+    acceptance = run_generated_fixture_acceptance(
+        fixture,
+        tmp_path,
+        environ={ENABLE_EXTERNAL_VALIDATION_ENV: "1"},
+        sst_binary="/usr/bin/sst",
+    )
+
+    assert acceptance.ok is True
+    assert [result.stage for result in acceptance.results] == [
+        "export_validation",
+        "export_json",
+        "json_syntax",
+        "sst_json_contract",
+        "sst_runtime",
+    ]
+    assert calls[0][1:3] == ["-m", "json.tool"]
+    assert calls[1] == ["/usr/bin/sst", "--stop-at=1ns", str(acceptance.output_path)]

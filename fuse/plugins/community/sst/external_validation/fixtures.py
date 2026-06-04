@@ -165,3 +165,52 @@ def minimal_two_component_link_fixture() -> SSTExternalValidationFixture:
         expected_component_names=("source0", "target0"),
         expected_link_names=("link_source_target",),
     )
+
+
+def simple_element_example_init_fixture() -> SSTExternalValidationFixture:
+    """Build a real-SST init fixture using SST Elements' simple example library.
+
+    This fixture is only exercised against a real SST installation when the
+    backend external validation gate is explicitly enabled and sst-info can
+    see the simpleElementExample element library.
+    """
+    component = make_fixture_component(
+        component_id="simple-example0",
+        element="simpleElementExample",
+        name="example0",
+    )
+
+    node = make_fixture_node(
+        node_id=1,
+        instance_name="example0",
+        component=component,
+        ports=(),
+        parameters={},
+    )
+
+    metadata = SSTExternalValidationMetadata(
+        name="simple_element_example_init",
+        description=(
+            "FUSE-generated SST init fixture for the SST Elements "
+            "simpleElementExample.example0 component."
+        ),
+        required_elements=("simpleElementExample",),
+        run_mode="init",
+        timeout_seconds=60,
+        expected_return_code=0,
+    )
+
+    return SSTExternalValidationFixture(
+        metadata=metadata,
+        scene=SSTExternalValidationScene([node], []),
+        expected_component_names=("example0",),
+        expected_link_names=(),
+    )
+
+
+def generated_acceptance_fixtures() -> tuple[SSTExternalValidationFixture, ...]:
+    """Return v0.7.0 backend acceptance fixtures owned by the SST plugin."""
+    return (
+        minimal_two_component_link_fixture(),
+        simple_element_example_init_fixture(),
+    )

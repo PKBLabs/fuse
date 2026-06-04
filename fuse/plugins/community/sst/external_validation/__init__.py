@@ -11,7 +11,9 @@
 
 from fuse.plugins.community.sst.external_validation.fixtures import (
     SSTExternalValidationFixture,
+    generated_acceptance_fixtures,
     minimal_two_component_link_fixture,
+    simple_element_example_init_fixture,
 )
 from fuse.plugins.community.sst.external_validation.metadata import (
     SSTExternalValidationMetadata,
@@ -23,6 +25,7 @@ from fuse.plugins.community.sst.external_validation.runner import (
     find_executable,
     run_generated_fixture_acceptance,
     run_json_syntax_check,
+    run_sst_element_availability_check,
     run_sst_external_acceptance,
     run_sst_init_check,
 )
@@ -34,9 +37,12 @@ __all__ = [
     "SSTFixtureAcceptanceResult",
     "external_validation_enabled",
     "find_executable",
+    "generated_acceptance_fixtures",
     "minimal_two_component_link_fixture",
     "run_generated_fixture_acceptance",
     "run_json_syntax_check",
+    "run_sst_element_availability_check",
     "run_sst_external_acceptance",
     "run_sst_init_check",
+    "simple_element_example_init_fixture",
 ]
