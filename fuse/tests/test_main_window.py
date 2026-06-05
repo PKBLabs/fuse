@@ -105,3 +105,47 @@ def test_docks_use_native_title_bars_until_floating(qtbot, tmp_path, monkeypatch
     assert window.properties_dock.titleBarWidget() is None
 
     window.close()
+
+
+def test_create_composite_action_follows_multiselection(qtbot, tmp_path, monkeypatch):
+    db_path = tmp_path / "test_app.db"
+
+    monkeypatch.setenv("FUSE_DB_PATH", str(db_path))
+    monkeypatch.setenv("QT_QPA_PLATFORM", os.environ.get("QT_QPA_PLATFORM", "offscreen"))
+    monkeypatch.setattr(
+        "fuse.core.ui.graphics_items.load_port_names_for_component",
+        lambda *args, **kwargs: ["in", "out"],
+    )
+
+    from PySide6.QtCore import QPointF
+    from fuse.app.app import MainWindow
+    from fuse.core.model.models import ComponentDefinition
+
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    first = window.scene.create_component_node(
+        ComponentDefinition(plugin_id="core", component_id="first", element="test", name="First"),
+        QPointF(0.0, 0.0),
+    )
+    second = window.scene.create_component_node(
+        ComponentDefinition(plugin_id="core", component_id="second", element="test", name="Second"),
+        QPointF(300.0, 0.0),
+    )
+
+    assert window.create_composite_action.text() == "Create Composite Component from Selection"
+    assert window.create_composite_action.isEnabled() is False
+
+    first.setSelected(True)
+    second.setSelected(True)
+    window.model_view.update_selection_highlights()
+
+    assert window.create_composite_action.isEnabled() is True
+
+    second.setSelected(False)
+    window.model_view.update_selection_highlights()
+
+    assert window.create_composite_action.isEnabled() is False
+
+    window.set_dirty(False)
+    window.close()

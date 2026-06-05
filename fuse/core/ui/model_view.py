@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
 
 from fuse.core.model.models import ComponentDefinition, MIME_COMPONENT
 from fuse.core.ui.model_scene import ModelScene
+from fuse.core.ui.selection_helpers import update_selection_dependent_highlights
 
 
 class FloatingModelToolbar(QFrame):
@@ -194,7 +195,7 @@ class ModelView(QGraphicsView):
         self.toolbar.move(12, 12)
         self.toolbar.show()
         self.editor_state_changed_callback = None
-
+        scene.selectionChanged.connect(self.update_selection_highlights)
 
         self.zoom_in_action = QAction("Zoom In", self)
         self.zoom_in_action.setShortcuts([QKeySequence.ZoomIn, QKeySequence("Shift++"), QKeySequence("Ctrl++")])
@@ -206,6 +207,14 @@ class ModelView(QGraphicsView):
         self.zoom_out_action.triggered.connect(self.zoom_out)
         self.addAction(self.zoom_out_action)
 
+
+    def update_selection_highlights(self) -> None:
+        scene = self.scene()
+        update_selection_dependent_highlights(
+            scene,
+            getattr(scene, "selection_changed_callback", None),
+            getattr(scene, "properties_panel", None),
+        )
 
     def notify_editor_state_changed(self) -> None:
         if self.editor_state_changed_callback is not None:

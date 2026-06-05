@@ -60,6 +60,10 @@ from fuse.core.ui.component_palette import ComponentPalette
 from fuse.core.ui.model_scene import ModelScene
 from fuse.core.ui.model_view import ModelView
 from fuse.core.ui.properties_panel import PropertiesPanel
+from fuse.core.ui.selection_helpers import (
+    can_create_composite_from_selection,
+    request_composite_from_selection,
+)
 
 OUTLINE_ROLE_KIND = Qt.UserRole
 OUTLINE_ROLE_NODE_ID = Qt.UserRole + 1
@@ -263,6 +267,7 @@ class MainWindow(QMainWindow):
         self.scene.component_used_callback = self.on_component_used
         self.scene.component_favorite_requested_callback = self.on_component_favorite_requested
         self.scene.selection_changed_callback = self.on_scene_selection_changed
+        self.scene.composite_creation_requested_callback = self.on_create_composite_from_selection_requested
         self.properties_panel.property_changed_callback = self.on_property_changed
         self.palette.preferences_changed_callback = self.on_component_palette_preferences_changed
 
@@ -277,6 +282,32 @@ class MainWindow(QMainWindow):
 
     def on_component_favorite_requested(self, component):
         self.palette.add_to_frequently_used(component)
+
+    def update_create_composite_action_state(self) -> None:
+        if hasattr(self, "create_composite_action"):
+            self.create_composite_action.setEnabled(
+                can_create_composite_from_selection(self.scene)
+            )
+
+    def request_create_composite_from_selection(self) -> None:
+        request_composite_from_selection(
+            self.scene,
+            self.on_create_composite_from_selection_requested,
+        )
+
+    def on_create_composite_from_selection_requested(self, components, links, attachments):
+        self.last_composite_creation_request = {
+            "components": list(components),
+            "links": list(links),
+            "attachments": list(attachments),
+        }
+        if hasattr(self, "statusBar"):
+            self.statusBar().showMessage(
+                "Composite component creation queued for "
+                f"{len(components)} components, {len(links)} internal links, "
+                f"and {len(attachments)} internal subcomponent attachments.",
+                5000,
+            )
 
     def setup_menu_bar(self):
         menu_bar = QMenuBar(self)
@@ -354,8 +385,14 @@ class MainWindow(QMainWindow):
         self.redo_action.triggered.connect(self.redo)
         self.redo_action.setEnabled(False)
 
+        self.create_composite_action = QAction("Create Composite Component from Selection", self)
+        self.create_composite_action.triggered.connect(self.request_create_composite_from_selection)
+        self.create_composite_action.setEnabled(False)
+
         edit_menu.addAction(self.undo_action)
         edit_menu.addAction(self.redo_action)
+        edit_menu.addSeparator()
+        edit_menu.addAction(self.create_composite_action)
         zoom_in_action = QAction("Zoom In", self)
         zoom_in_action.setShortcut("Ctrl++")
         zoom_in_action.triggered.connect(self.model_view.zoom_in)
@@ -592,6 +629,8 @@ class MainWindow(QMainWindow):
         self.mark_dirty()
 
     def on_scene_selection_changed(self, node):
+        self.update_create_composite_action_state()
+
         if node is None:
             self.palette.clear_compatibility_context()
         else:
