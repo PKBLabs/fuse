@@ -591,7 +591,48 @@ class MainWindow(QMainWindow):
             return editor.editor_view
         return self.model_view
 
+    def model_tab_scenes(self):
+        scenes = [self.scene]
+        if self.model_tabs is None:
+            return scenes
+
+        for index in range(1, self.model_tabs.count()):
+            widget = self.model_tabs.widget(index)
+            if isinstance(widget, CompositeInstanceEditorWidget):
+                scenes.append(widget.editor_scene)
+        return scenes
+
+    def bind_global_panels_to_active_model_tab(self) -> None:
+        active_scene = self.active_model_scene()
+        for scene in self.model_tab_scenes():
+            scene.properties_panel = None
+            scene.selection_changed_callback = self.on_scene_selection_changed
+
+        active_scene.properties_panel = self.properties_panel
+        self.sync_properties_panel_to_active_scene()
+
+    def sync_properties_panel_to_active_scene(self) -> None:
+        scene = self.active_model_scene()
+
+        selected_component = getattr(scene, "selected_component", None)
+        if selected_component is not None and selected_component.scene() is scene:
+            self.properties_panel.show_component(selected_component)
+            return
+
+        selected_connection = getattr(scene, "selected_connection", None)
+        if selected_connection is not None and selected_connection.scene() is scene:
+            self.properties_panel.show_link(selected_connection)
+            return
+
+        selected_attachment = getattr(scene, "selected_subcomp_attachment", None)
+        if selected_attachment is not None and selected_attachment.scene() is scene:
+            self.properties_panel.show_subcomp_attachment(selected_attachment)
+            return
+
+        self.properties_panel.show_empty()
+
     def on_model_tab_changed(self, index: int) -> None:
+        self.bind_global_panels_to_active_model_tab()
         self.update_model_outline()
         self.update_create_composite_action_state()
 
@@ -645,6 +686,7 @@ class MainWindow(QMainWindow):
             nested_edit_requested_callback=self.open_nested_composite_instance_tab,
             instance_changed_callback=self.on_composite_editor_changed,
         )
+        editor.editor_scene.selection_changed_callback = self.on_scene_selection_changed
         editor.composite_tab_path = label
         editor.parent_composite_editor = parent_editor
         self.composite_editor_widgets.append(editor)
@@ -685,6 +727,9 @@ class MainWindow(QMainWindow):
 
         self.model_tabs.removeTab(index)
         widget.deleteLater()
+        self.bind_global_panels_to_active_model_tab()
+        self.update_model_outline()
+        self.update_create_composite_action_state()
 
     def close_child_composite_tabs(self, parent_editor) -> None:
         if self.model_tabs is None:
@@ -702,6 +747,7 @@ class MainWindow(QMainWindow):
                     self.composite_editor_widgets.remove(widget)
                 self.model_tabs.removeTab(index)
                 widget.deleteLater()
+                self.bind_global_panels_to_active_model_tab()
             index -= 1
 
     def composite_editor_is_descendant(self, editor, ancestor) -> bool:
@@ -734,6 +780,7 @@ class MainWindow(QMainWindow):
         self.model_tabs.currentChanged.connect(self.on_model_tab_changed)
         self.model_tabs.addTab(self.model_view, self.project_model_tab_title())
         self.setCentralWidget(self.model_tabs)
+        self.bind_global_panels_to_active_model_tab()
 
     def make_dock(self, title: str, widget: QWidget, object_name: str = "") -> QDockWidget:
         dock = QDockWidget(title, self)

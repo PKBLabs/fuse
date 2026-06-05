@@ -398,8 +398,21 @@ def test_model_outline_follows_active_composite_model_tab(qtbot, tmp_path, monke
     window.edit_composite_instance(node)
     window.update_model_outline()
 
+    from fuse.core.ui.properties_panel import PropertiesPanel
+    from fuse.core.ui.composite_instance_editor import CompositeInstanceEditorWidget
+
+    editor = window.model_tabs.widget(1)
+    assert isinstance(editor, CompositeInstanceEditorWidget)
+    assert editor.findChildren(PropertiesPanel) == []
+    assert window.properties_panel.title.text() == "Nothing selected"
+
     assert any("internal_cache" in text for text in outline_texts(window))
     assert not any(node.instance_name in text for text in outline_texts(window))
+
+    internal_node = editor.editor_scene.component_items()[0]
+    editor.editor_scene.select_component(internal_node)
+    assert window.properties_panel.current_node is internal_node
+    assert window.properties_panel.title.text() == "Component Instance"
 
     window.model_tabs.setCurrentIndex(0)
     window.update_model_outline()

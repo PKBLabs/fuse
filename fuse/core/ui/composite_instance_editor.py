@@ -10,7 +10,6 @@ from typing import Any
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QLabel,
-    QSplitter,
     QVBoxLayout,
     QWidget,
 )
@@ -27,7 +26,6 @@ from fuse.core.persistence.project_io import (
 from fuse.core.ui.composite_builder import composite_port_mappings_for_fragment
 from fuse.core.ui.model_scene import ModelScene
 from fuse.core.ui.model_view import ModelView
-from fuse.core.ui.properties_panel import PropertiesPanel
 from fuse.core.model.models import SCHEMA_VERSION
 
 
@@ -163,21 +161,13 @@ class CompositeInstanceEditorWidget(QWidget):
         help_label.setWordWrap(True)
         layout.addWidget(help_label)
 
-        splitter = QSplitter(Qt.Horizontal, self)
         self.editor_scene = ModelScene()
         self.editor_scene.active_plugin_id = getattr(getattr(node, "scene", lambda: None)(), "active_plugin_id", "") or ""
         self.editor_view = ModelView(self.editor_scene)
-        self.editor_properties = PropertiesPanel()
-        self.editor_scene.properties_panel = self.editor_properties
         self.editor_scene.model_changed_callback = self.on_editor_scene_changed
         self.editor_scene.composite_instance_edit_requested_callback = self.request_nested_composite_edit
-        self.editor_properties.property_changed_callback = self.editor_scene.notify_model_changed
 
-        splitter.addWidget(self.editor_view)
-        splitter.addWidget(self.editor_properties)
-        splitter.setStretchFactor(0, 3)
-        splitter.setStretchFactor(1, 1)
-        layout.addWidget(splitter, 1)
+        layout.addWidget(self.editor_view, 1)
 
         self.load_instance_model()
 
@@ -190,7 +180,8 @@ class CompositeInstanceEditorWidget(QWidget):
         try:
             load_project_into_scene(project_dict_for_mini_model(mini_model), self.editor_scene)
             self.editor_scene.clearSelection()
-            self.editor_properties.show_empty()
+            if self.editor_scene.properties_panel is not None:
+                self.editor_scene.properties_panel.show_empty()
         finally:
             self.loading_model = False
 
