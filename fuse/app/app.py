@@ -45,6 +45,7 @@ from PySide6.QtWidgets import (
 
 from fuse.app.about import AboutDialog
 from fuse.app.composite_component_dialog import CompositeComponentDialog
+from fuse.app.composite_component_manager_dialog import CompositeComponentManagerDialog
 from fuse.app.project_settings_dialog import ProjectSettingsDialog
 from fuse.app.splash import create_splash_screen
 from fuse.core.app_info import APP_NAME, ORG_NAME
@@ -466,6 +467,14 @@ class MainWindow(QMainWindow):
             5000,
         )
 
+
+    def show_composite_component_manager(self) -> None:
+        dialog = CompositeComponentManagerDialog(self)
+        dialog.exec()
+        if dialog.changed:
+            self.load_framework_targets()
+            self.statusBar().showMessage("Composite component catalog refreshed.", 4000)
+
     def edit_composite_instance(self, node) -> None:
         self.open_composite_instance_tab(node)
 
@@ -558,10 +567,14 @@ class MainWindow(QMainWindow):
         self.create_composite_action.triggered.connect(self.request_create_composite_from_selection)
         self.create_composite_action.setEnabled(False)
 
+        self.manage_composite_components_action = QAction("Manage Composite Components...", self)
+        self.manage_composite_components_action.triggered.connect(self.show_composite_component_manager)
+
         edit_menu.addAction(self.undo_action)
         edit_menu.addAction(self.redo_action)
         edit_menu.addSeparator()
         edit_menu.addAction(self.create_composite_action)
+        edit_menu.addAction(self.manage_composite_components_action)
         zoom_in_action = QAction("Zoom In", self)
         zoom_in_action.setShortcut("Ctrl++")
         zoom_in_action.triggered.connect(self.model_view.zoom_in)

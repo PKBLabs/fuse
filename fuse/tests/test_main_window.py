@@ -165,6 +165,7 @@ def test_composite_import_export_actions_are_registered(qtbot, tmp_path, monkeyp
 
     assert window.import_composite_action.text() == "Import Composite Component..."
     assert window.export_composite_action.text() == "Selected Composite Component..."
+    assert window.manage_composite_components_action.text() == "Manage Composite Components..."
 
     window.close()
 
