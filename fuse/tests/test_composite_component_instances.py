@@ -31,7 +31,7 @@ def tree_item_by_name(panel: PropertiesPanel, name: str):
     return None
 
 
-def test_composite_instances_use_template_name_with_incrementing_suffix(monkeypatch):
+def test_composite_instances_use_template_name_with_incrementing_suffix(qtbot, monkeypatch):
     monkeypatch.setattr(
         "fuse.core.ui.graphics_items.load_port_names_for_component",
         lambda *args, **kwargs: [],
@@ -47,7 +47,7 @@ def test_composite_instances_use_template_name_with_incrementing_suffix(monkeypa
     assert second.instance_name == "Pair_2"
 
 
-def test_explicit_composite_instance_name_does_not_consume_next_default(monkeypatch):
+def test_explicit_composite_instance_name_does_not_consume_next_default(qtbot, monkeypatch):
     monkeypatch.setattr(
         "fuse.core.ui.graphics_items.load_port_names_for_component",
         lambda *args, **kwargs: [],
@@ -67,7 +67,7 @@ def test_explicit_composite_instance_name_does_not_consume_next_default(monkeypa
     assert default.instance_name == "Pair_1"
 
 
-def test_composite_instance_save_preserves_instance_name_icon_and_template_identity(monkeypatch):
+def test_composite_instance_save_preserves_instance_name_icon_and_template_identity(qtbot, monkeypatch):
     monkeypatch.setattr(
         "fuse.core.ui.graphics_items.load_port_names_for_component",
         lambda *args, **kwargs: [],
