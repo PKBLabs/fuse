@@ -30,6 +30,7 @@ def test_database_initialization_creates_core_and_plugin_tables():
 
     assert "core_plugins" in table_names
     assert "core_schema_migrations" in table_names
+    assert "core_composite_components" in table_names
 
     assert "sst_info_runs" in table_names
     assert "sst_elements" in table_names

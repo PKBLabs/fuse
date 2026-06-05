@@ -43,12 +43,14 @@ from PySide6.QtWidgets import (
 )
 
 from fuse.app.about import AboutDialog
+from fuse.app.composite_component_dialog import CompositeComponentDialog
 from fuse.app.project_settings_dialog import ProjectSettingsDialog
 from fuse.app.splash import create_splash_screen
 from fuse.core.app_info import APP_NAME, ORG_NAME
 from fuse.core.model.project_settings import ProjectSettings
 from fuse.core.model.validation import validate_model, validate_model_for_export
 from fuse.core.plugin_runtime.manager import get_plugin_by_id
+from fuse.core.persistence.composite_components import save_composite_component_definition
 from fuse.core.persistence.db_access import ensure_database_ready, load_framework_targets
 from fuse.core.persistence.project_io import (
     build_project_dict,
@@ -57,6 +59,11 @@ from fuse.core.persistence.project_io import (
     save_project_file,
 )
 from fuse.core.ui.component_palette import ComponentPalette
+from fuse.core.ui.composite_builder import (
+    build_composite_definition_from_selection,
+    replace_selection_with_composite_instance,
+    selection_boundary_report,
+)
 from fuse.core.ui.model_scene import ModelScene
 from fuse.core.ui.model_view import ModelView
 from fuse.core.ui.properties_panel import PropertiesPanel
@@ -301,13 +308,64 @@ class MainWindow(QMainWindow):
             "links": list(links),
             "attachments": list(attachments),
         }
-        if hasattr(self, "statusBar"):
+
+        boundary = selection_boundary_report(self.scene, components, links, attachments)
+        if boundary.has_boundary_items:
             self.statusBar().showMessage(
-                "Composite component creation queued for "
-                f"{len(components)} components, {len(links)} internal links, "
-                f"and {len(attachments)} internal subcomponent attachments.",
-                5000,
+                "Cannot create a composite while selected components still have "
+                "links or subcomponent attachments to unselected components.",
+                7000,
             )
+            return
+
+        dialog = CompositeComponentDialog(self)
+        if dialog.exec() != QDialog.Accepted:
+            return
+
+        self.create_composite_from_selection(
+            name=dialog.composite_name(),
+            icon_path=dialog.icon_path(),
+            description=dialog.composite_description(),
+            components=components,
+            links=links,
+            attachments=attachments,
+        )
+
+    def create_composite_from_selection(
+        self,
+        name: str,
+        icon_path: str,
+        description: str,
+        components,
+        links,
+        attachments,
+    ):
+        definition = build_composite_definition_from_selection(
+            name=name,
+            icon_path=icon_path,
+            components=list(components),
+            internal_connections=list(links),
+            internal_attachments=list(attachments),
+            description=description,
+        )
+        saved = save_composite_component_definition(definition)
+        composite_node = replace_selection_with_composite_instance(
+            self.scene,
+            saved,
+            list(components),
+            list(links),
+            list(attachments),
+        )
+
+        self.load_framework_targets()
+        self.update_model_outline()
+        self.update_create_composite_action_state()
+        self.mark_dirty()
+        self.statusBar().showMessage(
+            f"Created composite component '{saved.name}' from selection.",
+            5000,
+        )
+        return composite_node
 
     def setup_menu_bar(self):
         menu_bar = QMenuBar(self)

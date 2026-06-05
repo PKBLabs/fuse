@@ -48,6 +48,8 @@ def component_node_to_save_dict(node: ComponentNodeItem) -> dict:
         "iconPath": node.icon_path,
         "interface": node.component.iface,
         "displayNameOverride": node.component.display_name_override,
+        "isComposite": int(getattr(node.component, "is_composite", 0) or 0),
+        "compositeId": getattr(node.component, "composite_id", "") or "",
         "instanceName": node.instance_name,
         "parameters": node.parameters,
         "variablePortCounts": getattr(node, "variable_port_counts", {}),
@@ -258,6 +260,8 @@ def load_project_into_scene(project: dict, scene: ModelScene) -> None:
             iface=component_data.get("interface", ""),
             icon_path=icon_path,
             display_name_override=component_data.get("displayNameOverride", ""),
+            is_composite=int(component_data.get("isComposite", 0) or 0),
+            composite_id=component_data.get("compositeId", ""),
         )
 
         node_id = int(component_data["id"])

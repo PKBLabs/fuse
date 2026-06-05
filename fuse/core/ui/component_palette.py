@@ -512,6 +512,10 @@ class ComponentPalette(QWidget):
     def tooltip_for_component(self, component: ComponentDefinition) -> str:
         lines = [component.display_name or component.name]
 
+        if int(getattr(component, "is_composite", 0) or 0):
+            lines.append("")
+            lines.append("Reusable FUSE composite component")
+
         if component.description:
             lines.append("")
             lines.append(component.description)
@@ -539,6 +543,9 @@ class ComponentPalette(QWidget):
         return normal, subcomponents
 
     def simulator_label_for_component(self, component: ComponentDefinition) -> str:
+        if int(getattr(component, "is_composite", 0) or 0):
+            return "Composite Components"
+
         plugin_id = (component.plugin_id or "core").strip()
         labels = {"sst": "SST", "gem5": "Gem5", "core": "Core"}
         return labels.get(plugin_id, plugin_id.upper() if len(plugin_id) <= 4 else plugin_id.title())
