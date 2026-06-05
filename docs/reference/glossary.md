@@ -8,6 +8,14 @@ The plugin selected in Project Settings as the current modeling context. The act
 
 A set of component metadata exposed by a plugin. Catalogs may be versioned by framework target.
 
+## Composite component
+
+A reusable FUSE mini-model template made from selected components, internal links, parameters, and layout. Composite components are editor abstractions and are flattened into simulator-native components before plugin validation/export.
+
+## Composite instance
+
+A placed instance of a composite component template. It may have instance-local internal edits that do not change the global reusable template.
+
 ## Component definition
 
 The editor-facing generic description of a component type. FUSE serializes component definitions into drag/drop payloads and uses them to create component instances.
@@ -71,3 +79,8 @@ An SST command that reports available SST element libraries, components, subcomp
 ## gem5
 
 A computer architecture simulator. The gem5 community plugin exposes selected gem5 component metadata and validates configured gem5 binaries.
+
+
+## `.fcc` file
+
+A JSON file containing one exported composite component definition for sharing/importing. It is separate from the `.fse` project format.

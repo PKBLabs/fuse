@@ -26,7 +26,7 @@ The `.fse` format is FUSE's editable project format. It is not the same as simul
 | `projectSettings` | Project-wide plugin, target, and toolchain settings. |
 | `pluginSettings` | Compatibility mirror of plugin settings. |
 | `activeTarget` | Compatibility/quick-lookup active plugin and target. |
-| `components` | Component instances placed on the canvas. |
+| `components` | Component instances placed on the canvas, including composite instances. |
 | `links` | Point-to-point model links. |
 | `editor` | Editor view metadata. |
 
@@ -126,7 +126,9 @@ Each component entry describes one canvas instance.
   "position": {
     "x": 100.0,
     "y": 150.0
-  }
+  },
+  "isComposite": 0,
+  "compositeId": ""
 }
 ```
 
@@ -147,6 +149,47 @@ Each component entry describes one canvas instance.
 | `instanceName` | Unique instance name. |
 | `parameters` | User-entered parameter overrides. |
 | `position` | Model-scene coordinate position. |
+| `isComposite` | `1` when this component entry is a FUSE composite instance; otherwise `0`. |
+| `compositeId` | Composite template ID for FUSE composite instances. Empty for normal plugin-owned components. |
+| `compositeInstance` | Optional instance-local composite mini-model state for edited composite instances. |
+
+### Composite instance state
+
+Composite component instances may include an optional `compositeInstance` block when that placed instance has instance-local mini-model state.
+
+```json
+{
+  "id": 7,
+  "pluginId": "core",
+  "targetId": "fuse-composite",
+  "componentId": "6cb322e5-cfae-40f9-b6e9-example",
+  "isComposite": 1,
+  "compositeId": "6cb322e5-cfae-40f9-b6e9-example",
+  "instanceName": "CacheCluster_1",
+  "compositeInstance": {
+    "miniModel": {
+      "kind": "fuse.composite-mini-model",
+      "components": [],
+      "links": [],
+      "subcomponentAttachments": []
+    },
+    "portMappings": []
+  }
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `pluginId` | Composite instances use the core-owned plugin ID, currently `core`. |
+| `targetId` | Composite instances use the core-owned target ID, currently `fuse-composite`. |
+| `componentId` / `compositeId` | The local composite definition/template ID. |
+| `isComposite` | Marks the component as a FUSE composite instance. |
+| `compositeInstance.miniModel` | Instance-local editable mini-model for this placed instance. |
+| `compositeInstance.portMappings` | External port mappings for this instance. |
+
+The `compositeInstance` block is omitted when there is no meaningful instance-local mini-model to save. The global reusable composite definition itself is stored in the local database and can be exported separately as a `.fcc` file.
+
+Composite instances are expanded before plugin validation/export. Simulator-specific output should not contain FUSE composite nodes.
 
 ## `links`
 
@@ -230,3 +273,28 @@ Project validation requires:
 Unsupported schemas should fail clearly.
 
 Older `.fse` files that lack `projectSettings` may still be interpreted using `activeTarget` compatibility logic.
+
+
+## Composite component file format (`.fcc`)
+
+Reusable composite definitions can be shared with other FUSE users as `.fcc` files. The `.fcc` file is JSON and is separate from the editable `.fse` project format.
+
+```json
+{
+  "kind": "fuse.composite-component",
+  "schema_version": "0.1.0",
+  "definition": {
+    "composite_id": "6cb322e5-cfae-40f9-b6e9-example",
+    "name": "Cache Cluster",
+    "description": "Reusable cache cluster",
+    "icon_path": "icons/cache-cluster.png",
+    "mini_model": {},
+    "port_mappings": [],
+    "schema_version": "0.1.0",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "updated_at": "2026-01-01T00:00:00+00:00"
+  }
+}
+```
+
+Importing a `.fcc` file adds the definition to the local `core_composite_components` table. Exporting writes one reusable definition, not a full project.

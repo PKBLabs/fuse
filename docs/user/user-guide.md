@@ -37,7 +37,7 @@ Project-specific settings are saved in the `.fse` file. This lets one project ta
 
 ## Component palette
 
-The component palette lists components provided by the active plugin and selected target/catalog.
+The component palette lists components provided by the active plugin and selected target/catalog. It also lists locally stored composite components under **Composite Components** when reusable mini-model templates are available.
 
 The Community Edition includes community plugin directories for:
 
@@ -79,6 +79,10 @@ The palette tracks component usage locally so frequently used and recently used 
 
 Usage state is stored in local user settings. It is a convenience feature and is not written to the `.fse` project file.
 
+### Composite component entries
+
+Composite components are reusable FUSE mini-model templates. They appear in the palette under **Composite Components** and can be dragged onto the model canvas like plugin-provided components. A composite palette entry is owned by FUSE core, not by SST or gem5. During simulator validation/export, FUSE expands composite instances into their internal simulator-specific components and links before handing the model to the active plugin.
+
 ## Adding a component to the model
 
 1. Select a component in the palette.
@@ -87,7 +91,7 @@ Usage state is stored in local user settings. It is a convenience feature and is
 
 When the component is dropped, FUSE converts the drop location into model coordinates, creates a component instance, assigns a unique default instance name, adds the node to the model, and marks the project dirty.
 
-A component instance appears as an architecture icon with ports. The exact ports come from plugin-provided item details. If no ports are available, FUSE may use fallback ports so the component remains usable.
+A component instance appears as an architecture icon with ports. The exact ports come from plugin-provided item details. If no ports are available, FUSE may use fallback ports so the component remains usable. For composite instances, visible ports correspond to the unlinked ports inside the composite mini-model.
 
 ## Navigating the canvas
 
@@ -168,9 +172,21 @@ The properties panel updates to show:
 
 The selected link is highlighted.
 
+## Creating composite components
+
+Use composite components when you want to reuse a configured portion of the model. Select multiple components with **Multiselect** or **Ctrl+click**, then choose **Edit -> Create Composite Component from Selection** or the same action from the selected component context menu.
+
+FUSE stores the selected components, internal links, parameters, and relative positions as a local composite definition. It replaces the selected fragment with one composite instance. Only links whose endpoints are both selected become internal composite links. Unlinked internal ports become visible external ports on the composite box.
+
+Double-click a composite instance to open an editable model-view tab for that instance. Edits in a composite tab affect only that placed instance, not the global composite template. Composite tabs can be nested; for example, opening a composite inside another composite creates a hierarchy-labeled tab such as `Outer_1:Inner_1`.
+
+Manage reusable templates with **Edit -> Manage Composite Components...**. The manager can import `.fcc` files, export selected definitions, and delete obsolete definitions from the local database.
+
+For the full workflow, see [Composite Components](composite-components.md).
+
 ## Highlighting related links
 
-Click a component instance to highlight links attached to that component. This helps identify link ownership in dense models.
+Click a component instance to highlight links attached to that component. This helps identify link ownership in dense models. When several components are selected, FUSE highlights only links whose endpoints are both inside the selected set.
 
 ## Deleting components, subcomponents, and links
 
@@ -238,7 +254,7 @@ The project loader restores:
 
 - Project settings.
 - Active plugin/target selection.
-- Component instances.
+- Component instances, including composite instance identity and instance-local composite edit state.
 - Instance names.
 - Component plugin IDs.
 - Framework target metadata.
@@ -252,7 +268,7 @@ The project loader restores:
 
 A `.fse` file is FUSE's native project format. Simulator-specific exports are generated separately.
 
-For SST, FUSE can export the current model to SST JSON configuration format. The generated SST JSON file is intended for SST, while the `.fse` file remains the editable FUSE project.
+For SST, FUSE can export the current model to SST JSON configuration format. The generated SST JSON file is intended for SST, while the `.fse` file remains the editable FUSE project. Composite instances are expanded before plugin validation/export so the simulator-specific output contains ordinary SST or gem5 objects, not FUSE composite nodes.
 
 ## About dialog
 
@@ -267,6 +283,7 @@ The About dialog shows version, edition, licensing, copyright, and plugin policy
 ## More documentation
 
 - [Model Editor Workflow](model-editor-workflow.md)
+- [Composite Components](composite-components.md)
 - [Properties and Validation](properties-and-validation.md)
 - [Project Files](project-files.md)
 - [Component Metadata Reference](../reference/component-metadata.md)

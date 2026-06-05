@@ -8,8 +8,11 @@ FUSE separates project-instance data from plugin catalog data. This keeps `.fse`
 Plugin catalog data
   Available component types, parameters, ports, statistics, framework targets
 
+Core composite definition data
+  Locally stored reusable FUSE mini-model templates
+
 Project-instance data
-  User-created component instances, positions, links, parameter overrides
+  User-created component instances, positions, links, parameter overrides, composite instance edit state
 ```
 
 ## Project-instance data
@@ -23,6 +26,8 @@ Core model classes include:
 - `ProjectSettings`
 - `PluginProjectSettings`
 - `ToolchainSettings`
+- `CompositeComponentDefinition`
+- `CompositePortMapping`
 
 These are defined in:
 
@@ -52,7 +57,7 @@ icon_path
 display_name_override
 ```
 
-The key field is `plugin_id`. A `component_id` only has meaning within the plugin that created it. The `target_id` and `framework_version` fields make the definition version-aware.
+The key field is `plugin_id`. A `component_id` only has meaning within the plugin that created it. The `target_id` and `framework_version` fields make the definition version-aware. Composite component definitions use core-owned metadata (`plugin_id="core"`, `target_id="fuse-composite"`) so they can appear in the same palette without pretending to be SST or gem5 components.
 
 Example:
 
@@ -94,6 +99,14 @@ Example payload:
 ```
 
 Backward-compatible pipe-delimited formats are still parsed for older tests/files, but new code should use the JSON payload.
+
+## Composite component definitions
+
+Composite components are core-owned reusable mini-model definitions. A `CompositeComponentDefinition` stores a template ID, display name, description, optional icon path, a serialized mini-model, and external port mappings. A `CompositePortMapping` maps a visible composite port to the internal component port it represents.
+
+Placed composite instances are normal component nodes with composite identity fields. If an instance has been edited, its instance-local mini-model is stored with that placed node in the project file. Instance-local edits do not mutate the global composite definition in the local database.
+
+Before simulator validation/export, core flattening expands composite instances recursively into ordinary plugin-owned components and links. This keeps composite editing generic while preserving the rule that SST and gem5 plugins only receive simulator-native model objects.
 
 ## `ModelLink`
 
