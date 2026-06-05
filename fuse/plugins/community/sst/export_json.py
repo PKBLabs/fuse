@@ -358,6 +358,9 @@ def node_is_subcomponent(node) -> bool:
 
 def validate_sst_json_export(scene) -> SSTExportReport:
     """Validate that a scene can be exported to SST JSON without repair."""
+    from fuse.core.model.composite_flattening import flatten_scene_for_export
+
+    scene = flatten_scene_for_export(scene)
     report = SSTExportReport()
     nodes = list(scene.component_items())
     links = list(getattr(scene, "links", []) or [])
@@ -705,6 +708,9 @@ def build_sst_json_dict(
     This is intentionally separate from writing the file so tests can assert
     on the generated dictionary directly.
     """
+    from fuse.core.model.composite_flattening import flatten_scene_for_export
+
+    scene = flatten_scene_for_export(scene)
     nodes = sorted(scene.component_items(), key=lambda node: (str(node.instance_name), int(node.node_id)))
     nodes_by_id = {node.node_id: node for node in nodes}
 

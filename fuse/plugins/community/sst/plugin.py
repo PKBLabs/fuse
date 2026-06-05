@@ -405,16 +405,18 @@ class SSTPlugin:
         if format_id not in ("", "sst.json"):
             raise ValueError(f"Unsupported SST export format: {format_id}")
 
+        from fuse.core.model.composite_flattening import flatten_scene_for_export
         from fuse.plugins.community.sst.export_json import export_sst_json, validate_sst_json_export
 
         output = Path(output_path)
-        report = validate_sst_json_export(scene)
+        export_scene = flatten_scene_for_export(scene)
+        report = validate_sst_json_export(export_scene)
         report_path = ""
         if report.warnings:
             report_path = str(output.with_suffix(".export-report.json"))
 
         export_sst_json(
-            scene=scene,
+            scene=export_scene,
             output_path=output,
             report_path=report_path or None,
         )
@@ -434,9 +436,10 @@ class SSTPlugin:
         )
 
     def validate_export(self, scene) -> list:
+        from fuse.core.model.composite_flattening import flatten_scene_for_export
         from fuse.plugins.community.sst.export_json import validate_sst_json_export
 
-        return validate_sst_json_export(scene).issues
+        return validate_sst_json_export(flatten_scene_for_export(scene)).issues
 
     def validate_toolchain(self, plugin_settings) -> tuple[bool, str]:
         expected_version = getattr(plugin_settings, "framework_version", "") or ""
