@@ -9,12 +9,10 @@ from typing import Any
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QDialog,
-    QDialogButtonBox,
-    QHBoxLayout,
     QLabel,
     QSplitter,
     QVBoxLayout,
+    QWidget,
 )
 
 from fuse.core.model.composite import CompositeComponentDefinition, CompositePortMapping
@@ -137,17 +135,25 @@ def apply_composite_instance_edit(
     node.composite_port_mappings = [deepcopy(mapping) for mapping in normalized_mappings]
 
 
-class CompositeInstanceEditorDialog(QDialog):
-    def __init__(self, node, parent=None):
+class CompositeInstanceEditorWidget(QWidget):
+    def __init__(
+        self,
+        node,
+        parent=None,
+        nested_edit_requested_callback=None,
+        instance_changed_callback=None,
+    ):
         super().__init__(parent)
         self.node = node
-        self.setWindowTitle(f"Edit Composite Instance: {getattr(node, 'instance_name', 'Composite')}")
-        self.resize(980, 640)
+        self.nested_edit_requested_callback = nested_edit_requested_callback
+        self.instance_changed_callback = instance_changed_callback
+        self.loading_model = False
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
         help_label = QLabel(
             "Edit the internal mini-model for this composite instance. "
-            "Changes apply only to the selected instance, not the global composite template."
+            "Changes apply only to this placed instance, not the global composite template."
         )
         help_label.setWordWrap(True)
         layout.addWidget(help_label)
@@ -158,6 +164,8 @@ class CompositeInstanceEditorDialog(QDialog):
         self.editor_view = ModelView(self.editor_scene)
         self.editor_properties = PropertiesPanel()
         self.editor_scene.properties_panel = self.editor_properties
+        self.editor_scene.model_changed_callback = self.on_editor_scene_changed
+        self.editor_scene.composite_instance_edit_requested_callback = self.request_nested_composite_edit
         self.editor_properties.property_changed_callback = self.editor_scene.notify_model_changed
 
         splitter.addWidget(self.editor_view)
@@ -166,23 +174,43 @@ class CompositeInstanceEditorDialog(QDialog):
         splitter.setStretchFactor(1, 1)
         layout.addWidget(splitter, 1)
 
-        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self)
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
-
         self.load_instance_model()
 
     def load_instance_model(self) -> None:
         mini_model = composite_instance_mini_model(self.node)
         if not mini_model:
             return
-        load_project_into_scene(project_dict_for_mini_model(mini_model), self.editor_scene)
-        self.editor_scene.clearSelection()
-        self.editor_properties.show_empty()
+
+        self.loading_model = True
+        try:
+            load_project_into_scene(project_dict_for_mini_model(mini_model), self.editor_scene)
+            self.editor_scene.clearSelection()
+            self.editor_properties.show_empty()
+        finally:
+            self.loading_model = False
 
     def edited_mini_model(self) -> dict[str, Any]:
         return mini_model_from_scene(self.editor_scene)
 
     def edited_port_mappings(self) -> list[CompositePortMapping]:
         return port_mappings_from_scene(self.editor_scene)
+
+    def apply_current_edit_to_node(self) -> None:
+        apply_composite_instance_edit(
+            self.node,
+            self.edited_mini_model(),
+            self.edited_port_mappings(),
+        )
+
+    def on_editor_scene_changed(self) -> None:
+        if self.loading_model:
+            return
+
+        self.apply_current_edit_to_node()
+        if self.instance_changed_callback is not None:
+            self.instance_changed_callback(self)
+
+    def request_nested_composite_edit(self, nested_node) -> None:
+        self.apply_current_edit_to_node()
+        if self.nested_edit_requested_callback is not None:
+            self.nested_edit_requested_callback(nested_node, self)

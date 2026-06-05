@@ -35,6 +35,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QStatusBar,
     QStyle,
+    QTabWidget,
     QToolButton,
     QTreeWidget,
     QTreeWidgetItem,
@@ -72,10 +73,7 @@ from fuse.core.ui.composite_builder import (
     replace_selection_with_composite_instance,
     selection_boundary_report,
 )
-from fuse.core.ui.composite_instance_editor import (
-    CompositeInstanceEditorDialog,
-    apply_composite_instance_edit,
-)
+from fuse.core.ui.composite_instance_editor import CompositeInstanceEditorWidget
 from fuse.core.ui.model_scene import ModelScene
 from fuse.core.ui.model_view import ModelView
 from fuse.core.ui.properties_panel import PropertiesPanel
@@ -243,6 +241,8 @@ class MainWindow(QMainWindow):
         self.model_view = ModelView(self.scene)
         self.model_view.undo_callback = self.undo
         self.model_view.redo_callback = self.redo
+        self.model_tabs: QTabWidget | None = None
+        self.composite_editor_widgets: list[CompositeInstanceEditorWidget] = []
         self.properties_panel = PropertiesPanel()
         self.model_outline = QTreeWidget()
         self.model_outline.setHeaderHidden(True)
@@ -467,27 +467,7 @@ class MainWindow(QMainWindow):
         )
 
     def edit_composite_instance(self, node) -> None:
-        component_is_composite = bool(int(getattr(node.component, "is_composite", 0) or 0))
-        if not component_is_composite:
-            return
-
-        dialog = CompositeInstanceEditorDialog(node, self)
-        if dialog.exec() != QDialog.Accepted:
-            return
-
-        apply_composite_instance_edit(
-            node,
-            dialog.edited_mini_model(),
-            dialog.edited_port_mappings(),
-        )
-        if self.properties_panel.current_node is node:
-            self.properties_panel.show_component(node)
-        self.update_model_outline()
-        self.mark_dirty()
-        self.statusBar().showMessage(
-            f"Updated composite instance '{node.instance_name}'.",
-            5000,
-        )
+        self.open_composite_instance_tab(node)
 
     def setup_menu_bar(self):
         menu_bar = QMenuBar(self)
@@ -591,13 +571,144 @@ class MainWindow(QMainWindow):
         view_menu.addAction(zoom_in_action)
         view_menu.addAction(zoom_out_action)
 
+    def project_model_tab_title(self) -> str:
+        name = (self.project_name or "Untitled FUSE Project").strip()
+        return name or "Untitled FUSE Project"
+
+    def refresh_project_model_tab_title(self) -> None:
+        if self.model_tabs is not None and self.model_tabs.count() > 0:
+            self.model_tabs.setTabText(0, self.project_model_tab_title())
+            self.model_tabs.setTabToolTip(0, "Global project model")
+
+    def composite_tab_label(self, node, parent_editor=None) -> str:
+        node_name = getattr(node, "instance_name", "Composite") or "Composite"
+        if parent_editor is None:
+            return str(node_name)
+
+        parent_label = getattr(parent_editor, "composite_tab_path", "") or ""
+        if not parent_label:
+            return str(node_name)
+        return f"{parent_label}:{node_name}"
+
+    def find_composite_editor_tab_index(self, node, parent_editor=None) -> int:
+        if self.model_tabs is None:
+            return -1
+
+        for index in range(1, self.model_tabs.count()):
+            widget = self.model_tabs.widget(index)
+            if not isinstance(widget, CompositeInstanceEditorWidget):
+                continue
+            if widget.node is not node:
+                continue
+            if getattr(widget, "parent_composite_editor", None) is parent_editor:
+                return index
+        return -1
+
+    def open_composite_instance_tab(self, node, parent_editor=None) -> None:
+        component_is_composite = bool(int(getattr(node.component, "is_composite", 0) or 0))
+        if not component_is_composite:
+            return
+
+        existing_index = self.find_composite_editor_tab_index(node, parent_editor)
+        if existing_index >= 0:
+            self.model_tabs.setCurrentIndex(existing_index)
+            return
+
+        label = self.composite_tab_label(node, parent_editor)
+        editor = CompositeInstanceEditorWidget(
+            node,
+            parent=self,
+            nested_edit_requested_callback=self.open_nested_composite_instance_tab,
+            instance_changed_callback=self.on_composite_editor_changed,
+        )
+        editor.composite_tab_path = label
+        editor.parent_composite_editor = parent_editor
+        self.composite_editor_widgets.append(editor)
+
+        index = self.model_tabs.addTab(editor, label)
+        self.model_tabs.setTabToolTip(index, label.replace(":", " > "))
+        self.model_tabs.setCurrentIndex(index)
+        self.statusBar().showMessage(f"Opened composite instance tab '{label}'.", 3000)
+
+    def open_nested_composite_instance_tab(self, node, parent_editor) -> None:
+        self.open_composite_instance_tab(node, parent_editor=parent_editor)
+
+    def on_composite_editor_changed(self, editor) -> None:
+        self.propagate_composite_editor_change_to_ancestors(editor)
+        node = editor.node
+        if self.properties_panel.current_node is node:
+            self.properties_panel.show_component(node)
+        self.update_model_outline()
+        self.mark_dirty()
+
+    def propagate_composite_editor_change_to_ancestors(self, editor) -> None:
+        parent_editor = getattr(editor, "parent_composite_editor", None)
+        while parent_editor is not None:
+            parent_editor.apply_current_edit_to_node()
+            parent_editor = getattr(parent_editor, "parent_composite_editor", None)
+
+    def close_model_tab(self, index: int) -> None:
+        if self.model_tabs is None or index <= 0:
+            return
+
+        widget = self.model_tabs.widget(index)
+        if isinstance(widget, CompositeInstanceEditorWidget):
+            self.close_child_composite_tabs(widget)
+            widget.apply_current_edit_to_node()
+            self.propagate_composite_editor_change_to_ancestors(widget)
+            if widget in self.composite_editor_widgets:
+                self.composite_editor_widgets.remove(widget)
+
+        self.model_tabs.removeTab(index)
+        widget.deleteLater()
+
+    def close_child_composite_tabs(self, parent_editor) -> None:
+        if self.model_tabs is None:
+            return
+
+        index = self.model_tabs.count() - 1
+        while index > 0:
+            widget = self.model_tabs.widget(index)
+            if (
+                isinstance(widget, CompositeInstanceEditorWidget)
+                and self.composite_editor_is_descendant(widget, parent_editor)
+            ):
+                widget.apply_current_edit_to_node()
+                if widget in self.composite_editor_widgets:
+                    self.composite_editor_widgets.remove(widget)
+                self.model_tabs.removeTab(index)
+                widget.deleteLater()
+            index -= 1
+
+    def composite_editor_is_descendant(self, editor, ancestor) -> bool:
+        parent_editor = getattr(editor, "parent_composite_editor", None)
+        while parent_editor is not None:
+            if parent_editor is ancestor:
+                return True
+            parent_editor = getattr(parent_editor, "parent_composite_editor", None)
+        return False
+
+    def close_all_composite_model_tabs(self) -> None:
+        if self.model_tabs is None:
+            return
+
+        index = self.model_tabs.count() - 1
+        while index > 0:
+            self.close_model_tab(index)
+            index -= 1
+
     def setup_layout(self):
         self.component_palette_panel = QWidget()
         palette_layout = QVBoxLayout(self.component_palette_panel)
         palette_layout.setContentsMargins(8, 8, 8, 8)
         palette_layout.addWidget(self.palette)
 
-        self.setCentralWidget(self.model_view)
+        self.model_tabs = QTabWidget(self)
+        self.model_tabs.setDocumentMode(True)
+        self.model_tabs.setTabsClosable(True)
+        self.model_tabs.tabCloseRequested.connect(self.close_model_tab)
+        self.model_tabs.addTab(self.model_view, self.project_model_tab_title())
+        self.setCentralWidget(self.model_tabs)
 
     def make_dock(self, title: str, widget: QWidget, object_name: str = "") -> QDockWidget:
         dock = QDockWidget(title, self)
@@ -795,6 +906,7 @@ class MainWindow(QMainWindow):
 
         self.project_settings = new_settings
         self.project_name = self.project_settings.project_name or self.project_name
+        self.refresh_project_model_tab_title()
         self.apply_project_settings_to_ui()
         self.statusBar().showMessage("Project settings updated", 3000)
         self.mark_dirty()
@@ -1060,11 +1172,13 @@ class MainWindow(QMainWindow):
         try:
             self.project_settings = ProjectSettings.from_project_dict(snapshot)
             self.project_name = snapshot.get("project", {}).get("name", self.project_name)
+            self.close_all_composite_model_tabs()
             load_project_into_scene(snapshot, self.scene)
             self.properties_panel.set_validation_issues([])
             self.properties_panel.show_empty()
             self.apply_project_settings_to_ui()
             self.model_view.apply_editor_state(snapshot.get("editor", {}))
+            self.refresh_project_model_tab_title()
             self.update_model_outline()
             self._last_history_signature = self.history_signature(snapshot)
         finally:
@@ -1182,6 +1296,7 @@ class MainWindow(QMainWindow):
         self.current_project_path = None
         self._restoring_history = True
         try:
+            self.close_all_composite_model_tabs()
             self.scene.clear_model()
         finally:
             self._restoring_history = False
@@ -1190,6 +1305,7 @@ class MainWindow(QMainWindow):
         self.properties_panel.show_empty()
         self.apply_project_settings_to_ui()
         self.model_view.apply_editor_state({})
+        self.refresh_project_model_tab_title()
         self.update_model_outline()
         self.reset_undo_history(mark_clean=True)
         self.statusBar().showMessage("New project created", 3000)
@@ -1217,6 +1333,7 @@ class MainWindow(QMainWindow):
         else:
             self.project_name = "Untitled FUSE Project"
 
+        self.refresh_project_model_tab_title()
         self.set_dirty(self.is_dirty)
 
     def save_model(self) -> bool:
@@ -1420,6 +1537,7 @@ class MainWindow(QMainWindow):
         try:
             project = load_project_file(file_path)
             self.project_settings = ProjectSettings.from_project_dict(project)
+            self.close_all_composite_model_tabs()
             load_project_into_scene(project, self.scene)
             self.properties_panel.set_validation_issues([])
             self.properties_panel.show_empty()
@@ -1430,6 +1548,7 @@ class MainWindow(QMainWindow):
         self.set_current_project_path(file_path)
 
         self.apply_project_settings_to_ui()
+        self.refresh_project_model_tab_title()
         self.model_view.apply_editor_state(project.get("editor", {}))
         self.update_model_outline()
         self.reset_undo_history(mark_clean=True)

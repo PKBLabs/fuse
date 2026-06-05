@@ -54,7 +54,8 @@ def test_available_components_panel_is_dockable(qtbot, tmp_path, monkeypatch):
     window.show()
     qtbot.wait(100)
 
-    assert window.centralWidget() is window.model_view
+    assert window.centralWidget() is window.model_tabs
+    assert window.model_tabs.widget(0) is window.model_view
     assert isinstance(window.component_palette_dock, QDockWidget)
     assert window.component_palette_dock.windowTitle() == "Available Components"
     assert window.component_palette_dock.widget() is window.component_palette_panel
@@ -165,4 +166,162 @@ def test_composite_import_export_actions_are_registered(qtbot, tmp_path, monkeyp
     assert window.import_composite_action.text() == "Import Composite Component..."
     assert window.export_composite_action.text() == "Selected Composite Component..."
 
+    window.close()
+
+
+def test_model_view_uses_project_tab(qtbot, tmp_path, monkeypatch):
+    db_path = tmp_path / "test_app.db"
+
+    monkeypatch.setenv("FUSE_DB_PATH", str(db_path))
+    monkeypatch.setenv("QT_QPA_PLATFORM", os.environ.get("QT_QPA_PLATFORM", "offscreen"))
+
+    from fuse.app.app import MainWindow
+
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    assert window.model_tabs.count() == 1
+    assert window.model_tabs.tabText(0) == "Untitled FUSE Project"
+    assert window.model_tabs.widget(0) is window.model_view
+
+    window.close_model_tab(0)
+    assert window.model_tabs.count() == 1
+
+    window.close()
+
+
+def test_double_click_composite_opens_model_view_tab(qtbot, tmp_path, monkeypatch):
+    db_path = tmp_path / "test_app.db"
+
+    monkeypatch.setenv("FUSE_DB_PATH", str(db_path))
+    monkeypatch.setenv("QT_QPA_PLATFORM", os.environ.get("QT_QPA_PLATFORM", "offscreen"))
+    monkeypatch.setattr(
+        "fuse.core.ui.graphics_items.load_port_names_for_component",
+        lambda *args, **kwargs: [],
+    )
+
+    from PySide6.QtCore import QPointF
+    from fuse.app.app import MainWindow
+    from fuse.core.model.composite import CompositeComponentDefinition
+    from fuse.core.persistence.composite_components import save_composite_component_definition
+    from fuse.core.ui.composite_builder import component_definition_for_composite
+    from fuse.core.ui.composite_instance_editor import CompositeInstanceEditorWidget
+
+    definition = save_composite_component_definition(
+        CompositeComponentDefinition.make(
+            composite_id="tabbed-editor-template",
+            name="Cache Pair",
+            mini_model={
+                "schemaVersion": "0.1.0",
+                "kind": "fuse.composite-mini-model",
+                "components": [],
+                "links": [],
+                "subcompAttachments": [],
+            },
+            port_mappings=[],
+        )
+    )
+
+    window = MainWindow()
+    qtbot.addWidget(window)
+    node = window.scene.create_component_node(
+        component_definition_for_composite(definition),
+        QPointF(0.0, 0.0),
+    )
+
+    window.edit_composite_instance(node)
+
+    assert window.model_tabs.count() == 2
+    assert window.model_tabs.tabText(1) == node.instance_name
+    assert isinstance(window.model_tabs.widget(1), CompositeInstanceEditorWidget)
+
+    window.close_model_tab(1)
+    assert window.model_tabs.count() == 1
+
+    window.set_dirty(False)
+    window.close()
+
+
+def test_nested_composite_opens_hierarchical_model_view_tab(qtbot, tmp_path, monkeypatch):
+    db_path = tmp_path / "test_app.db"
+
+    monkeypatch.setenv("FUSE_DB_PATH", str(db_path))
+    monkeypatch.setenv("QT_QPA_PLATFORM", os.environ.get("QT_QPA_PLATFORM", "offscreen"))
+    monkeypatch.setattr(
+        "fuse.core.ui.graphics_items.load_port_names_for_component",
+        lambda *args, **kwargs: [],
+    )
+
+    from PySide6.QtCore import QPointF
+    from fuse.app.app import MainWindow
+    from fuse.core.model.composite import CompositeComponentDefinition
+    from fuse.core.persistence.composite_components import save_composite_component_definition
+    from fuse.core.ui.composite_builder import component_definition_for_composite
+    from fuse.core.ui.composite_instance_editor import CompositeInstanceEditorWidget
+
+    inner = save_composite_component_definition(
+        CompositeComponentDefinition.make(
+            composite_id="inner-tab-template",
+            name="Inner",
+            mini_model={
+                "schemaVersion": "0.1.0",
+                "kind": "fuse.composite-mini-model",
+                "components": [],
+                "links": [],
+                "subcompAttachments": [],
+            },
+            port_mappings=[],
+        )
+    )
+    outer = save_composite_component_definition(
+        CompositeComponentDefinition.make(
+            composite_id="outer-tab-template",
+            name="Outer",
+            mini_model={
+                "schemaVersion": "0.1.0",
+                "kind": "fuse.composite-mini-model",
+                "components": [
+                    {
+                        "id": 1,
+                        "element": "Composite Components",
+                        "name": "Inner",
+                        "pluginId": "core",
+                        "targetId": "fuse-composite",
+                        "componentId": inner.composite_id,
+                        "isComposite": 1,
+                        "compositeId": inner.composite_id,
+                        "instanceName": "Inner_1",
+                        "parameters": {},
+                        "variablePortCounts": {},
+                        "position": {"x": 0.0, "y": 0.0},
+                    }
+                ],
+                "links": [],
+                "subcompAttachments": [],
+            },
+            port_mappings=[],
+        )
+    )
+
+    window = MainWindow()
+    qtbot.addWidget(window)
+    outer_node = window.scene.create_component_node(
+        component_definition_for_composite(outer),
+        QPointF(0.0, 0.0),
+    )
+
+    window.edit_composite_instance(outer_node)
+    outer_editor = window.model_tabs.widget(1)
+    assert isinstance(outer_editor, CompositeInstanceEditorWidget)
+    inner_node = outer_editor.editor_scene.component_items()[0]
+
+    outer_editor.request_nested_composite_edit(inner_node)
+
+    assert window.model_tabs.count() == 3
+    assert window.model_tabs.tabText(2) == f"{outer_node.instance_name}:{inner_node.instance_name}"
+
+    window.close_model_tab(1)
+    assert window.model_tabs.count() == 1
+
+    window.set_dirty(False)
     window.close()
