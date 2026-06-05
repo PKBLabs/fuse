@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 )
 
 from fuse.core.model.composite import CompositeComponentDefinition, CompositePortMapping
+from fuse.core.model.composite_mini_model import normalize_mini_model_and_port_mappings
 from fuse.core.persistence.composite_components import get_composite_component_definition
 from fuse.core.persistence.project_io import (
     component_node_to_save_dict,
@@ -43,38 +44,52 @@ def composite_definition_for_node(node) -> CompositeComponentDefinition | None:
 def composite_instance_mini_model(node) -> dict[str, Any]:
     instance_model = getattr(node, "composite_instance_model", {}) or {}
     if isinstance(instance_model, dict) and instance_model.get("components") is not None:
-        return deepcopy(instance_model)
+        normalized_model, ignored_mappings = normalize_mini_model_and_port_mappings(
+            instance_model,
+            getattr(node, "composite_port_mappings", []) or [],
+        )
+        return normalized_model
 
     definition = composite_definition_for_node(node)
     if definition is None:
         return {}
-    return deepcopy(definition.mini_model or {})
+    normalized_model, ignored_mappings = normalize_mini_model_and_port_mappings(
+        definition.mini_model or {},
+        definition.port_mappings,
+    )
+    return normalized_model
 
 
 def composite_instance_port_mappings(node) -> list[CompositePortMapping]:
     mappings = getattr(node, "composite_port_mappings", None)
     if mappings:
-        return [
-            mapping if isinstance(mapping, CompositePortMapping) else CompositePortMapping.from_dict(mapping)
-            for mapping in mappings
-        ]
+        normalized_model, normalized_mappings = normalize_mini_model_and_port_mappings(
+            getattr(node, "composite_instance_model", {}) or {},
+            mappings,
+        )
+        return normalized_mappings
 
     definition = composite_definition_for_node(node)
     if definition is None:
         return []
-    return [deepcopy(mapping) for mapping in definition.port_mappings]
+    normalized_model, normalized_mappings = normalize_mini_model_and_port_mappings(
+        definition.mini_model or {},
+        definition.port_mappings,
+    )
+    return normalized_mappings
 
 
 def project_dict_for_mini_model(mini_model: dict[str, Any]) -> dict[str, Any]:
+    normalized_model, ignored_mappings = normalize_mini_model_and_port_mappings(mini_model, [])
     return {
         "schemaVersion": SCHEMA_VERSION,
         "project": {"name": "Composite instance mini-model"},
         "projectSettings": {},
         "pluginSettings": {},
         "activeTarget": {"pluginId": "", "targetId": ""},
-        "components": deepcopy(mini_model.get("components", []) or []),
-        "links": deepcopy(mini_model.get("links", []) or []),
-        "subcompAttachments": deepcopy(mini_model.get("subcompAttachments", []) or []),
+        "components": deepcopy(normalized_model.get("components", []) or []),
+        "links": deepcopy(normalized_model.get("links", []) or []),
+        "subcompAttachments": deepcopy(normalized_model.get("subcompAttachments", []) or []),
         "editor": {},
     }
 
@@ -114,8 +129,12 @@ def apply_composite_instance_edit(
     mini_model: dict[str, Any],
     port_mappings: list[CompositePortMapping],
 ) -> None:
-    node.composite_instance_model = deepcopy(mini_model)
-    node.composite_port_mappings = [deepcopy(mapping) for mapping in port_mappings]
+    normalized_model, normalized_mappings = normalize_mini_model_and_port_mappings(
+        mini_model,
+        port_mappings,
+    )
+    node.composite_instance_model = normalized_model
+    node.composite_port_mappings = [deepcopy(mapping) for mapping in normalized_mappings]
 
 
 class CompositeInstanceEditorDialog(QDialog):

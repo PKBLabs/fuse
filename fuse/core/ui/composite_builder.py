@@ -18,6 +18,7 @@ from fuse.core.model.composite import (
     CompositePortMapping,
 )
 from fuse.core.model.models import ComponentDefinition
+from fuse.core.model.composite_mini_model import normalize_mini_model_and_port_mappings
 from fuse.core.persistence.project_io import (
     component_node_to_save_dict,
     model_link_to_save_dict,
@@ -191,12 +192,17 @@ def build_composite_fragment(
         ],
     }
 
-    return CompositeSelectionFragment(
-        mini_model=mini_model,
-        port_mappings=composite_port_mappings_for_fragment(
+    normalized_model, normalized_mappings = normalize_mini_model_and_port_mappings(
+        mini_model,
+        composite_port_mappings_for_fragment(
             ordered_components,
             ordered_connections,
         ),
+    )
+
+    return CompositeSelectionFragment(
+        mini_model=normalized_model,
+        port_mappings=normalized_mappings,
         origin=origin,
     )
 
@@ -269,7 +275,11 @@ def replace_selection_with_composite_instance(
 
     composite_component = component_definition_for_composite(definition)
     composite_node = scene.create_component_node(composite_component, origin)
-    composite_node.composite_instance_model = dict(definition.mini_model or {})
-    composite_node.composite_port_mappings = list(definition.port_mappings)
+    normalized_model, normalized_mappings = normalize_mini_model_and_port_mappings(
+        definition.mini_model or {},
+        definition.port_mappings,
+    )
+    composite_node.composite_instance_model = normalized_model
+    composite_node.composite_port_mappings = normalized_mappings
     composite_node.setSelected(True)
     return composite_node

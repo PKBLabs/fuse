@@ -21,6 +21,7 @@ from fuse.core.ui.graphics_items import ComponentNodeItem, ConnectionItem, Subco
 from fuse.core.ui.model_scene import ModelScene
 from fuse.core.ui.model_view import ModelView
 from fuse.core.model.composite import CompositePortMapping
+from fuse.core.model.composite_mini_model import normalize_mini_model_and_port_mappings
 from fuse.core.model.models import ComponentDefinition, ModelLink, ModelSubcompAttachment, SCHEMA_VERSION
 from fuse.core.model.project_settings import ProjectSettings
 from fuse.core.persistence.model_serializer import finalize_project_dict, validate_serialized_project
@@ -64,11 +65,15 @@ def component_node_to_save_dict(node: ComponentNodeItem) -> dict:
         instance_model = getattr(node, "composite_instance_model", {}) or {}
         port_mappings = getattr(node, "composite_port_mappings", []) or []
         if instance_model or port_mappings:
+            normalized_model, normalized_mappings = normalize_mini_model_and_port_mappings(
+                instance_model,
+                port_mappings,
+            )
             saved["compositeInstance"] = {
-                "miniModel": instance_model,
+                "miniModel": normalized_model,
                 "portMappings": [
-                    mapping.to_dict() if hasattr(mapping, "to_dict") else dict(mapping)
-                    for mapping in port_mappings
+                    mapping.to_dict()
+                    for mapping in normalized_mappings
                 ],
             }
 
@@ -292,14 +297,13 @@ def load_project_into_scene(project: dict, scene: ModelScene) -> None:
         if isinstance(composite_instance, dict):
             mini_model = composite_instance.get("miniModel", {}) or {}
             port_mappings = composite_instance.get("portMappings", []) or []
-            if isinstance(mini_model, dict):
-                node.composite_instance_model = mini_model
-            if isinstance(port_mappings, list):
-                node.composite_port_mappings = [
-                    CompositePortMapping.from_dict(mapping)
-                    for mapping in port_mappings
-                    if isinstance(mapping, dict)
-                ]
+            if isinstance(mini_model, dict) or isinstance(port_mappings, list):
+                normalized_model, normalized_mappings = normalize_mini_model_and_port_mappings(
+                    mini_model if isinstance(mini_model, dict) else {},
+                    port_mappings if isinstance(port_mappings, list) else [],
+                )
+                node.composite_instance_model = normalized_model
+                node.composite_port_mappings = normalized_mappings
 
         position = component_data.get("position", {})
         node.setPos(float(position.get("x", 0)), float(position.get("y", 0)))

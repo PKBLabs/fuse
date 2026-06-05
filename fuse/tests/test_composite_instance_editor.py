@@ -152,3 +152,118 @@ def test_flattening_uses_instance_specific_mini_model(monkeypatch):
     cache_a = next(component for component in flattened.component_items() if component.instance_name == "cache_a_mc1")
 
     assert cache_a.parameters["cache_size"] == "128KiB"
+
+
+def test_project_dict_for_nested_composite_mini_model_normalizes_duplicate_ids():
+    from fuse.core.persistence.project_io import validate_project_dict
+    from fuse.core.ui.composite_instance_editor import project_dict_for_mini_model
+
+    mini_model = {
+        "schemaVersion": "0.1.0",
+        "kind": "fuse.composite-mini-model",
+        "components": [
+            {
+                "id": 14,
+                "element": "Composite Components",
+                "name": "Cache Pair",
+                "pluginId": "core",
+                "targetId": "fuse-composite",
+                "componentId": "small-composite",
+                "isComposite": 1,
+                "compositeId": "small-composite",
+                "instanceName": "Cache Pair_1",
+                "parameters": {},
+                "variablePortCounts": {},
+                "position": {"x": 0.0, "y": 0.0},
+                "compositeInstance": {
+                    "miniModel": {
+                        "schemaVersion": "0.1.0",
+                        "kind": "fuse.composite-mini-model",
+                        "components": [
+                            {
+                                "id": 1,
+                                "element": "memHierarchy",
+                                "name": "Cache",
+                                "pluginId": "sst",
+                                "targetId": "sst-test",
+                                "componentId": "cache-type",
+                                "instanceName": "cache_a",
+                                "parameters": {},
+                                "variablePortCounts": {},
+                                "position": {"x": 0.0, "y": 0.0},
+                            }
+                        ],
+                        "links": [],
+                        "subcompAttachments": [],
+                    },
+                    "portMappings": [],
+                },
+            },
+            {
+                "id": 14,
+                "element": "Composite Components",
+                "name": "Cache Pair",
+                "pluginId": "core",
+                "targetId": "fuse-composite",
+                "componentId": "small-composite",
+                "isComposite": 1,
+                "compositeId": "small-composite",
+                "instanceName": "Cache Pair_2",
+                "parameters": {},
+                "variablePortCounts": {},
+                "position": {"x": 240.0, "y": 0.0},
+                "compositeInstance": {
+                    "miniModel": {
+                        "schemaVersion": "0.1.0",
+                        "kind": "fuse.composite-mini-model",
+                        "components": [
+                            {
+                                "id": 1,
+                                "element": "memHierarchy",
+                                "name": "Cache",
+                                "pluginId": "sst",
+                                "targetId": "sst-test",
+                                "componentId": "cache-type",
+                                "instanceName": "cache_b",
+                                "parameters": {},
+                                "variablePortCounts": {},
+                                "position": {"x": 0.0, "y": 0.0},
+                            }
+                        ],
+                        "links": [],
+                        "subcompAttachments": [],
+                    },
+                    "portMappings": [],
+                },
+            },
+        ],
+        "links": [],
+        "subcompAttachments": [],
+    }
+
+    project = project_dict_for_mini_model(mini_model)
+    ids = [component["id"] for component in project["components"]]
+
+    assert ids == [14, 15]
+    validate_project_dict(project)
+
+
+def test_apply_composite_instance_edit_normalizes_duplicate_nested_ids(qtbot, monkeypatch):
+    monkeypatch.setattr(
+        "fuse.core.ui.graphics_items.load_port_names_for_component",
+        lambda *args, **kwargs: [],
+    )
+    definition = cache_pair_definition("normalize-instance-edit")
+    scene = ModelScene()
+    node = composite_node_for_definition(scene, definition)
+    edited_model = dict(definition.mini_model)
+    edited_model["components"] = [
+        dict(definition.mini_model["components"][0]),
+        dict(definition.mini_model["components"][1]),
+    ]
+    edited_model["components"][1]["id"] = edited_model["components"][0]["id"]
+
+    apply_composite_instance_edit(node, edited_model, definition.port_mappings)
+    ids = [component["id"] for component in node.composite_instance_model["components"]]
+
+    assert ids == [1, 2]
