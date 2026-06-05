@@ -340,6 +340,106 @@ def outline_texts(window):
     return texts
 
 
+
+
+def find_outline_item_containing(window, text):
+    def visit(item):
+        if text in item.text(0):
+            return item
+        for child_index in range(item.childCount()):
+            found = visit(item.child(child_index))
+            if found is not None:
+                return found
+        return None
+
+    for index in range(window.model_outline.topLevelItemCount()):
+        found = visit(window.model_outline.topLevelItem(index))
+        if found is not None:
+            return found
+
+    return None
+
+
+def test_model_outline_component_click_selects_and_highlights_component(qtbot, tmp_path, monkeypatch):
+    db_path = tmp_path / "test_app.db"
+
+    monkeypatch.setenv("FUSE_DB_PATH", str(db_path))
+    monkeypatch.setenv("QT_QPA_PLATFORM", os.environ.get("QT_QPA_PLATFORM", "offscreen"))
+    monkeypatch.setattr(
+        "fuse.core.ui.graphics_items.load_port_names_for_component",
+        lambda *args, **kwargs: [],
+    )
+
+    from PySide6.QtCore import QPointF
+    from fuse.app.app import MainWindow
+    from fuse.core.model.models import ComponentDefinition
+
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    node = window.scene.create_component_node(
+        ComponentDefinition(plugin_id="core", component_id="cpu", element="test", name="CPU"),
+        QPointF(120.0, 80.0),
+        instance_name="outline_cpu",
+    )
+    window.update_model_outline()
+
+    item = find_outline_item_containing(window, "outline_cpu")
+    assert item is not None
+
+    window.on_model_outline_item_clicked(item, 0)
+
+    assert node.isSelected() is True
+    assert window.scene.selected_component is node
+    assert window.properties_panel.current_node is node
+
+    window.set_dirty(False)
+    window.close()
+
+
+def test_model_outline_subcomponent_click_selects_and_highlights_subcomponent(qtbot, tmp_path, monkeypatch):
+    db_path = tmp_path / "test_app.db"
+
+    monkeypatch.setenv("FUSE_DB_PATH", str(db_path))
+    monkeypatch.setenv("QT_QPA_PLATFORM", os.environ.get("QT_QPA_PLATFORM", "offscreen"))
+    monkeypatch.setattr(
+        "fuse.core.ui.graphics_items.load_port_names_for_component",
+        lambda *args, **kwargs: [],
+    )
+
+    from PySide6.QtCore import QPointF
+    from fuse.app.app import MainWindow
+    from fuse.core.model.models import ComponentDefinition
+
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    subcomponent = window.scene.create_component_node(
+        ComponentDefinition(
+            plugin_id="core",
+            component_id="subcomponent",
+            element="test",
+            name="SubComponent",
+            is_subcomp=1,
+        ),
+        QPointF(160.0, 120.0),
+        instance_name="outline_subcomponent",
+    )
+    window.update_model_outline()
+
+    item = find_outline_item_containing(window, "outline_subcomponent")
+    assert item is not None
+
+    window.on_model_outline_item_clicked(item, 0)
+
+    assert subcomponent.isSelected() is True
+    assert window.scene.selected_component is subcomponent
+    assert window.properties_panel.current_node is subcomponent
+
+    window.set_dirty(False)
+    window.close()
+
+
 def test_model_outline_follows_active_composite_model_tab(qtbot, tmp_path, monkeypatch):
     db_path = tmp_path / "test_app.db"
 

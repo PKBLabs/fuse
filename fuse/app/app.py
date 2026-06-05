@@ -1902,6 +1902,12 @@ class MainWindow(QMainWindow):
     def on_component_used(self, component):
         self.palette.record_component_used(component)
 
+    def select_model_outline_component_node(self, scene, view, node) -> None:
+        scene.clearSelection()
+        node.setSelected(True)
+        scene.select_component(node)
+        view.centerOn(node)
+
     def on_model_outline_item_clicked(self, item: QTreeWidgetItem, column: int):
         kind = item.data(0, OUTLINE_ROLE_KIND)
         scene = self.active_model_scene()
@@ -1909,12 +1915,10 @@ class MainWindow(QMainWindow):
 
         if kind == "component":
             node_id = item.data(0, OUTLINE_ROLE_NODE_ID)
-
-            for node in scene.component_items():
-                if node.node_id == node_id:
-                    scene.select_component(node)
-                    view.centerOn(node)
-                    return
+            node = scene.find_node_by_id(int(node_id))
+            if node is not None:
+                self.select_model_outline_component_node(scene, view, node)
+            return
 
         if kind == "link":
             link_id = item.data(0, OUTLINE_ROLE_LINK_ID)
@@ -1925,7 +1929,11 @@ class MainWindow(QMainWindow):
             attachment_id = item.data(0, OUTLINE_ROLE_ATTACHMENT_ID)
             attachment = scene.find_subcomp_attachment_by_id(int(attachment_id))
             if attachment is not None:
-                scene.select_subcomp_attachment(attachment)
+                child_node = scene.find_node_by_id(attachment.attachment.child_node_id)
+                if child_node is not None:
+                    self.select_model_outline_component_node(scene, view, child_node)
+                else:
+                    scene.select_subcomp_attachment(attachment)
             return
 
     def show_model_outline_context_menu(self, position):
