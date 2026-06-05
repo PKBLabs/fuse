@@ -18,6 +18,7 @@ from typing import Any
 
 from fuse.core.model.models import ComponentDefinition, ModelLink, ModelSubcompAttachment
 from fuse.core.persistence.composite_components import get_composite_component_definition
+from fuse.core.model.composite import CompositePortMapping
 
 
 @dataclass(frozen=True)
@@ -292,7 +293,16 @@ def expand_composite_instance(
     if definition is None:
         raise ValueError(f"Composite definition '{composite_id}' was not found in local storage.")
 
-    mini_model = definition.mini_model or {}
+    mini_model = getattr(node, "composite_instance_model", {}) or definition.mini_model or {}
+    instance_mappings = getattr(node, "composite_port_mappings", []) or []
+    if instance_mappings:
+        port_mappings = [
+            mapping if isinstance(mapping, CompositePortMapping) else CompositePortMapping.from_dict(mapping)
+            for mapping in instance_mappings
+        ]
+    else:
+        port_mappings = definition.port_mappings
+
     suffix = state.next_composite_suffix()
     direct_endpoints: dict[tuple[int, str], FlattenedEndpoint] = {}
     composite_endpoints: dict[tuple[int, str], FlattenedEndpoint] = {}
@@ -401,7 +411,7 @@ def expand_composite_instance(
             )
         )
 
-    for mapping in definition.port_mappings:
+    for mapping in port_mappings:
         expansion.external_endpoints[mapping.external_port_name] = endpoint_for_component_port(
             mapping.internal_node_id,
             mapping.internal_port_name,

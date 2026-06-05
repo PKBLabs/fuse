@@ -64,6 +64,10 @@ from fuse.core.ui.composite_builder import (
     replace_selection_with_composite_instance,
     selection_boundary_report,
 )
+from fuse.core.ui.composite_instance_editor import (
+    CompositeInstanceEditorDialog,
+    apply_composite_instance_edit,
+)
 from fuse.core.ui.model_scene import ModelScene
 from fuse.core.ui.model_view import ModelView
 from fuse.core.ui.properties_panel import PropertiesPanel
@@ -275,6 +279,7 @@ class MainWindow(QMainWindow):
         self.scene.component_favorite_requested_callback = self.on_component_favorite_requested
         self.scene.selection_changed_callback = self.on_scene_selection_changed
         self.scene.composite_creation_requested_callback = self.on_create_composite_from_selection_requested
+        self.scene.composite_instance_edit_requested_callback = self.edit_composite_instance
         self.properties_panel.property_changed_callback = self.on_property_changed
         self.palette.preferences_changed_callback = self.on_component_palette_preferences_changed
 
@@ -366,6 +371,30 @@ class MainWindow(QMainWindow):
             5000,
         )
         return composite_node
+
+
+    def edit_composite_instance(self, node) -> None:
+        component_is_composite = bool(int(getattr(node.component, "is_composite", 0) or 0))
+        if not component_is_composite:
+            return
+
+        dialog = CompositeInstanceEditorDialog(node, self)
+        if dialog.exec() != QDialog.Accepted:
+            return
+
+        apply_composite_instance_edit(
+            node,
+            dialog.edited_mini_model(),
+            dialog.edited_port_mappings(),
+        )
+        if self.properties_panel.current_node is node:
+            self.properties_panel.show_component(node)
+        self.update_model_outline()
+        self.mark_dirty()
+        self.statusBar().showMessage(
+            f"Updated composite instance '{node.instance_name}'.",
+            5000,
+        )
 
     def setup_menu_bar(self):
         menu_bar = QMenuBar(self)

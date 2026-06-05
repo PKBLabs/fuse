@@ -20,6 +20,7 @@ from pathlib import Path
 from fuse.core.ui.graphics_items import ComponentNodeItem, ConnectionItem, SubcompAttachmentItem
 from fuse.core.ui.model_scene import ModelScene
 from fuse.core.ui.model_view import ModelView
+from fuse.core.model.composite import CompositePortMapping
 from fuse.core.model.models import ComponentDefinition, ModelLink, ModelSubcompAttachment, SCHEMA_VERSION
 from fuse.core.model.project_settings import ProjectSettings
 from fuse.core.persistence.model_serializer import finalize_project_dict, validate_serialized_project
@@ -32,7 +33,7 @@ def now_iso() -> str:
 def component_node_to_save_dict(node: ComponentNodeItem) -> dict:
     position = node.pos()
 
-    return {
+    saved = {
         "id": node.node_id,
         "element": node.component.element,
         "name": node.component.name,
@@ -58,6 +59,20 @@ def component_node_to_save_dict(node: ComponentNodeItem) -> dict:
             "y": position.y(),
         },
     }
+
+    if int(getattr(node.component, "is_composite", 0) or 0):
+        instance_model = getattr(node, "composite_instance_model", {}) or {}
+        port_mappings = getattr(node, "composite_port_mappings", []) or []
+        if instance_model or port_mappings:
+            saved["compositeInstance"] = {
+                "miniModel": instance_model,
+                "portMappings": [
+                    mapping.to_dict() if hasattr(mapping, "to_dict") else dict(mapping)
+                    for mapping in port_mappings
+                ],
+            }
+
+    return saved
 
 
 def model_link_to_save_dict(link: ModelLink) -> dict:
@@ -272,6 +287,19 @@ def load_project_into_scene(project: dict, scene: ModelScene) -> None:
             instance_name=component_data.get("instanceName"),
             variable_port_counts=component_data.get("variablePortCounts", {}),
         )
+
+        composite_instance = component_data.get("compositeInstance", {}) or {}
+        if isinstance(composite_instance, dict):
+            mini_model = composite_instance.get("miniModel", {}) or {}
+            port_mappings = composite_instance.get("portMappings", []) or []
+            if isinstance(mini_model, dict):
+                node.composite_instance_model = mini_model
+            if isinstance(port_mappings, list):
+                node.composite_port_mappings = [
+                    CompositePortMapping.from_dict(mapping)
+                    for mapping in port_mappings
+                    if isinstance(mapping, dict)
+                ]
 
         position = component_data.get("position", {})
         node.setPos(float(position.get("x", 0)), float(position.get("y", 0)))

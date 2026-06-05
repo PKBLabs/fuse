@@ -269,5 +269,7 @@ def replace_selection_with_composite_instance(
 
     composite_component = component_definition_for_composite(definition)
     composite_node = scene.create_component_node(composite_component, origin)
+    composite_node.composite_instance_model = dict(definition.mini_model or {})
+    composite_node.composite_port_mappings = list(definition.port_mappings)
     composite_node.setSelected(True)
     return composite_node

@@ -866,6 +866,8 @@ class ComponentNodeItem(QGraphicsRectItem):
         self.subcomp_connectors: list[SubcompConnectorItem] = []
         self.add_ports_button: AddPortsButtonItem | None = None
         self.icon_path = component.icon_path or ""
+        self.composite_instance_model: dict = {}
+        self.composite_port_mappings: list = []
 
         self.normal_brush = QBrush(QColor("#ffffff"))
         self.selected_brush = QBrush(QColor("#eff6ff"))
@@ -947,6 +949,21 @@ class ComponentNodeItem(QGraphicsRectItem):
         paint_option = QStyleOptionGraphicsItem(option)
         paint_option.state &= ~QStyle.State_Selected
         super().paint(painter, paint_option, widget)
+
+    def mouseDoubleClickEvent(self, event):
+        component_is_composite = bool(int(getattr(self.component, "is_composite", 0) or 0))
+        scene = self.scene()
+        if (
+            component_is_composite
+            and event.button() == Qt.LeftButton
+            and scene is not None
+            and getattr(scene, "composite_instance_edit_requested_callback", None) is not None
+        ):
+            scene.composite_instance_edit_requested_callback(self)
+            event.accept()
+            return
+
+        super().mouseDoubleClickEvent(event)
 
     def update_selection_style(self):
         if self.isSelected():
