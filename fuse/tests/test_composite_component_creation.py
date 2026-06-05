@@ -167,13 +167,14 @@ def test_project_save_dict_preserves_composite_identity(qtbot, monkeypatch):
         name="Pair",
         port_mappings=[],
     )
-    node = scene_node = ModelScene().create_component_node(
+    scene = ModelScene()
+    node = scene.create_component_node(
         component_definition_for_composite(definition),
         QPointF(0.0, 0.0),
     )
 
     saved = component_node_to_save_dict(node)
 
-    assert scene_node.component.is_composite == 1
+    assert node.component.is_composite == 1
     assert saved["isComposite"] == 1
     assert saved["compositeId"] == "pair-template"
