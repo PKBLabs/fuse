@@ -64,7 +64,7 @@ def component_node_to_save_dict(node: ComponentNodeItem) -> dict:
     if int(getattr(node.component, "is_composite", 0) or 0):
         instance_model = getattr(node, "composite_instance_model", {}) or {}
         port_mappings = getattr(node, "composite_port_mappings", []) or []
-        if instance_model or port_mappings:
+        if isinstance(instance_model, dict) and bool(instance_model.get("components") or []):
             normalized_model, normalized_mappings = normalize_mini_model_and_port_mappings(
                 instance_model,
                 port_mappings,
@@ -297,9 +297,9 @@ def load_project_into_scene(project: dict, scene: ModelScene) -> None:
         if isinstance(composite_instance, dict):
             mini_model = composite_instance.get("miniModel", {}) or {}
             port_mappings = composite_instance.get("portMappings", []) or []
-            if isinstance(mini_model, dict) or isinstance(port_mappings, list):
+            if isinstance(mini_model, dict) and bool(mini_model.get("components") or []):
                 normalized_model, normalized_mappings = normalize_mini_model_and_port_mappings(
-                    mini_model if isinstance(mini_model, dict) else {},
+                    mini_model,
                     port_mappings if isinstance(port_mappings, list) else [],
                 )
                 node.composite_instance_model = normalized_model

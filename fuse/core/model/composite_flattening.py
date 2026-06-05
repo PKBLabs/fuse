@@ -22,6 +22,10 @@ from fuse.core.model.composite import CompositePortMapping
 from fuse.core.model.composite_mini_model import normalize_mini_model_and_port_mappings
 
 
+def mini_model_has_components(mini_model: dict[str, Any]) -> bool:
+    return isinstance(mini_model, dict) and bool(mini_model.get("components") or [])
+
+
 @dataclass(frozen=True)
 class FlattenedEndpoint:
     node_id: int
@@ -294,9 +298,14 @@ def expand_composite_instance(
     if definition is None:
         raise ValueError(f"Composite definition '{composite_id}' was not found in local storage.")
 
-    raw_mini_model = getattr(node, "composite_instance_model", {}) or definition.mini_model or {}
+    instance_model = getattr(node, "composite_instance_model", {}) or {}
     instance_mappings = getattr(node, "composite_port_mappings", []) or []
-    raw_port_mappings = instance_mappings if instance_mappings else definition.port_mappings
+    if mini_model_has_components(instance_model):
+        raw_mini_model = instance_model
+        raw_port_mappings = instance_mappings if instance_mappings else definition.port_mappings
+    else:
+        raw_mini_model = definition.mini_model or {}
+        raw_port_mappings = definition.port_mappings
     mini_model, port_mappings = normalize_mini_model_and_port_mappings(
         raw_mini_model,
         raw_port_mappings,

@@ -39,9 +39,13 @@ def composite_definition_for_node(node) -> CompositeComponentDefinition | None:
     return get_composite_component_definition(str(composite_id))
 
 
+def mini_model_has_components(mini_model: dict[str, Any]) -> bool:
+    return isinstance(mini_model, dict) and bool(mini_model.get("components") or [])
+
+
 def composite_instance_mini_model(node) -> dict[str, Any]:
     instance_model = getattr(node, "composite_instance_model", {}) or {}
-    if isinstance(instance_model, dict) and instance_model.get("components") is not None:
+    if mini_model_has_components(instance_model):
         normalized_model, ignored_mappings = normalize_mini_model_and_port_mappings(
             instance_model,
             getattr(node, "composite_port_mappings", []) or [],
@@ -60,9 +64,10 @@ def composite_instance_mini_model(node) -> dict[str, Any]:
 
 def composite_instance_port_mappings(node) -> list[CompositePortMapping]:
     mappings = getattr(node, "composite_port_mappings", None)
-    if mappings:
+    instance_model = getattr(node, "composite_instance_model", {}) or {}
+    if mappings and mini_model_has_components(instance_model):
         normalized_model, normalized_mappings = normalize_mini_model_and_port_mappings(
-            getattr(node, "composite_instance_model", {}) or {},
+            instance_model,
             mappings,
         )
         return normalized_mappings

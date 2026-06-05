@@ -306,12 +306,12 @@ class MainWindow(QMainWindow):
     def update_create_composite_action_state(self) -> None:
         if hasattr(self, "create_composite_action"):
             self.create_composite_action.setEnabled(
-                can_create_composite_from_selection(self.scene)
+                can_create_composite_from_selection(self.active_model_scene())
             )
 
     def request_create_composite_from_selection(self) -> None:
         request_composite_from_selection(
-            self.scene,
+            self.active_model_scene(),
             self.on_create_composite_from_selection_requested,
         )
 
@@ -571,6 +571,30 @@ class MainWindow(QMainWindow):
         view_menu.addAction(zoom_in_action)
         view_menu.addAction(zoom_out_action)
 
+    def active_model_editor_widget(self):
+        if self.model_tabs is None:
+            return None
+        widget = self.model_tabs.currentWidget()
+        if isinstance(widget, CompositeInstanceEditorWidget):
+            return widget
+        return None
+
+    def active_model_scene(self):
+        editor = self.active_model_editor_widget()
+        if editor is not None:
+            return editor.editor_scene
+        return self.scene
+
+    def active_model_view(self):
+        editor = self.active_model_editor_widget()
+        if editor is not None:
+            return editor.editor_view
+        return self.model_view
+
+    def on_model_tab_changed(self, index: int) -> None:
+        self.update_model_outline()
+        self.update_create_composite_action_state()
+
     def project_model_tab_title(self) -> str:
         name = (self.project_name or "Untitled FUSE Project").strip()
         return name or "Untitled FUSE Project"
@@ -707,6 +731,7 @@ class MainWindow(QMainWindow):
         self.model_tabs.setDocumentMode(True)
         self.model_tabs.setTabsClosable(True)
         self.model_tabs.tabCloseRequested.connect(self.close_model_tab)
+        self.model_tabs.currentChanged.connect(self.on_model_tab_changed)
         self.model_tabs.addTab(self.model_view, self.project_model_tab_title())
         self.setCentralWidget(self.model_tabs)
 
@@ -943,13 +968,14 @@ class MainWindow(QMainWindow):
 
     def update_model_outline(self):
         self.model_outline.clear()
+        scene = self.active_model_scene()
 
-        attachments_by_parent, attached_child_ids = self.subcomponent_attachment_maps()
-        nodes_by_id = self.node_by_id()
+        attachments_by_parent, attached_child_ids = self.subcomponent_attachment_maps(scene)
+        nodes_by_id = self.node_by_id(scene)
 
         component_groups: dict[str, list] = {}
 
-        for node in self.scene.component_items():
+        for node in scene.component_items():
             # Attached subcomponents are shown underneath their parent component
             # through subcomp_attachments, not as independent top-level outline rows.
             if node.node_id in attached_child_ids:
@@ -980,7 +1006,7 @@ class MainWindow(QMainWindow):
         links_item.setFlags(links_item.flags() & ~Qt.ItemIsSelectable)
         self.model_outline.addTopLevelItem(links_item)
 
-        for link in sorted(self.scene.links, key=lambda item: item.name.lower()):
+        for link in sorted(scene.links, key=lambda item: item.name.lower()):
             link_item = QTreeWidgetItem([link.name])
             link_item.setData(0, OUTLINE_ROLE_KIND, "link")
             link_item.setData(0, OUTLINE_ROLE_LINK_ID, link.link_id)
@@ -995,11 +1021,12 @@ class MainWindow(QMainWindow):
 
         self.model_outline.expandAll()
 
-    def subcomponent_attachment_maps(self):
+    def subcomponent_attachment_maps(self, scene=None):
+        current_scene = scene or self.active_model_scene()
         attachments_by_parent: dict[int, list] = {}
         attached_child_ids: set[int] = set()
 
-        for attachment in getattr(self.scene, "subcomp_attachments", []):
+        for attachment in getattr(current_scene, "subcomp_attachments", []):
             attachments_by_parent.setdefault(
                 attachment.parent_node_id,
                 [],
@@ -1008,10 +1035,11 @@ class MainWindow(QMainWindow):
 
         return attachments_by_parent, attached_child_ids
 
-    def node_by_id(self) -> dict[int, object]:
+    def node_by_id(self, scene=None) -> dict[int, object]:
+        current_scene = scene or self.active_model_scene()
         return {
             node.node_id: node
-            for node in self.scene.component_items()
+            for node in current_scene.component_items()
         }
 
     def outline_label_for_node(self, node) -> str:
@@ -1829,26 +1857,28 @@ class MainWindow(QMainWindow):
 
     def on_model_outline_item_clicked(self, item: QTreeWidgetItem, column: int):
         kind = item.data(0, OUTLINE_ROLE_KIND)
+        scene = self.active_model_scene()
+        view = self.active_model_view()
 
         if kind == "component":
             node_id = item.data(0, OUTLINE_ROLE_NODE_ID)
 
-            for node in self.scene.component_items():
+            for node in scene.component_items():
                 if node.node_id == node_id:
-                    self.scene.select_component(node)
-                    self.model_view.centerOn(node)
+                    scene.select_component(node)
+                    view.centerOn(node)
                     return
 
         if kind == "link":
             link_id = item.data(0, OUTLINE_ROLE_LINK_ID)
-            self.scene.select_link_by_id(int(link_id))
+            scene.select_link_by_id(int(link_id))
             return
 
         if kind == "subcomp_attachment":
             attachment_id = item.data(0, OUTLINE_ROLE_ATTACHMENT_ID)
-            attachment = self.scene.find_subcomp_attachment_by_id(int(attachment_id))
+            attachment = scene.find_subcomp_attachment_by_id(int(attachment_id))
             if attachment is not None:
-                self.scene.select_subcomp_attachment(attachment)
+                scene.select_subcomp_attachment(attachment)
             return
 
     def show_model_outline_context_menu(self, position):
@@ -1858,6 +1888,7 @@ class MainWindow(QMainWindow):
             return
 
         kind = item.data(0, OUTLINE_ROLE_KIND)
+        scene = self.active_model_scene()
 
         menu = QMenu(self.model_outline)
 
@@ -1868,7 +1899,7 @@ class MainWindow(QMainWindow):
             action = menu.exec(self.model_outline.viewport().mapToGlobal(position))
 
             if action == remove_action:
-                self.scene.delete_link_by_id(int(link_id))
+                scene.delete_link_by_id(int(link_id))
                 self.update_model_outline()
 
             return
@@ -1880,14 +1911,14 @@ class MainWindow(QMainWindow):
             action = menu.exec(self.model_outline.viewport().mapToGlobal(position))
 
             if action == remove_action:
-                self.scene.delete_subcomp_attachment_by_id(int(attachment_id))
+                scene.delete_subcomp_attachment_by_id(int(attachment_id))
                 self.update_model_outline()
 
             return
 
         if kind == "component":
             node_id = item.data(0, OUTLINE_ROLE_NODE_ID)
-            node = self.scene.find_node_by_id(int(node_id))
+            node = scene.find_node_by_id(int(node_id))
 
             if node is None:
                 return
@@ -1908,7 +1939,7 @@ class MainWindow(QMainWindow):
                 self.palette.add_to_frequently_used(node.component)
 
             elif action == remove_action:
-                self.scene.delete_component_by_id(int(node_id))
+                scene.delete_component_by_id(int(node_id))
                 self.update_model_outline()
 
             return
@@ -1916,34 +1947,35 @@ class MainWindow(QMainWindow):
     def keyPressEvent(self, event):
         if event.key() in (Qt.Key_Delete, Qt.Key_Backspace):
             item = self.model_outline.currentItem()
+            scene = self.active_model_scene()
 
             if item is not None and self.model_outline.hasFocus():
                 kind = item.data(0, OUTLINE_ROLE_KIND)
 
                 if kind == "link":
                     link_id = item.data(0, OUTLINE_ROLE_LINK_ID)
-                    self.scene.delete_link_by_id(int(link_id))
+                    scene.delete_link_by_id(int(link_id))
                     self.update_model_outline()
                     event.accept()
                     return
 
                 if kind == "component":
                     node_id = item.data(0, OUTLINE_ROLE_NODE_ID)
-                    self.scene.delete_component_by_id(int(node_id))
+                    scene.delete_component_by_id(int(node_id))
                     self.update_model_outline()
                     event.accept()
                     return
 
                 if kind == "subcomp_attachment":
                     attachment_id = item.data(0, OUTLINE_ROLE_ATTACHMENT_ID)
-                    self.scene.delete_subcomp_attachment_by_id(int(attachment_id))
+                    scene.delete_subcomp_attachment_by_id(int(attachment_id))
                     self.update_model_outline()
                     event.accept()
                     return
 
             # If the outline does not own the focused selection, let the scene handle
             # the selected model item.
-            self.scene.keyPressEvent(event)
+            scene.keyPressEvent(event)
             if event.isAccepted():
                 self.update_model_outline()
                 return

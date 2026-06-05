@@ -325,3 +325,208 @@ def test_nested_composite_opens_hierarchical_model_view_tab(qtbot, tmp_path, mon
 
     window.set_dirty(False)
     window.close()
+
+
+def outline_texts(window):
+    texts = []
+
+    def collect(item):
+        texts.append(item.text(0))
+        for child_index in range(item.childCount()):
+            collect(item.child(child_index))
+
+    for index in range(window.model_outline.topLevelItemCount()):
+        collect(window.model_outline.topLevelItem(index))
+    return texts
+
+
+def test_model_outline_follows_active_composite_model_tab(qtbot, tmp_path, monkeypatch):
+    db_path = tmp_path / "test_app.db"
+
+    monkeypatch.setenv("FUSE_DB_PATH", str(db_path))
+    monkeypatch.setenv("QT_QPA_PLATFORM", os.environ.get("QT_QPA_PLATFORM", "offscreen"))
+    monkeypatch.setattr(
+        "fuse.core.ui.graphics_items.load_port_names_for_component",
+        lambda *args, **kwargs: [],
+    )
+
+    from PySide6.QtCore import QPointF
+    from fuse.app.app import MainWindow
+    from fuse.core.model.composite import CompositeComponentDefinition
+    from fuse.core.persistence.composite_components import save_composite_component_definition
+    from fuse.core.ui.composite_builder import component_definition_for_composite
+
+    definition = save_composite_component_definition(
+        CompositeComponentDefinition.make(
+            composite_id="outline-active-tab-template",
+            name="Outlined Composite",
+            mini_model={
+                "schemaVersion": "0.1.0",
+                "kind": "fuse.composite-mini-model",
+                "components": [
+                    {
+                        "id": 1,
+                        "element": "memHierarchy",
+                        "name": "Cache",
+                        "pluginId": "sst",
+                        "targetId": "sst-test",
+                        "componentId": "cache-type",
+                        "instanceName": "internal_cache",
+                        "parameters": {},
+                        "variablePortCounts": {},
+                        "position": {"x": 0.0, "y": 0.0},
+                    }
+                ],
+                "links": [],
+                "subcompAttachments": [],
+            },
+            port_mappings=[],
+        )
+    )
+
+    window = MainWindow()
+    qtbot.addWidget(window)
+    node = window.scene.create_component_node(
+        component_definition_for_composite(definition),
+        QPointF(0.0, 0.0),
+    )
+
+    window.update_model_outline()
+    assert any(node.instance_name in text for text in outline_texts(window))
+    assert not any("internal_cache" in text for text in outline_texts(window))
+
+    window.edit_composite_instance(node)
+    window.update_model_outline()
+
+    assert any("internal_cache" in text for text in outline_texts(window))
+    assert not any(node.instance_name in text for text in outline_texts(window))
+
+    window.model_tabs.setCurrentIndex(0)
+    window.update_model_outline()
+    assert any(node.instance_name in text for text in outline_texts(window))
+    assert not any("internal_cache" in text for text in outline_texts(window))
+
+    window.set_dirty(False)
+    window.close()
+
+
+def test_nested_composite_tab_loads_inner_template_when_parent_stores_port_only_instance_state(qtbot, tmp_path, monkeypatch):
+    db_path = tmp_path / "test_app.db"
+
+    monkeypatch.setenv("FUSE_DB_PATH", str(db_path))
+    monkeypatch.setenv("QT_QPA_PLATFORM", os.environ.get("QT_QPA_PLATFORM", "offscreen"))
+    monkeypatch.setattr(
+        "fuse.core.ui.graphics_items.load_port_names_for_component",
+        lambda *args, **kwargs: [],
+    )
+
+    from PySide6.QtCore import QPointF
+    from fuse.app.app import MainWindow
+    from fuse.core.model.composite import CompositeComponentDefinition, CompositePortMapping
+    from fuse.core.persistence.composite_components import save_composite_component_definition
+    from fuse.core.ui.composite_builder import component_definition_for_composite
+    from fuse.core.ui.composite_instance_editor import CompositeInstanceEditorWidget
+
+    inner = save_composite_component_definition(
+        CompositeComponentDefinition.make(
+            composite_id="inner-nonempty-template",
+            name="InnerNonEmpty",
+            mini_model={
+                "schemaVersion": "0.1.0",
+                "kind": "fuse.composite-mini-model",
+                "components": [
+                    {
+                        "id": 1,
+                        "element": "memHierarchy",
+                        "name": "Cache",
+                        "pluginId": "sst",
+                        "targetId": "sst-test",
+                        "componentId": "cache-type",
+                        "instanceName": "inner_cache",
+                        "parameters": {},
+                        "variablePortCounts": {},
+                        "position": {"x": 0.0, "y": 0.0},
+                    }
+                ],
+                "links": [],
+                "subcompAttachments": [],
+            },
+            port_mappings=[
+                CompositePortMapping(
+                    external_port_name="inner_cache.cpu",
+                    internal_node_id=1,
+                    internal_component_name="inner_cache",
+                    internal_port_name="cpu",
+                )
+            ],
+        )
+    )
+    outer = save_composite_component_definition(
+        CompositeComponentDefinition.make(
+            composite_id="outer-port-only-nested-template",
+            name="OuterPortOnlyNested",
+            mini_model={
+                "schemaVersion": "0.1.0",
+                "kind": "fuse.composite-mini-model",
+                "components": [
+                    {
+                        "id": 1,
+                        "element": "Composite Components",
+                        "name": "InnerNonEmpty",
+                        "pluginId": "core",
+                        "targetId": "fuse-composite",
+                        "componentId": inner.composite_id,
+                        "isComposite": 1,
+                        "compositeId": inner.composite_id,
+                        "instanceName": "InnerNonEmpty_1",
+                        "parameters": {},
+                        "variablePortCounts": {},
+                        "position": {"x": 0.0, "y": 0.0},
+                        "compositeInstance": {
+                            "miniModel": {
+                                "schemaVersion": "0.1.0",
+                                "kind": "fuse.composite-mini-model",
+                                "components": [],
+                                "links": [],
+                                "subcompAttachments": [],
+                            },
+                            "portMappings": [
+                                {
+                                    "external_port_name": "inner_cache.cpu",
+                                    "internal_node_id": 1,
+                                    "internal_component_name": "inner_cache",
+                                    "internal_port_name": "cpu",
+                                    "side": "",
+                                    "iface": "",
+                                    "description": "",
+                                }
+                            ],
+                        },
+                    }
+                ],
+                "links": [],
+                "subcompAttachments": [],
+            },
+            port_mappings=[],
+        )
+    )
+
+    window = MainWindow()
+    qtbot.addWidget(window)
+    outer_node = window.scene.create_component_node(
+        component_definition_for_composite(outer),
+        QPointF(0.0, 0.0),
+    )
+
+    window.edit_composite_instance(outer_node)
+    outer_editor = window.model_tabs.widget(1)
+    assert isinstance(outer_editor, CompositeInstanceEditorWidget)
+    inner_node = outer_editor.editor_scene.component_items()[0]
+
+    outer_editor.request_nested_composite_edit(inner_node)
+    inner_editor = window.model_tabs.widget(2)
+    assert isinstance(inner_editor, CompositeInstanceEditorWidget)
+    assert [node.instance_name for node in inner_editor.editor_scene.component_items()] == ["inner_cache"]
+
+    window.set_dirty(False)
+    window.close()
