@@ -50,7 +50,15 @@ from fuse.core.app_info import APP_NAME, ORG_NAME
 from fuse.core.model.project_settings import ProjectSettings
 from fuse.core.model.validation import validate_model, validate_model_for_export
 from fuse.core.plugin_runtime.manager import get_plugin_by_id
-from fuse.core.persistence.composite_components import save_composite_component_definition
+from fuse.core.persistence.composite_components import (
+    get_composite_component_definition,
+    save_composite_component_definition,
+)
+from fuse.core.persistence.composite_component_files import (
+    CompositeComponentFileError,
+    import_composite_component_file,
+    write_composite_component_file,
+)
 from fuse.core.persistence.db_access import ensure_database_ready, load_framework_targets
 from fuse.core.persistence.project_io import (
     build_project_dict,
@@ -372,6 +380,91 @@ class MainWindow(QMainWindow):
         )
         return composite_node
 
+    def selected_composite_node(self):
+        for node in self.scene.component_items():
+            if not node.isSelected():
+                continue
+            if int(getattr(node.component, "is_composite", 0) or 0):
+                return node
+        return None
+
+    def composite_export_default_path(self, definition) -> str:
+        safe_name = "".join(
+            char if char.isalnum() or char in ("-", "_") else "_"
+            for char in definition.name.strip()
+        ).strip("_")
+        if not safe_name:
+            safe_name = "composite_component"
+        return f"{safe_name}.fcc"
+
+    def export_selected_composite_component(self) -> None:
+        node = self.selected_composite_node()
+        if node is None:
+            QMessageBox.information(
+                self,
+                "Export Composite Component",
+                "Select a composite component instance before exporting.",
+            )
+            return
+
+        composite_id = getattr(node.component, "composite_id", "") or ""
+        definition = get_composite_component_definition(composite_id)
+        if definition is None:
+            QMessageBox.warning(
+                self,
+                "Export Composite Component",
+                "The selected composite component template could not be found.",
+            )
+            return
+
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export Composite Component",
+            self.composite_export_default_path(definition),
+            "FUSE Composite Component (*.fcc);;JSON Files (*.json);;All Files (*)",
+        )
+        if not path:
+            return
+
+        try:
+            written_path = write_composite_component_file(definition, path)
+        except CompositeComponentFileError as exc:
+            QMessageBox.warning(self, "Export Composite Component", str(exc))
+            return
+        except OSError as exc:
+            QMessageBox.warning(
+                self,
+                "Export Composite Component",
+                f"Unable to write composite component file: {exc}",
+            )
+            return
+
+        self.statusBar().showMessage(
+            f"Exported composite component '{definition.name}' to {written_path}.",
+            5000,
+        )
+
+    def import_composite_component(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Import Composite Component",
+            "",
+            "FUSE Composite Component (*.fcc);;JSON Files (*.json);;All Files (*)",
+        )
+        if not path:
+            return
+
+        try:
+            definition = import_composite_component_file(path)
+        except CompositeComponentFileError as exc:
+            QMessageBox.warning(self, "Import Composite Component", str(exc))
+            return
+
+        self.load_framework_targets()
+        self.statusBar().showMessage(
+            f"Imported composite component '{definition.name}'.",
+            5000,
+        )
 
     def edit_composite_instance(self, node) -> None:
         component_is_composite = bool(int(getattr(node.component, "is_composite", 0) or 0))
@@ -416,6 +509,8 @@ class MainWindow(QMainWindow):
         save_as_action = QAction("Save As...", self)
         export_sst_json_action = QAction("SST JSON...", self)
         export_gem5_python_action = QAction("gem5 Python...", self)
+        self.import_composite_action = QAction("Import Composite Component...", self)
+        self.export_composite_action = QAction("Selected Composite Component...", self)
         exit_action = QAction("Exit", self)
 
         new_action.triggered.connect(self.new_project)
@@ -427,6 +522,8 @@ class MainWindow(QMainWindow):
         save_as_action.triggered.connect(self.save_model_as)
         export_sst_json_action.triggered.connect(self.export_sst_json)
         export_gem5_python_action.triggered.connect(self.export_gem5_python)
+        self.import_composite_action.triggered.connect(self.import_composite_component)
+        self.export_composite_action.triggered.connect(self.export_selected_composite_component)
         exit_action.triggered.connect(self.close)
 
         file_menu.addAction(new_action)
@@ -439,9 +536,14 @@ class MainWindow(QMainWindow):
         file_menu.addAction(save_action)
         file_menu.addAction(save_as_action)
 
+        import_menu = file_menu.addMenu("Import")
+        import_menu.addAction(self.import_composite_action)
+
         export_menu = file_menu.addMenu("Export")
         export_menu.addAction(export_sst_json_action)
         export_menu.addAction(export_gem5_python_action)
+        export_menu.addSeparator()
+        export_menu.addAction(self.export_composite_action)
 
         file_menu.addSeparator()
         file_menu.addAction(exit_action)

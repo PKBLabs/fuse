@@ -149,3 +149,20 @@ def test_create_composite_action_follows_multiselection(qtbot, tmp_path, monkeyp
 
     window.set_dirty(False)
     window.close()
+
+
+def test_composite_import_export_actions_are_registered(qtbot, tmp_path, monkeypatch):
+    db_path = tmp_path / "test_app.db"
+
+    monkeypatch.setenv("FUSE_DB_PATH", str(db_path))
+    monkeypatch.setenv("QT_QPA_PLATFORM", os.environ.get("QT_QPA_PLATFORM", "offscreen"))
+
+    from fuse.app.app import MainWindow
+
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    assert window.import_composite_action.text() == "Import Composite Component..."
+    assert window.export_composite_action.text() == "Selected Composite Component..."
+
+    window.close()
