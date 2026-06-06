@@ -1141,6 +1141,29 @@ class ComponentNodeItem(QGraphicsRectItem):
         self.sync_ports_to_templates()
         self.update_add_ports_button_visibility()
 
+    def sync_composite_ports_from_mappings(self) -> tuple[bool, str]:
+        if not bool(int(getattr(self.component, "is_composite", 0) or 0)):
+            return True, ""
+
+        self.port_templates = [
+            {
+                "name": str(getattr(mapping, "external_port_name", "") or ""),
+                "description": str(getattr(mapping, "description", "") or ""),
+                "iface": str(getattr(mapping, "iface", "") or ""),
+                "is_variable": False,
+                "base_name": str(getattr(mapping, "external_port_name", "") or ""),
+                "count_parameter": "",
+                "default_count": 1,
+            }
+            for mapping in getattr(self, "composite_port_mappings", []) or []
+            if bool(getattr(mapping, "exposed", True))
+            and str(getattr(mapping, "external_port_name", "") or "")
+        ]
+        self.variable_port_templates = []
+        result = self.sync_ports_to_templates()
+        self.update_add_ports_button_visibility()
+        return result
+
     def load_port_templates(self) -> list[dict]:
         try:
             return load_port_metadata_for_component(

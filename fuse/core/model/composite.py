@@ -37,6 +37,7 @@ class CompositePortMapping:
     side: str = ""
     iface: str = ""
     description: str = ""
+    exposed: bool = True
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -47,6 +48,7 @@ class CompositePortMapping:
             "side": self.side,
             "iface": self.iface,
             "description": self.description,
+            "exposed": bool(self.exposed),
         }
 
     @staticmethod
@@ -59,6 +61,7 @@ class CompositePortMapping:
             side=str(data.get("side") or ""),
             iface=str(data.get("iface") or ""),
             description=str(data.get("description") or ""),
+            exposed=bool(data.get("exposed", True)),
         )
 
 

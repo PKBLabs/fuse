@@ -118,11 +118,45 @@ def mini_model_from_scene(scene: ModelScene) -> dict[str, Any]:
     }
 
 
-def port_mappings_from_scene(scene: ModelScene) -> list[CompositePortMapping]:
-    return composite_port_mappings_for_fragment(
+def preserve_exposed_state(
+    new_mappings: list[CompositePortMapping],
+    existing_mappings: list[CompositePortMapping],
+) -> list[CompositePortMapping]:
+    existing_by_internal_port = {
+        (
+            int(mapping.internal_node_id),
+            str(mapping.internal_component_name),
+            str(mapping.internal_port_name),
+        ): bool(getattr(mapping, "exposed", True))
+        for mapping in existing_mappings
+    }
+    existing_by_name = {
+        str(mapping.external_port_name): bool(getattr(mapping, "exposed", True))
+        for mapping in existing_mappings
+    }
+
+    for mapping in new_mappings:
+        key = (
+            int(mapping.internal_node_id),
+            str(mapping.internal_component_name),
+            str(mapping.internal_port_name),
+        )
+        if key in existing_by_internal_port:
+            mapping.exposed = existing_by_internal_port[key]
+        elif str(mapping.external_port_name) in existing_by_name:
+            mapping.exposed = existing_by_name[str(mapping.external_port_name)]
+    return new_mappings
+
+
+def port_mappings_from_scene(
+    scene: ModelScene,
+    existing_mappings: list[CompositePortMapping] | None = None,
+) -> list[CompositePortMapping]:
+    mappings = composite_port_mappings_for_fragment(
         scene.component_items(),
         scene.connection_items(),
     )
+    return preserve_exposed_state(mappings, list(existing_mappings or []))
 
 
 def apply_composite_instance_edit(
@@ -136,6 +170,8 @@ def apply_composite_instance_edit(
     )
     node.composite_instance_model = normalized_model
     node.composite_port_mappings = [deepcopy(mapping) for mapping in normalized_mappings]
+    if hasattr(node, "sync_composite_ports_from_mappings"):
+        node.sync_composite_ports_from_mappings()
 
 
 class CompositeInstanceEditorWidget(QWidget):
@@ -189,7 +225,10 @@ class CompositeInstanceEditorWidget(QWidget):
         return mini_model_from_scene(self.editor_scene)
 
     def edited_port_mappings(self) -> list[CompositePortMapping]:
-        return port_mappings_from_scene(self.editor_scene)
+        return port_mappings_from_scene(
+            self.editor_scene,
+            composite_instance_port_mappings(self.node),
+        )
 
     def apply_current_edit_to_node(self) -> None:
         apply_composite_instance_edit(

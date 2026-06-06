@@ -41,6 +41,7 @@ def make_file_definition(name="Cache Pair", composite_id="cache-pair"):
                 internal_component_name="cache_a",
                 internal_port_name="cpu",
                 iface="memHierarchy.memEvent",
+                exposed=False,
             )
         ],
     )
@@ -66,6 +67,8 @@ def test_composite_component_file_round_trips_definition(tmp_path):
     assert loaded.name == "Cache Pair"
     assert loaded.mini_model["components"][0]["name"] == "cache_a"
     assert loaded.port_mappings[0].external_port_name == "cache_a.cpu"
+    assert loaded.port_mappings[0].exposed is False
+    assert document["definition"]["port_mappings"][0]["exposed"] is False
 
 
 def test_import_composite_component_file_saves_to_local_database(tmp_path, monkeypatch):
@@ -87,6 +90,7 @@ def test_import_composite_component_file_saves_to_local_database(tmp_path, monke
     assert loaded is not None
     assert loaded.name == "Cache Pair"
     assert loaded.port_mappings[0].internal_port_name == "cpu"
+    assert loaded.port_mappings[0].exposed is False
 
 
 def test_import_composite_component_file_renames_name_collision_with_different_id(tmp_path, monkeypatch):

@@ -26,6 +26,14 @@ def mini_model_has_components(mini_model: dict[str, Any]) -> bool:
     return isinstance(mini_model, dict) and bool(mini_model.get("components") or [])
 
 
+def exposed_port_mappings(port_mappings: list[CompositePortMapping]) -> list[CompositePortMapping]:
+    return [
+        mapping
+        for mapping in port_mappings
+        if bool(getattr(mapping, "exposed", True))
+    ]
+
+
 @dataclass(frozen=True)
 class FlattenedEndpoint:
     node_id: int
@@ -419,7 +427,7 @@ def expand_composite_instance(
             )
         )
 
-    for mapping in port_mappings:
+    for mapping in exposed_port_mappings(port_mappings):
         expansion.external_endpoints[mapping.external_port_name] = endpoint_for_component_port(
             mapping.internal_node_id,
             mapping.internal_port_name,
@@ -513,7 +521,16 @@ def flatten_scene_for_export(scene) -> FlattenedScene:
         source_endpoint = endpoint_remap.get((int(link.source_node_id), link.source_port))
         target_endpoint = endpoint_remap.get((int(link.target_node_id), link.target_port))
         if source_endpoint is None or target_endpoint is None:
-            raise ValueError(f"Could not resolve link '{link.name}' while flattening composites.")
+            unresolved: list[str] = []
+            if source_endpoint is None:
+                unresolved.append(f"source {link.source_component_name}.{link.source_port}")
+            if target_endpoint is None:
+                unresolved.append(f"target {link.target_component_name}.{link.target_port}")
+            raise ValueError(
+                f"Could not resolve link '{link.name}' while flattening composites. "
+                f"Unresolved endpoint(s): {', '.join(unresolved)}. "
+                "For composite endpoints, make sure the port is exposed."
+            )
 
         if int(link.source_node_id) in composite_node_ids or int(link.target_node_id) in composite_node_ids:
             links.append(
