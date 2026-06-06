@@ -245,13 +245,6 @@ class CompositeInstanceEditorWidget(QWidget):
         help_label.setWordWrap(True)
         layout.addWidget(help_label)
 
-        self.save_template_button = QToolButton(self)
-        self.save_template_button.setText("Save Template Changes")
-        self.save_template_button.setToolTip("Save this composite template configuration to the local database")
-        self.save_template_button.clicked.connect(self.request_save_template_changes)
-        self.save_template_button.setEnabled(False)
-        layout.addWidget(self.save_template_button)
-
         self.editor_scene = ModelScene()
         self.editor_scene.active_plugin_id = getattr(getattr(node, "scene", lambda: None)(), "active_plugin_id", "") or ""
         self.editor_view = ModelView(self.editor_scene)
