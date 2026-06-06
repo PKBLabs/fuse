@@ -10,13 +10,17 @@ from typing import Any
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QLabel,
+    QMessageBox,
     QVBoxLayout,
     QWidget,
 )
 
 from fuse.core.model.composite import CompositeComponentDefinition, CompositePortMapping
 from fuse.core.model.composite_mini_model import normalize_mini_model_and_port_mappings
-from fuse.core.persistence.composite_components import get_composite_component_definition
+from fuse.core.persistence.composite_components import (
+    get_composite_component_definition,
+    save_composite_component_definition,
+)
 from fuse.core.persistence.project_io import (
     component_node_to_save_dict,
     load_project_into_scene,
@@ -78,6 +82,47 @@ def composite_instance_port_mappings(node) -> list[CompositePortMapping]:
         definition.port_mappings,
     )
     return normalized_mappings
+
+
+def port_mapping_matches_port(mapping: CompositePortMapping, port) -> bool:
+    return (
+        int(mapping.internal_node_id) == int(port.node.node_id)
+        and str(mapping.internal_component_name) == str(port.node.instance_name)
+        and str(mapping.internal_port_name) == str(port.name)
+    )
+
+
+def set_exposed_state_for_port_mapping(
+    mappings: list[CompositePortMapping],
+    port,
+    exposed: bool,
+) -> bool:
+    for mapping in mappings:
+        if port_mapping_matches_port(mapping, port):
+            mapping.exposed = bool(exposed)
+            return True
+    return False
+
+
+def port_is_exposed_in_mappings(
+    mappings: list[CompositePortMapping],
+    port,
+) -> bool:
+    for mapping in mappings:
+        if port_mapping_matches_port(mapping, port):
+            return bool(getattr(mapping, "exposed", True))
+    return False
+
+
+def update_editor_port_exposure_visuals(
+    scene: ModelScene,
+    mappings: list[CompositePortMapping],
+) -> None:
+    for node in scene.component_items():
+        for port in getattr(node, "ports", []) or []:
+            exposed = port_is_exposed_in_mappings(mappings, port)
+            port.is_composite_exposed_port = exposed
+            port.update_connection_state()
 
 
 def project_dict_for_mini_model(mini_model: dict[str, Any]) -> dict[str, Any]:
@@ -202,6 +247,8 @@ class CompositeInstanceEditorWidget(QWidget):
         self.editor_view = ModelView(self.editor_scene)
         self.editor_scene.model_changed_callback = self.on_editor_scene_changed
         self.editor_scene.composite_instance_edit_requested_callback = self.request_nested_composite_edit
+        self.editor_scene.composite_port_exposure_requested_callback = self.set_port_exposed
+        self.editor_scene.composite_port_exposure_state_callback = self.port_is_exposed
 
         layout.addWidget(self.editor_view, 1)
 
@@ -218,6 +265,7 @@ class CompositeInstanceEditorWidget(QWidget):
             self.editor_scene.clearSelection()
             if self.editor_scene.properties_panel is not None:
                 self.editor_scene.properties_panel.show_empty()
+            self.refresh_port_exposure_visuals()
         finally:
             self.loading_model = False
 
@@ -230,12 +278,38 @@ class CompositeInstanceEditorWidget(QWidget):
             composite_instance_port_mappings(self.node),
         )
 
+    def refresh_port_exposure_visuals(self) -> None:
+        update_editor_port_exposure_visuals(self.editor_scene, self.edited_port_mappings())
+
     def apply_current_edit_to_node(self) -> None:
         apply_composite_instance_edit(
             self.node,
             self.edited_mini_model(),
             self.edited_port_mappings(),
         )
+        self.refresh_port_exposure_visuals()
+
+    def port_is_exposed(self, port) -> bool:
+        return port_is_exposed_in_mappings(self.edited_port_mappings(), port)
+
+    def set_port_exposed(self, port, exposed: bool) -> bool:
+        if bool(exposed) and port.is_connected():
+            QMessageBox.warning(
+                self,
+                "Expose Composite Port",
+                "Only unlinked internal ports can be exposed on the composite boundary.",
+            )
+            return False
+
+        mappings = self.edited_port_mappings()
+        if not set_exposed_state_for_port_mapping(mappings, port, bool(exposed)):
+            return False
+
+        apply_composite_instance_edit(self.node, self.edited_mini_model(), mappings)
+        self.refresh_port_exposure_visuals()
+        if self.instance_changed_callback is not None:
+            self.instance_changed_callback(self)
+        return True
 
     def on_editor_scene_changed(self) -> None:
         if self.loading_model:
@@ -244,6 +318,121 @@ class CompositeInstanceEditorWidget(QWidget):
         self.apply_current_edit_to_node()
         if self.instance_changed_callback is not None:
             self.instance_changed_callback(self)
+
+    def request_nested_composite_edit(self, nested_node) -> None:
+        self.apply_current_edit_to_node()
+        if self.nested_edit_requested_callback is not None:
+            self.nested_edit_requested_callback(nested_node, self)
+
+
+class CompositeTemplateEditorWidget(QWidget):
+    def __init__(
+        self,
+        definition: CompositeComponentDefinition,
+        parent=None,
+        nested_edit_requested_callback=None,
+        template_changed_callback=None,
+    ):
+        super().__init__(parent)
+        self.definition = deepcopy(definition)
+        self.nested_edit_requested_callback = nested_edit_requested_callback
+        self.template_changed_callback = template_changed_callback
+        self.loading_model = False
+        self.template_dirty = False
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        help_label = QLabel(
+            "Edit the global/default configuration for this composite component. "
+            "Use Save Template Changes to write changes to the local composite database."
+        )
+        help_label.setWordWrap(True)
+        layout.addWidget(help_label)
+
+        self.editor_scene = ModelScene()
+        self.editor_view = ModelView(self.editor_scene)
+        self.editor_scene.model_changed_callback = self.on_editor_scene_changed
+        self.editor_scene.composite_instance_edit_requested_callback = self.request_nested_composite_edit
+        self.editor_scene.composite_port_exposure_requested_callback = self.set_port_exposed
+        self.editor_scene.composite_port_exposure_state_callback = self.port_is_exposed
+        layout.addWidget(self.editor_view, 1)
+
+        self.load_template_model()
+
+    def load_template_model(self) -> None:
+        if not self.definition.mini_model:
+            return
+
+        normalized_model, normalized_mappings = normalize_mini_model_and_port_mappings(
+            self.definition.mini_model or {},
+            self.definition.port_mappings,
+        )
+        self.definition.mini_model = normalized_model
+        self.definition.port_mappings = [deepcopy(mapping) for mapping in normalized_mappings]
+
+        self.loading_model = True
+        try:
+            load_project_into_scene(project_dict_for_mini_model(normalized_model), self.editor_scene)
+            self.editor_scene.clearSelection()
+            self.refresh_port_exposure_visuals()
+        finally:
+            self.loading_model = False
+
+    def edited_mini_model(self) -> dict[str, Any]:
+        return mini_model_from_scene(self.editor_scene)
+
+    def edited_port_mappings(self) -> list[CompositePortMapping]:
+        return port_mappings_from_scene(
+            self.editor_scene,
+            self.definition.port_mappings,
+        )
+
+    def refresh_port_exposure_visuals(self) -> None:
+        update_editor_port_exposure_visuals(self.editor_scene, self.edited_port_mappings())
+
+    def apply_current_edit_to_node(self) -> None:
+        self.definition.mini_model = self.edited_mini_model()
+        self.definition.port_mappings = [deepcopy(mapping) for mapping in self.edited_port_mappings()]
+        self.refresh_port_exposure_visuals()
+
+    def save_template_changes(self) -> CompositeComponentDefinition:
+        self.apply_current_edit_to_node()
+        saved = save_composite_component_definition(self.definition)
+        self.definition = deepcopy(saved)
+        self.template_dirty = False
+        return saved
+
+    def port_is_exposed(self, port) -> bool:
+        return port_is_exposed_in_mappings(self.edited_port_mappings(), port)
+
+    def set_port_exposed(self, port, exposed: bool) -> bool:
+        if bool(exposed) and port.is_connected():
+            QMessageBox.warning(
+                self,
+                "Expose Composite Port",
+                "Only unlinked internal ports can be exposed on the composite boundary.",
+            )
+            return False
+
+        mappings = self.edited_port_mappings()
+        if not set_exposed_state_for_port_mapping(mappings, port, bool(exposed)):
+            return False
+
+        self.definition.mini_model = self.edited_mini_model()
+        self.definition.port_mappings = [deepcopy(mapping) for mapping in mappings]
+        self.template_dirty = True
+        self.refresh_port_exposure_visuals()
+        if self.template_changed_callback is not None:
+            self.template_changed_callback(self)
+        return True
+
+    def on_editor_scene_changed(self) -> None:
+        if self.loading_model:
+            return
+        self.apply_current_edit_to_node()
+        self.template_dirty = True
+        if self.template_changed_callback is not None:
+            self.template_changed_callback(self)
 
     def request_nested_composite_edit(self, nested_node) -> None:
         self.apply_current_edit_to_node()

@@ -100,6 +100,7 @@ class PortItem(QGraphicsEllipseItem):
                 or ""
         )
         self.connections: list[ConnectionItem] = []
+        self.is_composite_exposed_port = False
 
         self.setPos(x, y)
         self.setBrush(QBrush(QColor("#2f80ed")))
@@ -188,11 +189,43 @@ class PortItem(QGraphicsEllipseItem):
             self.setBrush(QBrush(QColor("#6b7280")))
             self.setToolTip(f"⚠ Port Occupied\n{self.name}")
         else:
-            self.setBrush(QBrush(QColor("#2f80ed")))
+            if bool(getattr(self, "is_composite_exposed_port", False)):
+                self.setBrush(QBrush(QColor("#f97316")))
+                self.setPen(QPen(QColor("#c2410c"), 2))
+            else:
+                self.setBrush(QBrush(QColor("#2f80ed")))
+                self.setPen(QPen(QColor("#1f4e79"), 1))
             tooltip = f"Port: {self.name}"
             if self.interface:
                 tooltip += f"\nInterface: {self.interface}"
+            if bool(getattr(self, "is_composite_exposed_port", False)):
+                tooltip += "\nExposed on composite boundary"
             self.setToolTip(tooltip)
+
+    def contextMenuEvent(self, event):
+        scene = self.scene()
+        if scene is None or not hasattr(scene, "composite_port_exposure_requested_callback"):
+            super().contextMenuEvent(event)
+            return
+
+        state_callback = getattr(scene, "composite_port_exposure_state_callback", None)
+        is_exposed = False
+        if state_callback is not None:
+            is_exposed = bool(state_callback(self))
+
+        menu = QMenu()
+        action_text = "Hide Port from Composite" if is_exposed else "Expose Port on Composite"
+        exposure_action = menu.addAction(action_text)
+        if not is_exposed and self.is_connected():
+            exposure_action.setEnabled(False)
+            exposure_action.setToolTip("Only unlinked internal ports can be exposed.")
+
+        action = menu.exec(event.screenPos())
+        if action == exposure_action:
+            callback = getattr(scene, "composite_port_exposure_requested_callback", None)
+            if callback is not None:
+                callback(self, not is_exposed)
+        event.accept()
 
     def mousePressEvent(self, event):
         scene = self.scene()

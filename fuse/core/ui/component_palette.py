@@ -103,12 +103,18 @@ class ComponentTree(QTreeWidget):
             return
 
         menu = QMenu(self)
+        edit_action = None
+        if bool(int(getattr(component, "is_composite", 0) or 0)):
+            edit_action = menu.addAction("Edit Component...")
+            menu.addSeparator()
         add_action = menu.addAction("Add to Frequently Used")
         remove_action = menu.addAction("Remove from Frequently Used")
 
         action = menu.exec(self.viewport().mapToGlobal(position))
 
-        if action == add_action:
+        if edit_action is not None and action == edit_action:
+            self.palette.request_edit_component(component)
+        elif action == add_action:
             self.palette.add_to_frequently_used(component)
         elif action == remove_action:
             self.palette.remove_from_frequently_used(component)
@@ -150,12 +156,18 @@ class ComponentTileButton(QToolButton):
     def show_context_menu(self, position):
         menu = QMenu(self)
 
+        edit_action = None
+        if bool(int(getattr(self.component, "is_composite", 0) or 0)):
+            edit_action = menu.addAction("Edit Component...")
+            menu.addSeparator()
         add_action = menu.addAction("Add to Frequently Used")
         remove_action = menu.addAction("Remove from Frequently Used")
 
         action = menu.exec(self.mapToGlobal(position))
 
-        if action == add_action:
+        if edit_action is not None and action == edit_action:
+            self.palette.request_edit_component(self.component)
+        elif action == add_action:
             self.palette.add_to_frequently_used(self.component)
         elif action == remove_action:
             self.palette.remove_from_frequently_used(self.component)
@@ -184,6 +196,7 @@ class ComponentPalette(QWidget):
         self.auto_expand_all_component_tree = False
         self.component_catalog_expanded = False
         self.preferences_changed_callback = None
+        self.edit_component_requested_callback = None
 
         self.view_selector = QComboBox()
         self.view_selector.addItems(
@@ -311,6 +324,10 @@ class ComponentPalette(QWidget):
     def emit_preferences_changed(self) -> None:
         if self.preferences_changed_callback is not None:
             self.preferences_changed_callback(self.preference_snapshot())
+
+    def request_edit_component(self, component: ComponentDefinition) -> None:
+        if self.edit_component_requested_callback is not None:
+            self.edit_component_requested_callback(component)
 
     def on_view_selector_changed(self) -> None:
         if self.view_selector.currentText() != self.VIEW_COMPATIBLE:

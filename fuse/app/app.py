@@ -74,7 +74,10 @@ from fuse.core.ui.composite_builder import (
     replace_selection_with_composite_instance,
     selection_boundary_report,
 )
-from fuse.core.ui.composite_instance_editor import CompositeInstanceEditorWidget
+from fuse.core.ui.composite_instance_editor import (
+    CompositeInstanceEditorWidget,
+    CompositeTemplateEditorWidget,
+)
 from fuse.core.ui.model_scene import ModelScene
 from fuse.core.ui.model_view import ModelView
 from fuse.core.ui.properties_panel import PropertiesPanel
@@ -244,6 +247,7 @@ class MainWindow(QMainWindow):
         self.model_view.redo_callback = self.redo
         self.model_tabs: QTabWidget | None = None
         self.composite_editor_widgets: list[CompositeInstanceEditorWidget] = []
+        self.composite_template_editor_widgets: list[CompositeTemplateEditorWidget] = []
         self.properties_panel = PropertiesPanel()
         self.model_outline = QTreeWidget()
         self.model_outline.setHeaderHidden(True)
@@ -291,6 +295,7 @@ class MainWindow(QMainWindow):
         self.scene.composite_instance_edit_requested_callback = self.edit_composite_instance
         self.properties_panel.property_changed_callback = self.on_property_changed
         self.palette.preferences_changed_callback = self.on_component_palette_preferences_changed
+        self.palette.edit_component_requested_callback = self.open_composite_template_from_palette_component
 
         self.setup_menu_bar()
         self.setup_layout()
@@ -469,7 +474,7 @@ class MainWindow(QMainWindow):
 
 
     def show_composite_component_manager(self) -> None:
-        dialog = CompositeComponentManagerDialog(self)
+        dialog = CompositeComponentManagerDialog(self, edit_requested_callback=self.open_composite_definition_tab)
         dialog.exec()
         if dialog.changed:
             self.load_framework_targets()
@@ -570,11 +575,16 @@ class MainWindow(QMainWindow):
         self.manage_composite_components_action = QAction("Manage Composite Components...", self)
         self.manage_composite_components_action.triggered.connect(self.show_composite_component_manager)
 
+        self.save_composite_template_action = QAction("Save Template Changes", self)
+        self.save_composite_template_action.triggered.connect(self.save_active_composite_template_changes)
+        self.save_composite_template_action.setEnabled(False)
+
         edit_menu.addAction(self.undo_action)
         edit_menu.addAction(self.redo_action)
         edit_menu.addSeparator()
         edit_menu.addAction(self.create_composite_action)
         edit_menu.addAction(self.manage_composite_components_action)
+        edit_menu.addAction(self.save_composite_template_action)
         zoom_in_action = QAction("Zoom In", self)
         zoom_in_action.setShortcut("Ctrl++")
         zoom_in_action.triggered.connect(self.model_view.zoom_in)
@@ -588,7 +598,15 @@ class MainWindow(QMainWindow):
         if self.model_tabs is None:
             return None
         widget = self.model_tabs.currentWidget()
-        if isinstance(widget, CompositeInstanceEditorWidget):
+        if isinstance(widget, (CompositeInstanceEditorWidget, CompositeTemplateEditorWidget)):
+            return widget
+        return None
+
+    def active_composite_template_editor_widget(self):
+        if self.model_tabs is None:
+            return None
+        widget = self.model_tabs.currentWidget()
+        if isinstance(widget, CompositeTemplateEditorWidget):
             return widget
         return None
 
@@ -611,7 +629,7 @@ class MainWindow(QMainWindow):
 
         for index in range(1, self.model_tabs.count()):
             widget = self.model_tabs.widget(index)
-            if isinstance(widget, CompositeInstanceEditorWidget):
+            if isinstance(widget, (CompositeInstanceEditorWidget, CompositeTemplateEditorWidget)):
                 scenes.append(widget.editor_scene)
         return scenes
 
@@ -648,6 +666,7 @@ class MainWindow(QMainWindow):
         self.bind_global_panels_to_active_model_tab()
         self.update_model_outline()
         self.update_create_composite_action_state()
+        self.update_save_composite_template_action_state()
 
     def project_model_tab_title(self) -> str:
         name = (self.project_name or "Untitled FUSE Project").strip()
@@ -657,6 +676,101 @@ class MainWindow(QMainWindow):
         if self.model_tabs is not None and self.model_tabs.count() > 0:
             self.model_tabs.setTabText(0, self.project_model_tab_title())
             self.model_tabs.setTabToolTip(0, "Global project model")
+
+    def update_save_composite_template_action_state(self) -> None:
+        if hasattr(self, "save_composite_template_action"):
+            self.save_composite_template_action.setEnabled(
+                self.active_composite_template_editor_widget() is not None
+            )
+
+    def open_composite_template_from_palette_component(self, component) -> None:
+        if not bool(int(getattr(component, "is_composite", 0) or 0)):
+            return
+        composite_id = getattr(component, "composite_id", "") or getattr(component, "component_id", "") or ""
+        definition = get_composite_component_definition(str(composite_id))
+        if definition is not None:
+            self.open_composite_definition_tab(definition)
+
+    def find_composite_template_tab_index(self, composite_id: str) -> int:
+        if self.model_tabs is None:
+            return -1
+        for index in range(1, self.model_tabs.count()):
+            widget = self.model_tabs.widget(index)
+            if not isinstance(widget, CompositeTemplateEditorWidget):
+                continue
+            if widget.definition.composite_id == composite_id:
+                return index
+        return -1
+
+    def open_composite_definition_tab(self, definition) -> None:
+        existing_index = self.find_composite_template_tab_index(definition.composite_id)
+        if existing_index >= 0:
+            self.model_tabs.setCurrentIndex(existing_index)
+            return
+
+        label = f"{definition.name} [Template]"
+        editor = CompositeTemplateEditorWidget(
+            definition,
+            parent=self,
+            nested_edit_requested_callback=self.open_nested_composite_instance_tab,
+            template_changed_callback=self.on_composite_template_editor_changed,
+        )
+        editor.editor_scene.selection_changed_callback = self.on_scene_selection_changed
+        editor.composite_tab_path = label
+        editor.parent_composite_editor = None
+        self.composite_template_editor_widgets.append(editor)
+
+        index = self.model_tabs.addTab(editor, label)
+        self.model_tabs.setTabToolTip(index, f"Global template: {definition.name}")
+        self.model_tabs.setCurrentIndex(index)
+        self.statusBar().showMessage(f"Opened composite template tab '{definition.name}'.", 3000)
+
+    def on_composite_template_editor_changed(self, editor) -> None:
+        self.update_model_outline()
+
+    def save_active_composite_template_changes(self) -> None:
+        editor = self.active_composite_template_editor_widget()
+        if editor is None:
+            return
+
+        affected_instances = [
+            node
+            for node in self.scene.component_items()
+            if bool(int(getattr(node.component, "is_composite", 0) or 0))
+            and getattr(node.component, "composite_id", "") == editor.definition.composite_id
+        ]
+        apply_to_instances = False
+        if affected_instances:
+            response = QMessageBox.question(
+                self,
+                "Save Composite Template Changes",
+                (
+                    "This project contains existing instances of this composite component.\n\n"
+                    "Apply the updated template to those instances in the current project? "
+                    "This may replace instance-local composite edits."
+                ),
+                QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel,
+                QMessageBox.No,
+            )
+            if response == QMessageBox.Cancel:
+                return
+            apply_to_instances = response == QMessageBox.Yes
+
+        saved = editor.save_template_changes()
+        if apply_to_instances:
+            for node in affected_instances:
+                node.composite_instance_model = copy.deepcopy(saved.mini_model)
+                node.composite_port_mappings = copy.deepcopy(saved.port_mappings)
+                node.sync_composite_ports_from_mappings()
+            self.mark_dirty()
+
+        self.load_framework_targets()
+        self.update_model_outline()
+        self.statusBar().showMessage(
+            f"Saved composite template changes for '{saved.name}'.",
+            5000,
+        )
+        self.update_save_composite_template_action_state()
 
     def composite_tab_label(self, node, parent_editor=None) -> str:
         node_name = getattr(node, "instance_name", "Composite") or "Composite"
@@ -723,7 +837,8 @@ class MainWindow(QMainWindow):
     def propagate_composite_editor_change_to_ancestors(self, editor) -> None:
         parent_editor = getattr(editor, "parent_composite_editor", None)
         while parent_editor is not None:
-            parent_editor.apply_current_edit_to_node()
+            if hasattr(parent_editor, "apply_current_edit_to_node"):
+                parent_editor.apply_current_edit_to_node()
             parent_editor = getattr(parent_editor, "parent_composite_editor", None)
 
     def close_model_tab(self, index: int) -> None:
@@ -737,6 +852,11 @@ class MainWindow(QMainWindow):
             self.propagate_composite_editor_change_to_ancestors(widget)
             if widget in self.composite_editor_widgets:
                 self.composite_editor_widgets.remove(widget)
+        elif isinstance(widget, CompositeTemplateEditorWidget):
+            self.close_child_composite_tabs(widget)
+            widget.apply_current_edit_to_node()
+            if widget in self.composite_template_editor_widgets:
+                self.composite_template_editor_widgets.remove(widget)
 
         self.model_tabs.removeTab(index)
         widget.deleteLater()
@@ -752,7 +872,7 @@ class MainWindow(QMainWindow):
         while index > 0:
             widget = self.model_tabs.widget(index)
             if (
-                isinstance(widget, CompositeInstanceEditorWidget)
+                isinstance(widget, (CompositeInstanceEditorWidget, CompositeTemplateEditorWidget))
                 and self.composite_editor_is_descendant(widget, parent_editor)
             ):
                 widget.apply_current_edit_to_node()

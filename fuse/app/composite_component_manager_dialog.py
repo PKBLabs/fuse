@@ -48,8 +48,9 @@ def safe_composite_file_stem(name: str) -> str:
 
 
 class CompositeComponentManagerDialog(QDialog):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, edit_requested_callback=None):
         super().__init__(parent)
+        self.edit_requested_callback = edit_requested_callback
         self.setWindowTitle("Manage Composite Components")
         self.setMinimumSize(780, 420)
         self.changed = False
@@ -67,21 +68,24 @@ class CompositeComponentManagerDialog(QDialog):
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.table.verticalHeader().setVisible(False)
         self.table.itemSelectionChanged.connect(self.update_button_state)
-        self.table.doubleClicked.connect(self.export_selected_definition)
+        self.table.doubleClicked.connect(self.edit_selected_definition)
         self.table.horizontalHeader().setStretchLastSection(True)
 
         self.import_button = QPushButton("Import...", self)
+        self.edit_button = QPushButton("Edit...", self)
         self.export_button = QPushButton("Export...", self)
         self.delete_button = QPushButton("Delete", self)
         self.close_button = QPushButton("Close", self)
 
         self.import_button.clicked.connect(self.import_definition)
+        self.edit_button.clicked.connect(self.edit_selected_definition)
         self.export_button.clicked.connect(self.export_selected_definition)
         self.delete_button.clicked.connect(self.delete_selected_definition)
         self.close_button.clicked.connect(self.accept)
 
         button_layout = QHBoxLayout()
         button_layout.addWidget(self.import_button)
+        button_layout.addWidget(self.edit_button)
         button_layout.addWidget(self.export_button)
         button_layout.addWidget(self.delete_button)
         button_layout.addStretch(1)
@@ -124,8 +128,16 @@ class CompositeComponentManagerDialog(QDialog):
 
     def update_button_state(self) -> None:
         has_selection = self.selected_definition() is not None
+        self.edit_button.setEnabled(has_selection)
         self.export_button.setEnabled(has_selection)
         self.delete_button.setEnabled(has_selection)
+
+    def edit_selected_definition(self) -> None:
+        definition = self.selected_definition()
+        if definition is None or self.edit_requested_callback is None:
+            return
+        self.edit_requested_callback(definition)
+        self.accept()
 
     def import_definition(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
