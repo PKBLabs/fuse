@@ -208,6 +208,11 @@ class PortItem(QGraphicsEllipseItem):
             super().contextMenuEvent(event)
             return
 
+        if hasattr(scene, "cancel_pending_connection"):
+            scene.cancel_pending_connection()
+        if hasattr(scene, "cancel_pending_subcomp_attachment"):
+            scene.cancel_pending_subcomp_attachment()
+
         state_callback = getattr(scene, "composite_port_exposure_state_callback", None)
         is_exposed = False
         if state_callback is not None:
@@ -225,10 +230,29 @@ class PortItem(QGraphicsEllipseItem):
             callback = getattr(scene, "composite_port_exposure_requested_callback", None)
             if callback is not None:
                 callback(self, not is_exposed)
+            if hasattr(scene, "cancel_pending_connection"):
+                scene.cancel_pending_connection()
         event.accept()
 
     def mousePressEvent(self, event):
         scene = self.scene()
+        if event.button() != Qt.LeftButton:
+            super().mousePressEvent(event)
+            return
+
+        if (
+            scene is not None
+            and bool(getattr(scene, "composite_port_exposure_mode", False))
+            and hasattr(scene, "composite_port_exposure_requested_callback")
+        ):
+            state_callback = getattr(scene, "composite_port_exposure_state_callback", None)
+            is_exposed = bool(state_callback(self)) if state_callback is not None else False
+            callback = getattr(scene, "composite_port_exposure_requested_callback", None)
+            if callback is not None:
+                callback(self, not is_exposed)
+            event.accept()
+            return
+
         if scene is not None and hasattr(scene, "port_clicked"):
             scene.port_clicked(self)
         event.accept()
@@ -1051,6 +1075,13 @@ class ComponentNodeItem(QGraphicsRectItem):
         event.accept()
 
     def should_add_fallback_ports(self) -> bool:
+        # Composite components use their explicit exposed-port mapping as the
+        # authoritative source of visible ports. If no ports are exposed, the
+        # composite should render with no ports rather than generic in/out
+        # fallback ports.
+        if bool(int(getattr(self.component, "is_composite", 0) or 0)):
+            return False
+
         plugin_id = getattr(self.component, "plugin_id", "") or ""
 
         # SST metadata is authoritative. If sst-info says a component/subcomponent

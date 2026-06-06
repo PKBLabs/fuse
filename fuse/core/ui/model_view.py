@@ -75,6 +75,12 @@ class FloatingModelToolbar(QFrame):
         self.multiselect_button.clicked.connect(view.enable_multiselect_mode)
         layout.addWidget(self.multiselect_button)
 
+        self.expose_ports_button = self.make_button("Expose Ports", checkable=True)
+        self.expose_ports_button.setToolTip("Toggle whether internal ports are exposed on the composite boundary")
+        self.expose_ports_button.clicked.connect(view.enable_composite_port_exposure_mode)
+        self.expose_ports_button.setEnabled(False)
+        layout.addWidget(self.expose_ports_button)
+
         layout.addWidget(self.make_separator())
 
         self.undo_button = self.make_button("Undo")
@@ -137,10 +143,18 @@ class FloatingModelToolbar(QFrame):
     def set_mode(self, mode: str) -> None:
         self.select_button.blockSignals(True)
         self.multiselect_button.blockSignals(True)
+        self.expose_ports_button.blockSignals(True)
         self.select_button.setChecked(mode == "select")
         self.multiselect_button.setChecked(mode == "multiselect")
+        self.expose_ports_button.setChecked(mode == "expose_ports")
         self.select_button.blockSignals(False)
         self.multiselect_button.blockSignals(False)
+        self.expose_ports_button.blockSignals(False)
+
+    def set_port_exposure_tools_available(self, available: bool) -> None:
+        self.expose_ports_button.setEnabled(bool(available))
+        if not available and self.expose_ports_button.isChecked():
+            self.view.enable_select_move_mode()
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -247,6 +261,8 @@ class ModelView(QGraphicsView):
         mode = str(editor.get("mode", "select") or "select")
         if mode == "multiselect":
             self.enable_multiselect_mode()
+        elif mode == "expose_ports" and self.port_exposure_tools_available():
+            self.enable_composite_port_exposure_mode()
         else:
             self.enable_select_move_mode()
 
@@ -336,15 +352,38 @@ class ModelView(QGraphicsView):
         if self.redo_callback is not None:
             self.redo_callback()
 
+    def set_port_exposure_tools_available(self, available: bool) -> None:
+        self.toolbar.set_port_exposure_tools_available(bool(available))
+
+    def port_exposure_tools_available(self) -> bool:
+        return bool(self.toolbar.expose_ports_button.isEnabled())
+
+    def set_scene_port_exposure_mode(self, enabled: bool) -> None:
+        scene = self.scene()
+        if scene is not None:
+            scene.composite_port_exposure_mode = bool(enabled)
+
     def enable_select_move_mode(self) -> None:
         self.mode = "select"
         self.setDragMode(QGraphicsView.NoDrag)
+        self.set_scene_port_exposure_mode(False)
         self.toolbar.set_mode(self.mode)
         self.notify_editor_state_changed()
 
     def enable_multiselect_mode(self) -> None:
         self.mode = "multiselect"
         self.setDragMode(QGraphicsView.RubberBandDrag)
+        self.set_scene_port_exposure_mode(False)
+        self.toolbar.set_mode(self.mode)
+        self.notify_editor_state_changed()
+
+    def enable_composite_port_exposure_mode(self) -> None:
+        if not self.port_exposure_tools_available():
+            self.enable_select_move_mode()
+            return
+        self.mode = "expose_ports"
+        self.setDragMode(QGraphicsView.NoDrag)
+        self.set_scene_port_exposure_mode(True)
         self.toolbar.set_mode(self.mode)
         self.notify_editor_state_changed()
 

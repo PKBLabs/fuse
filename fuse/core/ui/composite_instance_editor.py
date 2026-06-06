@@ -11,6 +11,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QLabel,
     QMessageBox,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -237,10 +238,19 @@ class CompositeInstanceEditorWidget(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         help_label = QLabel(
             "Edit the internal mini-model for this composite instance. "
-            "Changes apply only to this placed instance, not the global composite template."
+            "Changes apply only to this placed instance, not the global composite template. "
+            "Use the Expose Ports toolbar mode or right-click a port to toggle whether "
+            "an unlinked internal port appears on this composite instance."
         )
         help_label.setWordWrap(True)
         layout.addWidget(help_label)
+
+        self.save_template_button = QToolButton(self)
+        self.save_template_button.setText("Save Template Changes")
+        self.save_template_button.setToolTip("Save this composite template configuration to the local database")
+        self.save_template_button.clicked.connect(self.request_save_template_changes)
+        self.save_template_button.setEnabled(False)
+        layout.addWidget(self.save_template_button)
 
         self.editor_scene = ModelScene()
         self.editor_scene.active_plugin_id = getattr(getattr(node, "scene", lambda: None)(), "active_plugin_id", "") or ""
@@ -249,6 +259,7 @@ class CompositeInstanceEditorWidget(QWidget):
         self.editor_scene.composite_instance_edit_requested_callback = self.request_nested_composite_edit
         self.editor_scene.composite_port_exposure_requested_callback = self.set_port_exposed
         self.editor_scene.composite_port_exposure_state_callback = self.port_is_exposed
+        self.editor_view.set_port_exposure_tools_available(True)
 
         layout.addWidget(self.editor_view, 1)
 
@@ -332,11 +343,13 @@ class CompositeTemplateEditorWidget(QWidget):
         parent=None,
         nested_edit_requested_callback=None,
         template_changed_callback=None,
+        template_save_requested_callback=None,
     ):
         super().__init__(parent)
         self.definition = deepcopy(definition)
         self.nested_edit_requested_callback = nested_edit_requested_callback
         self.template_changed_callback = template_changed_callback
+        self.template_save_requested_callback = template_save_requested_callback
         self.loading_model = False
         self.template_dirty = False
 
@@ -344,10 +357,19 @@ class CompositeTemplateEditorWidget(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         help_label = QLabel(
             "Edit the global/default configuration for this composite component. "
-            "Use Save Template Changes to write changes to the local composite database."
+            "Use Save Template Changes to write changes to the local composite database. "
+            "Use the Expose Ports toolbar mode or right-click a port to toggle whether "
+            "an unlinked internal port appears on new composite instances."
         )
         help_label.setWordWrap(True)
         layout.addWidget(help_label)
+
+        self.save_template_button = QToolButton(self)
+        self.save_template_button.setText("Save Template Changes")
+        self.save_template_button.setToolTip("Save this composite template configuration to the local database")
+        self.save_template_button.clicked.connect(self.request_save_template_changes)
+        self.save_template_button.setEnabled(False)
+        layout.addWidget(self.save_template_button)
 
         self.editor_scene = ModelScene()
         self.editor_view = ModelView(self.editor_scene)
@@ -355,6 +377,7 @@ class CompositeTemplateEditorWidget(QWidget):
         self.editor_scene.composite_instance_edit_requested_callback = self.request_nested_composite_edit
         self.editor_scene.composite_port_exposure_requested_callback = self.set_port_exposed
         self.editor_scene.composite_port_exposure_state_callback = self.port_is_exposed
+        self.editor_view.set_port_exposure_tools_available(True)
         layout.addWidget(self.editor_view, 1)
 
         self.load_template_model()
@@ -390,6 +413,19 @@ class CompositeTemplateEditorWidget(QWidget):
     def refresh_port_exposure_visuals(self) -> None:
         update_editor_port_exposure_visuals(self.editor_scene, self.edited_port_mappings())
 
+    def update_save_button_state(self) -> None:
+        self.save_template_button.setEnabled(bool(self.template_dirty))
+
+    def set_template_dirty(self, dirty: bool = True) -> None:
+        self.template_dirty = bool(dirty)
+        self.update_save_button_state()
+
+    def request_save_template_changes(self) -> None:
+        if self.template_save_requested_callback is not None:
+            self.template_save_requested_callback(self)
+            return
+        self.save_template_changes()
+
     def apply_current_edit_to_node(self) -> None:
         self.definition.mini_model = self.edited_mini_model()
         self.definition.port_mappings = [deepcopy(mapping) for mapping in self.edited_port_mappings()]
@@ -399,7 +435,7 @@ class CompositeTemplateEditorWidget(QWidget):
         self.apply_current_edit_to_node()
         saved = save_composite_component_definition(self.definition)
         self.definition = deepcopy(saved)
-        self.template_dirty = False
+        self.set_template_dirty(False)
         return saved
 
     def port_is_exposed(self, port) -> bool:
@@ -420,7 +456,7 @@ class CompositeTemplateEditorWidget(QWidget):
 
         self.definition.mini_model = self.edited_mini_model()
         self.definition.port_mappings = [deepcopy(mapping) for mapping in mappings]
-        self.template_dirty = True
+        self.set_template_dirty(True)
         self.refresh_port_exposure_visuals()
         if self.template_changed_callback is not None:
             self.template_changed_callback(self)
@@ -430,7 +466,7 @@ class CompositeTemplateEditorWidget(QWidget):
         if self.loading_model:
             return
         self.apply_current_edit_to_node()
-        self.template_dirty = True
+        self.set_template_dirty(True)
         if self.template_changed_callback is not None:
             self.template_changed_callback(self)
 

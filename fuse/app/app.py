@@ -678,10 +678,12 @@ class MainWindow(QMainWindow):
             self.model_tabs.setTabToolTip(0, "Global project model")
 
     def update_save_composite_template_action_state(self) -> None:
-        if hasattr(self, "save_composite_template_action"):
-            self.save_composite_template_action.setEnabled(
-                self.active_composite_template_editor_widget() is not None
-            )
+        if not hasattr(self, "save_composite_template_action"):
+            return
+        editor = self.active_composite_template_editor_widget()
+        self.save_composite_template_action.setEnabled(
+            editor is not None and bool(getattr(editor, "template_dirty", False))
+        )
 
     def open_composite_template_from_palette_component(self, component) -> None:
         if not bool(int(getattr(component, "is_composite", 0) or 0)):
@@ -714,6 +716,7 @@ class MainWindow(QMainWindow):
             parent=self,
             nested_edit_requested_callback=self.open_nested_composite_instance_tab,
             template_changed_callback=self.on_composite_template_editor_changed,
+            template_save_requested_callback=self.save_composite_template_changes_for_editor,
         )
         editor.editor_scene.selection_changed_callback = self.on_scene_selection_changed
         editor.composite_tab_path = label
@@ -726,12 +729,30 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"Opened composite template tab '{definition.name}'.", 3000)
 
     def on_composite_template_editor_changed(self, editor) -> None:
+        self.update_composite_template_tab_label(editor)
+        self.update_save_composite_template_action_state()
         self.update_model_outline()
 
-    def save_active_composite_template_changes(self) -> None:
+    def update_composite_template_tab_label(self, editor) -> None:
+        if self.model_tabs is None:
+            return
+        index = self.model_tabs.indexOf(editor)
+        if index < 0:
+            return
+        dirty_prefix = "*" if bool(getattr(editor, "template_dirty", False)) else ""
+        label = f"{dirty_prefix}{editor.definition.name} [Template]"
+        self.model_tabs.setTabText(index, label)
+        self.model_tabs.setTabToolTip(index, f"Global template: {editor.definition.name}")
+
+    def save_active_composite_template_changes(self) -> bool:
         editor = self.active_composite_template_editor_widget()
         if editor is None:
-            return
+            return False
+        return self.save_composite_template_changes_for_editor(editor)
+
+    def save_composite_template_changes_for_editor(self, editor) -> bool:
+        if editor is None:
+            return False
 
         affected_instances = [
             node
@@ -753,7 +774,7 @@ class MainWindow(QMainWindow):
                 QMessageBox.No,
             )
             if response == QMessageBox.Cancel:
-                return
+                return False
             apply_to_instances = response == QMessageBox.Yes
 
         saved = editor.save_template_changes()
@@ -770,7 +791,9 @@ class MainWindow(QMainWindow):
             f"Saved composite template changes for '{saved.name}'.",
             5000,
         )
+        self.update_composite_template_tab_label(editor)
         self.update_save_composite_template_action_state()
+        return True
 
     def composite_tab_label(self, node, parent_editor=None) -> str:
         node_name = getattr(node, "instance_name", "Composite") or "Composite"
@@ -853,8 +876,9 @@ class MainWindow(QMainWindow):
             if widget in self.composite_editor_widgets:
                 self.composite_editor_widgets.remove(widget)
         elif isinstance(widget, CompositeTemplateEditorWidget):
+            if not self.confirm_close_composite_template_editor(widget):
+                return
             self.close_child_composite_tabs(widget)
-            widget.apply_current_edit_to_node()
             if widget in self.composite_template_editor_widgets:
                 self.composite_template_editor_widgets.remove(widget)
 
@@ -863,6 +887,26 @@ class MainWindow(QMainWindow):
         self.bind_global_panels_to_active_model_tab()
         self.update_model_outline()
         self.update_create_composite_action_state()
+        self.update_save_composite_template_action_state()
+
+    def confirm_close_composite_template_editor(self, editor) -> bool:
+        if not bool(getattr(editor, "template_dirty", False)):
+            return True
+
+        response = QMessageBox.question(
+            self,
+            "Unsaved Composite Template Changes",
+            (
+                f"Save changes to composite template '{editor.definition.name}' before closing this tab?"
+            ),
+            QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel,
+            QMessageBox.Save,
+        )
+        if response == QMessageBox.Cancel:
+            return False
+        if response == QMessageBox.Save:
+            return self.save_composite_template_changes_for_editor(editor)
+        return True
 
     def close_child_composite_tabs(self, parent_editor) -> None:
         if self.model_tabs is None:

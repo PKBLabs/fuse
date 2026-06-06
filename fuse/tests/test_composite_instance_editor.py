@@ -325,3 +325,61 @@ def test_template_editor_saves_exposed_port_state_to_database(qtbot, monkeypatch
     stored = get_composite_component_definition(definition.composite_id)
     assert stored is not None
     assert stored.port_mappings[0].exposed is True
+
+
+def test_composite_editor_expose_ports_toolbar_mode_is_available(qtbot, monkeypatch):
+    from fuse.core.ui.composite_instance_editor import CompositeInstanceEditorWidget
+
+    monkeypatch.setattr(
+        "fuse.core.ui.graphics_items.load_port_names_for_component",
+        lambda *args, **kwargs: ["cpu", "mem"],
+    )
+    definition = cache_pair_definition("toolbar-port-exposure")
+    definition.port_mappings[0].exposed = False
+    save_composite_component_definition(definition)
+
+    scene = ModelScene()
+    node = composite_node_for_definition(scene, definition)
+    widget = CompositeInstanceEditorWidget(node)
+    qtbot.addWidget(widget)
+
+    assert widget.editor_view.toolbar.expose_ports_button.isEnabled() is True
+    widget.editor_view.enable_composite_port_exposure_mode()
+
+    assert widget.editor_view.mode == "expose_ports"
+    assert widget.editor_scene.composite_port_exposure_mode is True
+
+    widget.editor_view.enable_select_move_mode()
+
+    assert widget.editor_view.mode == "select"
+    assert widget.editor_scene.composite_port_exposure_mode is False
+
+
+def test_template_editor_save_button_tracks_dirty_state(qtbot, monkeypatch):
+    from fuse.core.ui.composite_instance_editor import CompositeTemplateEditorWidget
+
+    monkeypatch.setattr(
+        "fuse.core.ui.graphics_items.load_port_names_for_component",
+        lambda *args, **kwargs: ["cpu", "mem"],
+    )
+    definition = cache_pair_definition("template-save-button")
+    definition.port_mappings[0].exposed = False
+    save_composite_component_definition(definition)
+
+    widget = CompositeTemplateEditorWidget(definition)
+    qtbot.addWidget(widget)
+
+    internal_node = next(item for item in widget.editor_scene.component_items() if item.instance_name == "cache_a")
+    port = next(port for port in internal_node.ports if port.name == "cpu")
+
+    assert widget.template_dirty is False
+    assert widget.save_template_button.isEnabled() is False
+
+    assert widget.set_port_exposed(port, True) is True
+    assert widget.template_dirty is True
+    assert widget.save_template_button.isEnabled() is True
+
+    widget.save_template_changes()
+
+    assert widget.template_dirty is False
+    assert widget.save_template_button.isEnabled() is False
