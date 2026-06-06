@@ -304,6 +304,7 @@ def load_project_into_scene(project: dict, scene: ModelScene) -> None:
                 )
                 node.composite_instance_model = normalized_model
                 node.composite_port_mappings = normalized_mappings
+                node.sync_composite_ports_from_mappings()
 
         position = component_data.get("position", {})
         node.setPos(float(position.get("x", 0)), float(position.get("y", 0)))

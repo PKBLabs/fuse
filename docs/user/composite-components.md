@@ -31,7 +31,7 @@ Composite components are a FUSE editing abstraction. They are not SST components
 6. Optionally enter a description and icon path, or use **Browse** to select an icon.
 7. Confirm the dialog.
 
-FUSE stores the selected portion of the model as a local composite definition and replaces the selected items with one placed composite instance.
+FUSE stores the selected portion of the model as a local composite definition and replaces the selected items with one placed composite instance. New composites start with their candidate external ports hidden by default. Open the new composite template and explicitly expose only the ports that should appear on the composite boundary. New composites start with their candidate external ports hidden by default. Open the new composite template and explicitly expose only the ports that should appear on the composite boundary.
 
 ## Selection rules
 
@@ -47,21 +47,34 @@ selected component <-> unselected component
 
 If a selected fragment has a boundary connection to an unselected component, FUSE protects the model from accidental corruption. The selected fragment must be made self-contained before it can be converted into a composite, or future boundary-remapping support must be used once available.
 
-## External composite ports
+## Explicit composite ports
 
-Composite component ports are derived from the unoccupied ports of the internal mini-model.
+Composite ports are explicit. FUSE records candidate boundary ports for the internal mini-model, but a port appears on the composite component box only when it is marked as exposed.
 
-For example, suppose a composite contains two internal components. Each component has two ports, and one internal link connects the two components. The connected internal ports are hidden inside the composite. The two remaining free ports become external ports on the composite instance.
+By default, newly created composites expose no ports. This avoids noisy composite boxes when a mini-model has many unused internal ports, especially when composites contain other composites. Users choose the public interface of the composite by exposing only the ports that should be linkable from the parent model.
 
-Each external composite port maps one-to-one to an internal component port:
+Each exposed composite port maps one-to-one to an internal component port:
 
 ```text
-Composite external port
+visible composite port
   -> internal component instance
   -> internal port name
 ```
 
-When you connect a normal component to a composite port, the link is drawn to the composite box in the model view. During validation/export, FUSE resolves that visual connection to the mapped internal component port.
+Hidden ports remain available inside the composite edit tab, but they do not appear on the composite boundary and cannot be used by links in the parent model.
+
+### Exposing and hiding ports
+
+Open a composite template or composite instance edit tab, then use one of these workflows:
+
+- Enable **Expose Ports** in the floating model-view toolbar and left-click internal ports to toggle whether they are exposed.
+- Right-click an internal port and choose **Expose Port on Composite** or **Hide Port from Composite**.
+
+Exposed internal ports are highlighted in the composite edit view. Hiding a port removes it from the composite component boundary. Showing a port adds it to the visible ports for that template or instance.
+
+Right-clicking a port for expose/hide does not start link-creation mode. The expose/hide workflow is separate from normal linking.
+
+When you connect a normal component to an exposed composite port, the link is drawn to the composite box in the model view. During validation/export, FUSE resolves that visual connection to the mapped internal component port.
 
 ## Composite entries in the component palette
 
@@ -89,7 +102,7 @@ The first tab is the global project model. Composite edit tabs appear to the rig
 
 The project tab cannot be closed. Composite tabs can be closed. Closing a parent composite tab also closes tabs for nested child composite edit contexts.
 
-Edits made inside a composite tab apply only to that placed instance. They do not mutate the global composite template stored in the local database. This allows one instance of a composite to be customized without changing other instances of the same template.
+Edits made inside a composite instance tab apply only to that placed instance. They do not mutate the global composite template stored in the local database. This allows one instance of a composite to be customized without changing other instances of the same template.
 
 Instance-local edits include:
 
@@ -99,6 +112,7 @@ Instance-local edits include:
 - internal positions
 - internal links and subcomponent attachments supported by the normal model editor
 - nested composite instance state
+- exposed/hidden port state for that placed instance
 
 ## Nested composites
 
@@ -130,6 +144,26 @@ Both panels follow the active model-view tab:
 - Selecting a component, subcomponent, or link in the outline selects and highlights it in the active model view.
 - Opening a composite tab starts with no selected object, so the Properties panel shows nothing selected until the user clicks an item.
 
+## Editing global composite templates
+
+A composite definition can be edited as a global/default template. Open the manager with:
+
+```text
+Edit -> Manage Composite Components...
+```
+
+Select a composite and choose **Edit**, or right-click a composite entry in the component palette and choose **Edit Component...**. FUSE opens a template edit tab named like:
+
+```text
+CacheCluster [Template]
+```
+
+Template edit tabs change the reusable database definition. Use **Expose Ports** or the port context menu to choose which internal ports should appear on new composite instances by default.
+
+Template tabs have a **Save Template Changes** button. Dirty template tabs are marked with an asterisk. If you close a dirty template tab, FUSE prompts you to save, discard, or cancel the close operation.
+
+When the current project already contains instances of the edited template, saving asks whether to apply the updated template to existing instances in the open project. Applying the template can replace instance-local composite edits. If you do not apply the template, the database definition is still saved, but existing placed instances keep their current instance-local state.
+
 ## Managing local composite definitions
 
 Open:
@@ -143,6 +177,7 @@ The manager dialog lists composite definitions stored in the local database. It 
 - importing `.fcc` files
 - exporting selected composite definitions to `.fcc`
 - deleting obsolete or erroneous composite definitions from the local database
+- editing global/default composite templates
 
 Deleting a definition removes it from the local component catalog. It does not rewrite already-saved project files or external `.fcc` files. If an open project still contains instances of a deleted template, those instances may rely on their saved instance-local mini-model state or may report a missing composite definition during expansion.
 
@@ -188,4 +223,6 @@ The SST exporter receives only SST components, SST subcomponents, and SST links.
 - Deleting a composite definition removes it from the local catalog but does not automatically remove or rewrite placed instances in existing projects.
 - Composite boundary links are conservative during creation; only links with both endpoints in the selected fragment become internal links.
 - Composite icons currently use file paths. Shared projects may need icon paths adjusted if the same files do not exist on another machine.
+- New composites expose no ports until the user explicitly exposes ports in a template or instance edit tab.
+- Hidden composite ports cannot be linked from the parent model. If a link cannot be flattened, check that the target composite port is exposed.
 - Very deep composite hierarchies may produce long tab labels; full hierarchy labels are intended to preserve edit context.

@@ -100,6 +100,7 @@ class PortItem(QGraphicsEllipseItem):
                 or ""
         )
         self.connections: list[ConnectionItem] = []
+        self.is_composite_exposed_port = False
 
         self.setPos(x, y)
         self.setBrush(QBrush(QColor("#2f80ed")))
@@ -188,14 +189,70 @@ class PortItem(QGraphicsEllipseItem):
             self.setBrush(QBrush(QColor("#6b7280")))
             self.setToolTip(f"⚠ Port Occupied\n{self.name}")
         else:
-            self.setBrush(QBrush(QColor("#2f80ed")))
+            if bool(getattr(self, "is_composite_exposed_port", False)):
+                self.setBrush(QBrush(QColor("#f97316")))
+                self.setPen(QPen(QColor("#c2410c"), 2))
+            else:
+                self.setBrush(QBrush(QColor("#2f80ed")))
+                self.setPen(QPen(QColor("#1f4e79"), 1))
             tooltip = f"Port: {self.name}"
             if self.interface:
                 tooltip += f"\nInterface: {self.interface}"
+            if bool(getattr(self, "is_composite_exposed_port", False)):
+                tooltip += "\nExposed on composite boundary"
             self.setToolTip(tooltip)
+
+    def contextMenuEvent(self, event):
+        scene = self.scene()
+        if scene is None or not hasattr(scene, "composite_port_exposure_requested_callback"):
+            super().contextMenuEvent(event)
+            return
+
+        if hasattr(scene, "cancel_pending_connection"):
+            scene.cancel_pending_connection()
+        if hasattr(scene, "cancel_pending_subcomp_attachment"):
+            scene.cancel_pending_subcomp_attachment()
+
+        state_callback = getattr(scene, "composite_port_exposure_state_callback", None)
+        is_exposed = False
+        if state_callback is not None:
+            is_exposed = bool(state_callback(self))
+
+        menu = QMenu()
+        action_text = "Hide Port from Composite" if is_exposed else "Expose Port on Composite"
+        exposure_action = menu.addAction(action_text)
+        if not is_exposed and self.is_connected():
+            exposure_action.setEnabled(False)
+            exposure_action.setToolTip("Only unlinked internal ports can be exposed.")
+
+        action = menu.exec(event.screenPos())
+        if action == exposure_action:
+            callback = getattr(scene, "composite_port_exposure_requested_callback", None)
+            if callback is not None:
+                callback(self, not is_exposed)
+            if hasattr(scene, "cancel_pending_connection"):
+                scene.cancel_pending_connection()
+        event.accept()
 
     def mousePressEvent(self, event):
         scene = self.scene()
+        if event.button() != Qt.LeftButton:
+            super().mousePressEvent(event)
+            return
+
+        if (
+            scene is not None
+            and bool(getattr(scene, "composite_port_exposure_mode", False))
+            and hasattr(scene, "composite_port_exposure_requested_callback")
+        ):
+            state_callback = getattr(scene, "composite_port_exposure_state_callback", None)
+            is_exposed = bool(state_callback(self)) if state_callback is not None else False
+            callback = getattr(scene, "composite_port_exposure_requested_callback", None)
+            if callback is not None:
+                callback(self, not is_exposed)
+            event.accept()
+            return
+
         if scene is not None and hasattr(scene, "port_clicked"):
             scene.port_clicked(self)
         event.accept()
@@ -1018,6 +1075,13 @@ class ComponentNodeItem(QGraphicsRectItem):
         event.accept()
 
     def should_add_fallback_ports(self) -> bool:
+        # Composite components use their explicit exposed-port mapping as the
+        # authoritative source of visible ports. If no ports are exposed, the
+        # composite should render with no ports rather than generic in/out
+        # fallback ports.
+        if bool(int(getattr(self.component, "is_composite", 0) or 0)):
+            return False
+
         plugin_id = getattr(self.component, "plugin_id", "") or ""
 
         # SST metadata is authoritative. If sst-info says a component/subcomponent
@@ -1140,6 +1204,29 @@ class ComponentNodeItem(QGraphicsRectItem):
 
         self.sync_ports_to_templates()
         self.update_add_ports_button_visibility()
+
+    def sync_composite_ports_from_mappings(self) -> tuple[bool, str]:
+        if not bool(int(getattr(self.component, "is_composite", 0) or 0)):
+            return True, ""
+
+        self.port_templates = [
+            {
+                "name": str(getattr(mapping, "external_port_name", "") or ""),
+                "description": str(getattr(mapping, "description", "") or ""),
+                "iface": str(getattr(mapping, "iface", "") or ""),
+                "is_variable": False,
+                "base_name": str(getattr(mapping, "external_port_name", "") or ""),
+                "count_parameter": "",
+                "default_count": 1,
+            }
+            for mapping in getattr(self, "composite_port_mappings", []) or []
+            if bool(getattr(mapping, "exposed", True))
+            and str(getattr(mapping, "external_port_name", "") or "")
+        ]
+        self.variable_port_templates = []
+        result = self.sync_ports_to_templates()
+        self.update_add_ports_button_visibility()
+        return result
 
     def load_port_templates(self) -> list[dict]:
         try:

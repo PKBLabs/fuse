@@ -41,6 +41,7 @@ def make_test_composite():
                 internal_port_name="cpu",
                 iface="memHierarchy.memEvent",
                 description="CPU-side cache port",
+                exposed=True,
             ),
             CompositePortMapping(
                 external_port_name="cache_b.mem",
@@ -49,6 +50,7 @@ def make_test_composite():
                 internal_port_name="mem",
                 iface="memHierarchy.memEvent",
                 description="Memory-side cache port",
+                exposed=False,
             ),
         ],
     )
@@ -90,6 +92,8 @@ def test_composite_definition_storage_round_trips_model_and_ports():
     assert loaded.mini_model["components"][0]["name"] == "cache_a"
     assert loaded.port_mappings[0].external_port_name == "cache_a.cpu"
     assert loaded.port_mappings[1].internal_port_name == "mem"
+    assert loaded.port_mappings[0].exposed is True
+    assert loaded.port_mappings[1].exposed is False
 
 
 def test_composite_definition_update_keeps_original_created_timestamp():
@@ -130,7 +134,7 @@ def test_load_component_definitions_includes_composite_definitions(monkeypatch):
     assert composites[0].display_name == "Cache Pair (Composite)"
 
 
-def test_composite_component_details_expose_external_ports():
+def test_composite_component_details_expose_only_explicit_external_ports():
     from fuse.core.persistence.composite_components import save_composite_component_definition
     from fuse.core.persistence.db_access import get_component_details, load_port_metadata_for_component
 
@@ -143,7 +147,7 @@ def test_composite_component_details_expose_external_ports():
     )
     details = get_component_details("core", "composite-cache-pair", "fuse-composite")
 
-    assert [port["name"] for port in ports] == ["cache_a.cpu", "cache_b.mem"]
+    assert [port["name"] for port in ports] == ["cache_a.cpu"]
     assert details["component"]["is_composite"] == 1
     assert details["component"]["composite_id"] == "composite-cache-pair"
     assert details["ports"][0]["iface"] == "memHierarchy.memEvent"

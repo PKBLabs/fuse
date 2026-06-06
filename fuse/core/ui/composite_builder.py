@@ -155,6 +155,7 @@ def composite_port_mappings_for_fragment(
                         or ""
                     ),
                     description=str(metadata.get("description", "") or ""),
+                    exposed=False,
                 )
             )
 
@@ -281,5 +282,6 @@ def replace_selection_with_composite_instance(
     )
     composite_node.composite_instance_model = normalized_model
     composite_node.composite_port_mappings = normalized_mappings
+    composite_node.sync_composite_ports_from_mappings()
     composite_node.setSelected(True)
     return composite_node

@@ -145,6 +145,7 @@ def save_cache_pair_composite(composite_id="flatten-cache-pair"):
                 internal_component_name="cache_a",
                 internal_port_name="cpu",
                 iface="memHierarchy.memEvent",
+                exposed=True,
             ),
             CompositePortMapping(
                 external_port_name="cache_b.mem",
@@ -152,6 +153,7 @@ def save_cache_pair_composite(composite_id="flatten-cache-pair"):
                 internal_component_name="cache_b",
                 internal_port_name="mem",
                 iface="memHierarchy.memEvent",
+                exposed=True,
             ),
         ],
     )
@@ -295,3 +297,56 @@ def test_flatten_scene_reports_missing_composite_definition():
         assert "missing-template" in str(exc)
     else:
         raise AssertionError("missing composite definition should fail flattening")
+
+
+def test_flatten_scene_rejects_link_to_hidden_composite_port(monkeypatch):
+    from fuse.core.model.composite import CompositeComponentDefinition, CompositePortMapping
+    from fuse.core.model.composite_flattening import flatten_scene_for_export
+    from fuse.core.model.models import ModelLink
+    from fuse.core.persistence.composite_components import save_composite_component_definition
+
+    patch_port_metadata(monkeypatch)
+    definition = save_cache_pair_composite("flatten-hidden-port")
+    definition.port_mappings = [
+        CompositePortMapping(
+            external_port_name="cache_a.cpu",
+            internal_node_id=1,
+            internal_component_name="cache_a",
+            internal_port_name="cpu",
+            iface="memHierarchy.memEvent",
+            exposed=False,
+        )
+    ]
+    save_composite_component_definition(definition)
+
+    cpu = FakeNode(
+        sst_component("cpu-type", "standardCPU"),
+        10,
+        "cpu0",
+        ports=[FakePort("mem")],
+    )
+    composite = FakeNode(
+        composite_component(definition.composite_id, definition.name),
+        20,
+        "Cache Pair_1",
+        ports=[],
+    )
+    external_link = ModelLink(
+        7,
+        "cpu_to_hidden_pair_port",
+        10,
+        "cpu0",
+        "mem",
+        20,
+        "Cache Pair_1",
+        "cache_a.cpu",
+        plugin_id="sst",
+    )
+
+    try:
+        flatten_scene_for_export(FakeScene([cpu, composite], [external_link]))
+    except ValueError as exc:
+        assert "make sure the port is exposed" in str(exc)
+        assert "cpu_to_hidden_pair_port" in str(exc)
+    else:
+        raise AssertionError("link to hidden composite port should fail flattening")

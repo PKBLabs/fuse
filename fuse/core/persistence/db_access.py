@@ -152,6 +152,7 @@ def load_port_metadata_for_component(
                 "default_count": 1,
             }
             for mapping in composite.port_mappings
+            if bool(getattr(mapping, "exposed", True))
         ]
 
     details = load_item_details(plugin_id, component_id, target_id=target_id)

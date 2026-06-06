@@ -16,6 +16,10 @@ A reusable FUSE mini-model template made from selected components, internal link
 
 A placed instance of a composite component template. It may have instance-local internal edits that do not change the global reusable template.
 
+## Composite exposed port
+
+A candidate composite port mapping that is visible on the composite component boundary and can be linked from the parent model. Hidden candidate mappings remain internal to the composite edit context.
+
 ## Component definition
 
 The editor-facing generic description of a component type. FUSE serializes component definitions into drag/drop payloads and uses them to create component instances.

@@ -87,6 +87,7 @@ def test_build_composite_definition_preserves_fragment_and_external_ports(qtbot,
     ]
     assert definition.port_mappings[0].internal_node_id == first.node_id
     assert definition.port_mappings[1].internal_component_name == second.instance_name
+    assert [mapping.exposed for mapping in definition.port_mappings] == [False, False]
 
 
 def test_replace_selection_with_composite_instance_removes_fragment_and_keeps_composite_node(qtbot, monkeypatch, tmp_path):
@@ -123,10 +124,8 @@ def test_replace_selection_with_composite_instance_removes_fragment_and_keeps_co
     assert composite_node.component.composite_id == definition.composite_id
     assert composite_node.instance_name == "Pair_1"
     assert composite_node.pos() == QPointF(50.0, 80.0)
-    assert [port.name for port in composite_node.ports] == [
-        f"{first.instance_name}.in",
-        f"{second.instance_name}.out",
-    ]
+    assert [mapping.exposed for mapping in composite_node.composite_port_mappings] == [False, False]
+    assert [port.name for port in composite_node.ports] == []
 
 
 def test_boundary_report_blocks_selection_with_link_to_unselected_component(qtbot, monkeypatch):
