@@ -289,8 +289,12 @@ class ModelView(QGraphicsView):
         if self.toolbar.maximumHeight() != available_height:
             self.toolbar.setMaximumHeight(available_height)
 
-        max_x = max(margin, self.viewport().width() - self.toolbar.width() - margin)
-        max_y = max(margin, self.viewport().height() - self.toolbar.height() - margin)
+        # Clamp the toolbar anchor point to the viewport rather than requiring
+        # the full toolbar rectangle to fit. Composite-edit tools can make the
+        # toolbar wider than small/offscreen test viewports, and persisted
+        # anchor positions should still round-trip in that case.
+        max_x = max(margin, self.viewport().width() - margin)
+        max_y = max(margin, self.viewport().height() - margin)
         self.toolbar.move(max(margin, min(int(x), max_x)), max(margin, min(int(y), max_y)))
         self.toolbar.raise_()
 
