@@ -166,3 +166,85 @@ def test_component_palette_places_search_and_view_controls_below_frequently_used
     assert layout.itemAt(3).widget() is palette.component_search
     assert layout.itemAt(4).layout() is not None
     assert layout.itemAt(5).widget() is palette.tree
+
+
+def test_component_palette_groups_composites_separately(qtbot, monkeypatch):
+    from fuse.core.model.models import ComponentDefinition
+    from fuse.core.ui.component_palette import ComponentPalette
+
+    definitions = [
+        ComponentDefinition(
+            plugin_id="sst",
+            component_id="1",
+            element="miranda",
+            name="Generator",
+            category="PROCESSOR COMPONENT",
+        ),
+        ComponentDefinition(
+            plugin_id="core",
+            target_id="fuse-composite",
+            component_id="composite-cache-pair",
+            element="Composite Components",
+            name="Cache Pair",
+            category="Composite Components",
+            description="Reusable mini-model",
+            is_composite=1,
+            composite_id="composite-cache-pair",
+        ),
+    ]
+
+    monkeypatch.setattr(
+        "fuse.core.ui.component_palette.load_component_definitions",
+        lambda *args, **kwargs: definitions,
+    )
+
+    palette = ComponentPalette()
+    qtbot.addWidget(palette)
+    palette.load_components()
+
+    top_level_names = [
+        palette.tree.topLevelItem(index).text(0)
+        for index in range(palette.tree.topLevelItemCount())
+    ]
+
+    assert "Composite Components" in top_level_names
+    assert "SST" in top_level_names
+
+
+def test_component_palette_search_matches_composite_description(qtbot, monkeypatch):
+    from fuse.core.model.models import ComponentDefinition
+    from fuse.core.ui.component_palette import ComponentPalette
+
+    definitions = [
+        ComponentDefinition(
+            plugin_id="core",
+            target_id="fuse-composite",
+            component_id="composite-cache-pair",
+            element="Composite Components",
+            name="Cache Pair",
+            category="Composite Components",
+            description="Reusable mini-model for paired cache blocks",
+            is_composite=1,
+            composite_id="composite-cache-pair",
+        ),
+        ComponentDefinition(
+            plugin_id="gem5",
+            component_id="2",
+            element="mem",
+            name="DDR3_1600_8x8",
+            category="Memory",
+        ),
+    ]
+
+    monkeypatch.setattr(
+        "fuse.core.ui.component_palette.load_component_definitions",
+        lambda *args, **kwargs: definitions,
+    )
+
+    palette = ComponentPalette()
+    qtbot.addWidget(palette)
+    palette.load_components()
+    palette.component_search.setText("paired cache")
+
+    assert palette.tree.topLevelItemCount() == 1
+    assert palette.tree.topLevelItem(0).text(0) == "Composite Components"

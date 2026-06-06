@@ -18,7 +18,17 @@ from fuse.core.plugin_runtime.manager import (
     load_all_palette_items,
     load_item_details,
 )
+from fuse.core.model.composite import (
+    COMPOSITE_CATEGORY,
+    COMPOSITE_ELEMENT,
+    COMPOSITE_PLUGIN_ID,
+    COMPOSITE_TARGET_ID,
+)
 from fuse.core.model.models import ComponentDefinition
+from fuse.core.persistence.composite_components import (
+    get_composite_component_definition,
+    list_composite_component_definitions,
+)
 
 
 def ensure_database_ready(run_plugin_bootstrap: bool = False) -> None:
@@ -88,6 +98,35 @@ def load_component_definitions(
             )
         )
 
+    definitions.extend(load_composite_component_definitions())
+
+    return definitions
+
+
+def load_composite_component_definitions() -> list[ComponentDefinition]:
+    definitions = []
+
+    for composite in list_composite_component_definitions():
+        definitions.append(
+            ComponentDefinition(
+                plugin_id=COMPOSITE_PLUGIN_ID,
+                target_id=COMPOSITE_TARGET_ID,
+                target_label="FUSE Composite Components",
+                framework_version=composite.schema_version,
+                component_id=composite.composite_id,
+                element=COMPOSITE_ELEMENT,
+                name=composite.name,
+                is_subcomp=0,
+                category=COMPOSITE_CATEGORY,
+                functionality="Reusable mini-model",
+                description=composite.description,
+                icon_path=composite.icon_path,
+                display_name_override=f"{composite.name} (Composite)",
+                is_composite=1,
+                composite_id=composite.composite_id,
+            )
+        )
+
     return definitions
 
 
@@ -96,6 +135,25 @@ def load_port_metadata_for_component(
     component_id: str,
     target_id: str | None = None,
 ) -> list[dict]:
+    if is_composite_component_request(plugin_id, component_id, target_id):
+        composite = get_composite_component_definition(str(component_id or ""))
+
+        if composite is None:
+            return []
+
+        return [
+            {
+                "name": mapping.external_port_name,
+                "description": mapping.description,
+                "iface": mapping.iface,
+                "is_variable": False,
+                "base_name": mapping.external_port_name,
+                "count_parameter": "",
+                "default_count": 1,
+            }
+            for mapping in composite.port_mappings
+        ]
+
     details = load_item_details(plugin_id, component_id, target_id=target_id)
 
     return [
@@ -111,7 +169,6 @@ def load_port_metadata_for_component(
         for connector in details.connectors
     ]
 
-
 def load_port_names_for_component(
     plugin_id: str,
     component_id: str,
@@ -124,6 +181,9 @@ def load_subcomp_connector_metadata_for_component(
     component_id: str,
     target_id: str | None = None,
 ) -> list[dict]:
+    if is_composite_component_request(plugin_id, component_id, target_id):
+        return []
+
     details = load_item_details(plugin_id, component_id, target_id=target_id)
 
     return [
@@ -139,11 +199,48 @@ def load_subcomp_connector_metadata_for_component(
         for connector in getattr(details, "subcomp_connectors", [])
     ]
 
+def is_composite_component_request(
+    plugin_id: str,
+    component_id: str | int | None,
+    target_id: str | None = None,
+) -> bool:
+    return (
+        (plugin_id or "") == COMPOSITE_PLUGIN_ID
+        and (target_id or COMPOSITE_TARGET_ID) == COMPOSITE_TARGET_ID
+        and bool(component_id)
+    )
+
+
 def get_component_details(
     plugin_id: str,
     component_id: str,
     target_id: str | None = None,
 ):
+    if is_composite_component_request(plugin_id, component_id, target_id):
+        composite = get_composite_component_definition(str(component_id or ""))
+
+        if composite is None:
+            return {}
+
+        return {
+            "component": {
+                "name": composite.name,
+                "description": composite.description,
+                "category": COMPOSITE_CATEGORY,
+                "icon_path": composite.icon_path,
+                "target_id": COMPOSITE_TARGET_ID,
+                "target_label": "FUSE Composite Components",
+                "framework_version": composite.schema_version,
+                "is_composite": 1,
+                "composite_id": composite.composite_id,
+            },
+            "parameters": [],
+            "ports": load_port_metadata_for_component(plugin_id, component_id, target_id),
+            "subcomp_connectors": [],
+            "statistics": [],
+            "subcomponent_slots": [],
+        }
+
     details = load_item_details(plugin_id, component_id, target_id=target_id)
 
     return {

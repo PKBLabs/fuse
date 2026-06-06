@@ -108,6 +108,9 @@ class PropertiesPanel(QWidget):
         self.delete_link_button.setVisible(False)
 
         component = node.component
+        component_is_composite = bool(int(getattr(component, "is_composite", 0) or 0))
+        if component_is_composite:
+            self.title.setText("Composite Component Instance")
 
         object_group = self.add_category("Object")
 
@@ -123,10 +126,15 @@ class PropertiesPanel(QWidget):
         if name_issues:
             self.mark_item_invalid(name_item, "\n".join(name_issues))
 
+        if component_is_composite:
+            kind_label = "Composite Component"
+        else:
+            kind_label = "SubComponent" if component.is_subcomp else "Component"
+
         self.add_property(
             object_group,
             "Kind",
-            "SubComponent" if component.is_subcomp else "Component",
+            kind_label,
             "component.kind",
             editable=False,
         )
@@ -144,6 +152,23 @@ class PropertiesPanel(QWidget):
             editable=True,
         )
         icon_item.setToolTip(1, "Path to the icon used for this component instance.")
+
+        if component_is_composite:
+            template_group = self.add_category("Composite Template")
+            self.add_property(
+                template_group,
+                "Template Name",
+                component.name,
+                "component.composite.template_name",
+                editable=False,
+            )
+            self.add_property(
+                template_group,
+                "Template ID",
+                getattr(component, "composite_id", "") or "",
+                "component.composite.template_id",
+                editable=False,
+            )
 
         if node.variable_port_templates:
             variable_ports_group = self.add_category("Variable Ports")

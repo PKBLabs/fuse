@@ -35,6 +35,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QStatusBar,
     QStyle,
+    QTabWidget,
     QToolButton,
     QTreeWidget,
     QTreeWidgetItem,
@@ -43,12 +44,23 @@ from PySide6.QtWidgets import (
 )
 
 from fuse.app.about import AboutDialog
+from fuse.app.composite_component_dialog import CompositeComponentDialog
+from fuse.app.composite_component_manager_dialog import CompositeComponentManagerDialog
 from fuse.app.project_settings_dialog import ProjectSettingsDialog
 from fuse.app.splash import create_splash_screen
 from fuse.core.app_info import APP_NAME, ORG_NAME
 from fuse.core.model.project_settings import ProjectSettings
 from fuse.core.model.validation import validate_model, validate_model_for_export
 from fuse.core.plugin_runtime.manager import get_plugin_by_id
+from fuse.core.persistence.composite_components import (
+    get_composite_component_definition,
+    save_composite_component_definition,
+)
+from fuse.core.persistence.composite_component_files import (
+    CompositeComponentFileError,
+    import_composite_component_file,
+    write_composite_component_file,
+)
 from fuse.core.persistence.db_access import ensure_database_ready, load_framework_targets
 from fuse.core.persistence.project_io import (
     build_project_dict,
@@ -57,9 +69,19 @@ from fuse.core.persistence.project_io import (
     save_project_file,
 )
 from fuse.core.ui.component_palette import ComponentPalette
+from fuse.core.ui.composite_builder import (
+    build_composite_definition_from_selection,
+    replace_selection_with_composite_instance,
+    selection_boundary_report,
+)
+from fuse.core.ui.composite_instance_editor import CompositeInstanceEditorWidget
 from fuse.core.ui.model_scene import ModelScene
 from fuse.core.ui.model_view import ModelView
 from fuse.core.ui.properties_panel import PropertiesPanel
+from fuse.core.ui.selection_helpers import (
+    can_create_composite_from_selection,
+    request_composite_from_selection,
+)
 
 OUTLINE_ROLE_KIND = Qt.UserRole
 OUTLINE_ROLE_NODE_ID = Qt.UserRole + 1
@@ -220,6 +242,8 @@ class MainWindow(QMainWindow):
         self.model_view = ModelView(self.scene)
         self.model_view.undo_callback = self.undo
         self.model_view.redo_callback = self.redo
+        self.model_tabs: QTabWidget | None = None
+        self.composite_editor_widgets: list[CompositeInstanceEditorWidget] = []
         self.properties_panel = PropertiesPanel()
         self.model_outline = QTreeWidget()
         self.model_outline.setHeaderHidden(True)
@@ -263,6 +287,8 @@ class MainWindow(QMainWindow):
         self.scene.component_used_callback = self.on_component_used
         self.scene.component_favorite_requested_callback = self.on_component_favorite_requested
         self.scene.selection_changed_callback = self.on_scene_selection_changed
+        self.scene.composite_creation_requested_callback = self.on_create_composite_from_selection_requested
+        self.scene.composite_instance_edit_requested_callback = self.edit_composite_instance
         self.properties_panel.property_changed_callback = self.on_property_changed
         self.palette.preferences_changed_callback = self.on_component_palette_preferences_changed
 
@@ -277,6 +303,180 @@ class MainWindow(QMainWindow):
 
     def on_component_favorite_requested(self, component):
         self.palette.add_to_frequently_used(component)
+
+    def update_create_composite_action_state(self) -> None:
+        if hasattr(self, "create_composite_action"):
+            self.create_composite_action.setEnabled(
+                can_create_composite_from_selection(self.active_model_scene())
+            )
+
+    def request_create_composite_from_selection(self) -> None:
+        request_composite_from_selection(
+            self.active_model_scene(),
+            self.on_create_composite_from_selection_requested,
+        )
+
+    def on_create_composite_from_selection_requested(self, components, links, attachments):
+        self.last_composite_creation_request = {
+            "components": list(components),
+            "links": list(links),
+            "attachments": list(attachments),
+        }
+
+        boundary = selection_boundary_report(self.scene, components, links, attachments)
+        if boundary.has_boundary_items:
+            self.statusBar().showMessage(
+                "Cannot create a composite while selected components still have "
+                "links or subcomponent attachments to unselected components.",
+                7000,
+            )
+            return
+
+        dialog = CompositeComponentDialog(self)
+        if dialog.exec() != QDialog.Accepted:
+            return
+
+        self.create_composite_from_selection(
+            name=dialog.composite_name(),
+            icon_path=dialog.icon_path(),
+            description=dialog.composite_description(),
+            components=components,
+            links=links,
+            attachments=attachments,
+        )
+
+    def create_composite_from_selection(
+        self,
+        name: str,
+        icon_path: str,
+        description: str,
+        components,
+        links,
+        attachments,
+    ):
+        definition = build_composite_definition_from_selection(
+            name=name,
+            icon_path=icon_path,
+            components=list(components),
+            internal_connections=list(links),
+            internal_attachments=list(attachments),
+            description=description,
+        )
+        saved = save_composite_component_definition(definition)
+        composite_node = replace_selection_with_composite_instance(
+            self.scene,
+            saved,
+            list(components),
+            list(links),
+            list(attachments),
+        )
+
+        self.load_framework_targets()
+        self.update_model_outline()
+        self.update_create_composite_action_state()
+        self.mark_dirty()
+        self.statusBar().showMessage(
+            f"Created composite component '{saved.name}' from selection.",
+            5000,
+        )
+        return composite_node
+
+    def selected_composite_node(self):
+        for node in self.scene.component_items():
+            if not node.isSelected():
+                continue
+            if int(getattr(node.component, "is_composite", 0) or 0):
+                return node
+        return None
+
+    def composite_export_default_path(self, definition) -> str:
+        safe_name = "".join(
+            char if char.isalnum() or char in ("-", "_") else "_"
+            for char in definition.name.strip()
+        ).strip("_")
+        if not safe_name:
+            safe_name = "composite_component"
+        return f"{safe_name}.fcc"
+
+    def export_selected_composite_component(self) -> None:
+        node = self.selected_composite_node()
+        if node is None:
+            QMessageBox.information(
+                self,
+                "Export Composite Component",
+                "Select a composite component instance before exporting.",
+            )
+            return
+
+        composite_id = getattr(node.component, "composite_id", "") or ""
+        definition = get_composite_component_definition(composite_id)
+        if definition is None:
+            QMessageBox.warning(
+                self,
+                "Export Composite Component",
+                "The selected composite component template could not be found.",
+            )
+            return
+
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export Composite Component",
+            self.composite_export_default_path(definition),
+            "FUSE Composite Component (*.fcc);;JSON Files (*.json);;All Files (*)",
+        )
+        if not path:
+            return
+
+        try:
+            written_path = write_composite_component_file(definition, path)
+        except CompositeComponentFileError as exc:
+            QMessageBox.warning(self, "Export Composite Component", str(exc))
+            return
+        except OSError as exc:
+            QMessageBox.warning(
+                self,
+                "Export Composite Component",
+                f"Unable to write composite component file: {exc}",
+            )
+            return
+
+        self.statusBar().showMessage(
+            f"Exported composite component '{definition.name}' to {written_path}.",
+            5000,
+        )
+
+    def import_composite_component(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Import Composite Component",
+            "",
+            "FUSE Composite Component (*.fcc);;JSON Files (*.json);;All Files (*)",
+        )
+        if not path:
+            return
+
+        try:
+            definition = import_composite_component_file(path)
+        except CompositeComponentFileError as exc:
+            QMessageBox.warning(self, "Import Composite Component", str(exc))
+            return
+
+        self.load_framework_targets()
+        self.statusBar().showMessage(
+            f"Imported composite component '{definition.name}'.",
+            5000,
+        )
+
+
+    def show_composite_component_manager(self) -> None:
+        dialog = CompositeComponentManagerDialog(self)
+        dialog.exec()
+        if dialog.changed:
+            self.load_framework_targets()
+            self.statusBar().showMessage("Composite component catalog refreshed.", 4000)
+
+    def edit_composite_instance(self, node) -> None:
+        self.open_composite_instance_tab(node)
 
     def setup_menu_bar(self):
         menu_bar = QMenuBar(self)
@@ -298,6 +498,8 @@ class MainWindow(QMainWindow):
         save_as_action = QAction("Save As...", self)
         export_sst_json_action = QAction("SST JSON...", self)
         export_gem5_python_action = QAction("gem5 Python...", self)
+        self.import_composite_action = QAction("Import Composite Component...", self)
+        self.export_composite_action = QAction("Selected Composite Component...", self)
         exit_action = QAction("Exit", self)
 
         new_action.triggered.connect(self.new_project)
@@ -309,6 +511,8 @@ class MainWindow(QMainWindow):
         save_as_action.triggered.connect(self.save_model_as)
         export_sst_json_action.triggered.connect(self.export_sst_json)
         export_gem5_python_action.triggered.connect(self.export_gem5_python)
+        self.import_composite_action.triggered.connect(self.import_composite_component)
+        self.export_composite_action.triggered.connect(self.export_selected_composite_component)
         exit_action.triggered.connect(self.close)
 
         file_menu.addAction(new_action)
@@ -321,9 +525,14 @@ class MainWindow(QMainWindow):
         file_menu.addAction(save_action)
         file_menu.addAction(save_as_action)
 
+        import_menu = file_menu.addMenu("Import")
+        import_menu.addAction(self.import_composite_action)
+
         export_menu = file_menu.addMenu("Export")
         export_menu.addAction(export_sst_json_action)
         export_menu.addAction(export_gem5_python_action)
+        export_menu.addSeparator()
+        export_menu.addAction(self.export_composite_action)
 
         file_menu.addSeparator()
         file_menu.addAction(exit_action)
@@ -354,8 +563,18 @@ class MainWindow(QMainWindow):
         self.redo_action.triggered.connect(self.redo)
         self.redo_action.setEnabled(False)
 
+        self.create_composite_action = QAction("Create Composite Component from Selection", self)
+        self.create_composite_action.triggered.connect(self.request_create_composite_from_selection)
+        self.create_composite_action.setEnabled(False)
+
+        self.manage_composite_components_action = QAction("Manage Composite Components...", self)
+        self.manage_composite_components_action.triggered.connect(self.show_composite_component_manager)
+
         edit_menu.addAction(self.undo_action)
         edit_menu.addAction(self.redo_action)
+        edit_menu.addSeparator()
+        edit_menu.addAction(self.create_composite_action)
+        edit_menu.addAction(self.manage_composite_components_action)
         zoom_in_action = QAction("Zoom In", self)
         zoom_in_action.setShortcut("Ctrl++")
         zoom_in_action.triggered.connect(self.model_view.zoom_in)
@@ -365,13 +584,216 @@ class MainWindow(QMainWindow):
         view_menu.addAction(zoom_in_action)
         view_menu.addAction(zoom_out_action)
 
+    def active_model_editor_widget(self):
+        if self.model_tabs is None:
+            return None
+        widget = self.model_tabs.currentWidget()
+        if isinstance(widget, CompositeInstanceEditorWidget):
+            return widget
+        return None
+
+    def active_model_scene(self):
+        editor = self.active_model_editor_widget()
+        if editor is not None:
+            return editor.editor_scene
+        return self.scene
+
+    def active_model_view(self):
+        editor = self.active_model_editor_widget()
+        if editor is not None:
+            return editor.editor_view
+        return self.model_view
+
+    def model_tab_scenes(self):
+        scenes = [self.scene]
+        if self.model_tabs is None:
+            return scenes
+
+        for index in range(1, self.model_tabs.count()):
+            widget = self.model_tabs.widget(index)
+            if isinstance(widget, CompositeInstanceEditorWidget):
+                scenes.append(widget.editor_scene)
+        return scenes
+
+    def bind_global_panels_to_active_model_tab(self) -> None:
+        active_scene = self.active_model_scene()
+        for scene in self.model_tab_scenes():
+            scene.properties_panel = None
+            scene.selection_changed_callback = self.on_scene_selection_changed
+
+        active_scene.properties_panel = self.properties_panel
+        self.sync_properties_panel_to_active_scene()
+
+    def sync_properties_panel_to_active_scene(self) -> None:
+        scene = self.active_model_scene()
+
+        selected_component = getattr(scene, "selected_component", None)
+        if selected_component is not None and selected_component.scene() is scene:
+            self.properties_panel.show_component(selected_component)
+            return
+
+        selected_connection = getattr(scene, "selected_connection", None)
+        if selected_connection is not None and selected_connection.scene() is scene:
+            self.properties_panel.show_link(selected_connection)
+            return
+
+        selected_attachment = getattr(scene, "selected_subcomp_attachment", None)
+        if selected_attachment is not None and selected_attachment.scene() is scene:
+            self.properties_panel.show_subcomp_attachment(selected_attachment)
+            return
+
+        self.properties_panel.show_empty()
+
+    def on_model_tab_changed(self, index: int) -> None:
+        self.bind_global_panels_to_active_model_tab()
+        self.update_model_outline()
+        self.update_create_composite_action_state()
+
+    def project_model_tab_title(self) -> str:
+        name = (self.project_name or "Untitled FUSE Project").strip()
+        return name or "Untitled FUSE Project"
+
+    def refresh_project_model_tab_title(self) -> None:
+        if self.model_tabs is not None and self.model_tabs.count() > 0:
+            self.model_tabs.setTabText(0, self.project_model_tab_title())
+            self.model_tabs.setTabToolTip(0, "Global project model")
+
+    def composite_tab_label(self, node, parent_editor=None) -> str:
+        node_name = getattr(node, "instance_name", "Composite") or "Composite"
+        if parent_editor is None:
+            return str(node_name)
+
+        parent_label = getattr(parent_editor, "composite_tab_path", "") or ""
+        if not parent_label:
+            return str(node_name)
+        return f"{parent_label}:{node_name}"
+
+    def find_composite_editor_tab_index(self, node, parent_editor=None) -> int:
+        if self.model_tabs is None:
+            return -1
+
+        for index in range(1, self.model_tabs.count()):
+            widget = self.model_tabs.widget(index)
+            if not isinstance(widget, CompositeInstanceEditorWidget):
+                continue
+            if widget.node is not node:
+                continue
+            if getattr(widget, "parent_composite_editor", None) is parent_editor:
+                return index
+        return -1
+
+    def open_composite_instance_tab(self, node, parent_editor=None) -> None:
+        component_is_composite = bool(int(getattr(node.component, "is_composite", 0) or 0))
+        if not component_is_composite:
+            return
+
+        existing_index = self.find_composite_editor_tab_index(node, parent_editor)
+        if existing_index >= 0:
+            self.model_tabs.setCurrentIndex(existing_index)
+            return
+
+        label = self.composite_tab_label(node, parent_editor)
+        editor = CompositeInstanceEditorWidget(
+            node,
+            parent=self,
+            nested_edit_requested_callback=self.open_nested_composite_instance_tab,
+            instance_changed_callback=self.on_composite_editor_changed,
+        )
+        editor.editor_scene.selection_changed_callback = self.on_scene_selection_changed
+        editor.composite_tab_path = label
+        editor.parent_composite_editor = parent_editor
+        self.composite_editor_widgets.append(editor)
+
+        index = self.model_tabs.addTab(editor, label)
+        self.model_tabs.setTabToolTip(index, label.replace(":", " > "))
+        self.model_tabs.setCurrentIndex(index)
+        self.statusBar().showMessage(f"Opened composite instance tab '{label}'.", 3000)
+
+    def open_nested_composite_instance_tab(self, node, parent_editor) -> None:
+        self.open_composite_instance_tab(node, parent_editor=parent_editor)
+
+    def on_composite_editor_changed(self, editor) -> None:
+        self.propagate_composite_editor_change_to_ancestors(editor)
+        node = editor.node
+        if self.properties_panel.current_node is node:
+            self.properties_panel.show_component(node)
+        self.update_model_outline()
+        self.mark_dirty()
+
+    def propagate_composite_editor_change_to_ancestors(self, editor) -> None:
+        parent_editor = getattr(editor, "parent_composite_editor", None)
+        while parent_editor is not None:
+            parent_editor.apply_current_edit_to_node()
+            parent_editor = getattr(parent_editor, "parent_composite_editor", None)
+
+    def close_model_tab(self, index: int) -> None:
+        if self.model_tabs is None or index <= 0:
+            return
+
+        widget = self.model_tabs.widget(index)
+        if isinstance(widget, CompositeInstanceEditorWidget):
+            self.close_child_composite_tabs(widget)
+            widget.apply_current_edit_to_node()
+            self.propagate_composite_editor_change_to_ancestors(widget)
+            if widget in self.composite_editor_widgets:
+                self.composite_editor_widgets.remove(widget)
+
+        self.model_tabs.removeTab(index)
+        widget.deleteLater()
+        self.bind_global_panels_to_active_model_tab()
+        self.update_model_outline()
+        self.update_create_composite_action_state()
+
+    def close_child_composite_tabs(self, parent_editor) -> None:
+        if self.model_tabs is None:
+            return
+
+        index = self.model_tabs.count() - 1
+        while index > 0:
+            widget = self.model_tabs.widget(index)
+            if (
+                isinstance(widget, CompositeInstanceEditorWidget)
+                and self.composite_editor_is_descendant(widget, parent_editor)
+            ):
+                widget.apply_current_edit_to_node()
+                if widget in self.composite_editor_widgets:
+                    self.composite_editor_widgets.remove(widget)
+                self.model_tabs.removeTab(index)
+                widget.deleteLater()
+                self.bind_global_panels_to_active_model_tab()
+            index -= 1
+
+    def composite_editor_is_descendant(self, editor, ancestor) -> bool:
+        parent_editor = getattr(editor, "parent_composite_editor", None)
+        while parent_editor is not None:
+            if parent_editor is ancestor:
+                return True
+            parent_editor = getattr(parent_editor, "parent_composite_editor", None)
+        return False
+
+    def close_all_composite_model_tabs(self) -> None:
+        if self.model_tabs is None:
+            return
+
+        index = self.model_tabs.count() - 1
+        while index > 0:
+            self.close_model_tab(index)
+            index -= 1
+
     def setup_layout(self):
         self.component_palette_panel = QWidget()
         palette_layout = QVBoxLayout(self.component_palette_panel)
         palette_layout.setContentsMargins(8, 8, 8, 8)
         palette_layout.addWidget(self.palette)
 
-        self.setCentralWidget(self.model_view)
+        self.model_tabs = QTabWidget(self)
+        self.model_tabs.setDocumentMode(True)
+        self.model_tabs.setTabsClosable(True)
+        self.model_tabs.tabCloseRequested.connect(self.close_model_tab)
+        self.model_tabs.currentChanged.connect(self.on_model_tab_changed)
+        self.model_tabs.addTab(self.model_view, self.project_model_tab_title())
+        self.setCentralWidget(self.model_tabs)
+        self.bind_global_panels_to_active_model_tab()
 
     def make_dock(self, title: str, widget: QWidget, object_name: str = "") -> QDockWidget:
         dock = QDockWidget(title, self)
@@ -569,6 +991,7 @@ class MainWindow(QMainWindow):
 
         self.project_settings = new_settings
         self.project_name = self.project_settings.project_name or self.project_name
+        self.refresh_project_model_tab_title()
         self.apply_project_settings_to_ui()
         self.statusBar().showMessage("Project settings updated", 3000)
         self.mark_dirty()
@@ -592,6 +1015,8 @@ class MainWindow(QMainWindow):
         self.mark_dirty()
 
     def on_scene_selection_changed(self, node):
+        self.update_create_composite_action_state()
+
         if node is None:
             self.palette.clear_compatibility_context()
         else:
@@ -603,13 +1028,14 @@ class MainWindow(QMainWindow):
 
     def update_model_outline(self):
         self.model_outline.clear()
+        scene = self.active_model_scene()
 
-        attachments_by_parent, attached_child_ids = self.subcomponent_attachment_maps()
-        nodes_by_id = self.node_by_id()
+        attachments_by_parent, attached_child_ids = self.subcomponent_attachment_maps(scene)
+        nodes_by_id = self.node_by_id(scene)
 
         component_groups: dict[str, list] = {}
 
-        for node in self.scene.component_items():
+        for node in scene.component_items():
             # Attached subcomponents are shown underneath their parent component
             # through subcomp_attachments, not as independent top-level outline rows.
             if node.node_id in attached_child_ids:
@@ -640,7 +1066,7 @@ class MainWindow(QMainWindow):
         links_item.setFlags(links_item.flags() & ~Qt.ItemIsSelectable)
         self.model_outline.addTopLevelItem(links_item)
 
-        for link in sorted(self.scene.links, key=lambda item: item.name.lower()):
+        for link in sorted(scene.links, key=lambda item: item.name.lower()):
             link_item = QTreeWidgetItem([link.name])
             link_item.setData(0, OUTLINE_ROLE_KIND, "link")
             link_item.setData(0, OUTLINE_ROLE_LINK_ID, link.link_id)
@@ -655,11 +1081,12 @@ class MainWindow(QMainWindow):
 
         self.model_outline.expandAll()
 
-    def subcomponent_attachment_maps(self):
+    def subcomponent_attachment_maps(self, scene=None):
+        current_scene = scene or self.active_model_scene()
         attachments_by_parent: dict[int, list] = {}
         attached_child_ids: set[int] = set()
 
-        for attachment in getattr(self.scene, "subcomp_attachments", []):
+        for attachment in getattr(current_scene, "subcomp_attachments", []):
             attachments_by_parent.setdefault(
                 attachment.parent_node_id,
                 [],
@@ -668,10 +1095,11 @@ class MainWindow(QMainWindow):
 
         return attachments_by_parent, attached_child_ids
 
-    def node_by_id(self) -> dict[int, object]:
+    def node_by_id(self, scene=None) -> dict[int, object]:
+        current_scene = scene or self.active_model_scene()
         return {
             node.node_id: node
-            for node in self.scene.component_items()
+            for node in current_scene.component_items()
         }
 
     def outline_label_for_node(self, node) -> str:
@@ -832,11 +1260,13 @@ class MainWindow(QMainWindow):
         try:
             self.project_settings = ProjectSettings.from_project_dict(snapshot)
             self.project_name = snapshot.get("project", {}).get("name", self.project_name)
+            self.close_all_composite_model_tabs()
             load_project_into_scene(snapshot, self.scene)
             self.properties_panel.set_validation_issues([])
             self.properties_panel.show_empty()
             self.apply_project_settings_to_ui()
             self.model_view.apply_editor_state(snapshot.get("editor", {}))
+            self.refresh_project_model_tab_title()
             self.update_model_outline()
             self._last_history_signature = self.history_signature(snapshot)
         finally:
@@ -954,6 +1384,7 @@ class MainWindow(QMainWindow):
         self.current_project_path = None
         self._restoring_history = True
         try:
+            self.close_all_composite_model_tabs()
             self.scene.clear_model()
         finally:
             self._restoring_history = False
@@ -962,6 +1393,7 @@ class MainWindow(QMainWindow):
         self.properties_panel.show_empty()
         self.apply_project_settings_to_ui()
         self.model_view.apply_editor_state({})
+        self.refresh_project_model_tab_title()
         self.update_model_outline()
         self.reset_undo_history(mark_clean=True)
         self.statusBar().showMessage("New project created", 3000)
@@ -989,6 +1421,7 @@ class MainWindow(QMainWindow):
         else:
             self.project_name = "Untitled FUSE Project"
 
+        self.refresh_project_model_tab_title()
         self.set_dirty(self.is_dirty)
 
     def save_model(self) -> bool:
@@ -1192,6 +1625,7 @@ class MainWindow(QMainWindow):
         try:
             project = load_project_file(file_path)
             self.project_settings = ProjectSettings.from_project_dict(project)
+            self.close_all_composite_model_tabs()
             load_project_into_scene(project, self.scene)
             self.properties_panel.set_validation_issues([])
             self.properties_panel.show_empty()
@@ -1202,6 +1636,7 @@ class MainWindow(QMainWindow):
         self.set_current_project_path(file_path)
 
         self.apply_project_settings_to_ui()
+        self.refresh_project_model_tab_title()
         self.model_view.apply_editor_state(project.get("editor", {}))
         self.update_model_outline()
         self.reset_undo_history(mark_clean=True)
@@ -1480,28 +1915,38 @@ class MainWindow(QMainWindow):
     def on_component_used(self, component):
         self.palette.record_component_used(component)
 
+    def select_model_outline_component_node(self, scene, view, node) -> None:
+        scene.clearSelection()
+        node.setSelected(True)
+        scene.select_component(node)
+        view.centerOn(node)
+
     def on_model_outline_item_clicked(self, item: QTreeWidgetItem, column: int):
         kind = item.data(0, OUTLINE_ROLE_KIND)
+        scene = self.active_model_scene()
+        view = self.active_model_view()
 
         if kind == "component":
             node_id = item.data(0, OUTLINE_ROLE_NODE_ID)
-
-            for node in self.scene.component_items():
-                if node.node_id == node_id:
-                    self.scene.select_component(node)
-                    self.model_view.centerOn(node)
-                    return
+            node = scene.find_node_by_id(int(node_id))
+            if node is not None:
+                self.select_model_outline_component_node(scene, view, node)
+            return
 
         if kind == "link":
             link_id = item.data(0, OUTLINE_ROLE_LINK_ID)
-            self.scene.select_link_by_id(int(link_id))
+            scene.select_link_by_id(int(link_id))
             return
 
         if kind == "subcomp_attachment":
             attachment_id = item.data(0, OUTLINE_ROLE_ATTACHMENT_ID)
-            attachment = self.scene.find_subcomp_attachment_by_id(int(attachment_id))
+            attachment = scene.find_subcomp_attachment_by_id(int(attachment_id))
             if attachment is not None:
-                self.scene.select_subcomp_attachment(attachment)
+                child_node = scene.find_node_by_id(attachment.attachment.child_node_id)
+                if child_node is not None:
+                    self.select_model_outline_component_node(scene, view, child_node)
+                else:
+                    scene.select_subcomp_attachment(attachment)
             return
 
     def show_model_outline_context_menu(self, position):
@@ -1511,6 +1956,7 @@ class MainWindow(QMainWindow):
             return
 
         kind = item.data(0, OUTLINE_ROLE_KIND)
+        scene = self.active_model_scene()
 
         menu = QMenu(self.model_outline)
 
@@ -1521,7 +1967,7 @@ class MainWindow(QMainWindow):
             action = menu.exec(self.model_outline.viewport().mapToGlobal(position))
 
             if action == remove_action:
-                self.scene.delete_link_by_id(int(link_id))
+                scene.delete_link_by_id(int(link_id))
                 self.update_model_outline()
 
             return
@@ -1533,14 +1979,14 @@ class MainWindow(QMainWindow):
             action = menu.exec(self.model_outline.viewport().mapToGlobal(position))
 
             if action == remove_action:
-                self.scene.delete_subcomp_attachment_by_id(int(attachment_id))
+                scene.delete_subcomp_attachment_by_id(int(attachment_id))
                 self.update_model_outline()
 
             return
 
         if kind == "component":
             node_id = item.data(0, OUTLINE_ROLE_NODE_ID)
-            node = self.scene.find_node_by_id(int(node_id))
+            node = scene.find_node_by_id(int(node_id))
 
             if node is None:
                 return
@@ -1561,7 +2007,7 @@ class MainWindow(QMainWindow):
                 self.palette.add_to_frequently_used(node.component)
 
             elif action == remove_action:
-                self.scene.delete_component_by_id(int(node_id))
+                scene.delete_component_by_id(int(node_id))
                 self.update_model_outline()
 
             return
@@ -1569,34 +2015,35 @@ class MainWindow(QMainWindow):
     def keyPressEvent(self, event):
         if event.key() in (Qt.Key_Delete, Qt.Key_Backspace):
             item = self.model_outline.currentItem()
+            scene = self.active_model_scene()
 
             if item is not None and self.model_outline.hasFocus():
                 kind = item.data(0, OUTLINE_ROLE_KIND)
 
                 if kind == "link":
                     link_id = item.data(0, OUTLINE_ROLE_LINK_ID)
-                    self.scene.delete_link_by_id(int(link_id))
+                    scene.delete_link_by_id(int(link_id))
                     self.update_model_outline()
                     event.accept()
                     return
 
                 if kind == "component":
                     node_id = item.data(0, OUTLINE_ROLE_NODE_ID)
-                    self.scene.delete_component_by_id(int(node_id))
+                    scene.delete_component_by_id(int(node_id))
                     self.update_model_outline()
                     event.accept()
                     return
 
                 if kind == "subcomp_attachment":
                     attachment_id = item.data(0, OUTLINE_ROLE_ATTACHMENT_ID)
-                    self.scene.delete_subcomp_attachment_by_id(int(attachment_id))
+                    scene.delete_subcomp_attachment_by_id(int(attachment_id))
                     self.update_model_outline()
                     event.accept()
                     return
 
             # If the outline does not own the focused selection, let the scene handle
             # the selected model item.
-            self.scene.keyPressEvent(event)
+            scene.keyPressEvent(event)
             if event.isAccepted():
                 self.update_model_outline()
                 return

@@ -16,6 +16,7 @@ A `.fse` project saves:
 - Selected framework target/catalog per plugin.
 - Toolchain settings, excluding secrets.
 - Component instances.
+- Composite instance identity and instance-local composite edit state.
 - Instance names.
 - Plugin ID for each component.
 - Target/catalog metadata for each component.
@@ -30,7 +31,7 @@ A `.fse` project saves:
 
 ## What is not saved
 
-A project file does not store the full plugin catalog, such as every SST component returned by `sst-info`.
+A project file does not store the full plugin catalog, such as every SST component returned by `sst-info`. It also does not embed every local composite definition; reusable composite templates live in the local database and can be shared separately as `.fcc` files. A project may store instance-local composite mini-model state for placed composite instances.
 
 That data belongs to plugin-specific database tables such as:
 
@@ -169,6 +170,43 @@ Important component fields:
 | `iconPath` | Icon used for this instance. |
 | `parameters` | User overrides for plugin-defined parameters. |
 | `position` | Model-scene coordinates. |
+| `isComposite` | Whether this component entry is a FUSE composite instance. |
+| `compositeId` | Composite template ID for composite instances. |
+| `compositeInstance` | Optional instance-local composite mini-model state. |
+
+## Example composite component entry
+
+Composite instances are saved as component entries with core-owned composite identity. If a placed instance has instance-local edits, the `compositeInstance` block stores that mini-model state.
+
+```json
+{
+  "id": 7,
+  "instanceName": "CacheCluster_1",
+  "pluginId": "core",
+  "targetId": "fuse-composite",
+  "componentId": "6cb322e5-cfae-40f9-b6e9-example",
+  "element": "Composite Components",
+  "name": "CacheCluster",
+  "isComposite": 1,
+  "compositeId": "6cb322e5-cfae-40f9-b6e9-example",
+  "parameters": {},
+  "position": {
+    "x": 300.0,
+    "y": 200.0
+  },
+  "compositeInstance": {
+    "miniModel": {
+      "kind": "fuse.composite-mini-model",
+      "components": [],
+      "links": [],
+      "subcomponentAttachments": []
+    },
+    "portMappings": []
+  }
+}
+```
+
+Composite instances are expanded before simulator validation/export. The simulator-specific export should contain ordinary SST or gem5 objects, not FUSE composite nodes.
 
 ## Example link entry
 
@@ -264,3 +302,10 @@ The choices behave as follows:
 - **Cancel** leaves the current model open without saving or discarding changes.
 
 Save As appends the `.fse` extension when the user omits it. If Save As fails, FUSE restores the previously active project path and leaves the model marked as unsaved.
+
+
+## Composite definition files
+
+Reusable composite templates can be exported as `.fcc` files. A `.fcc` file stores one composite definition and can be imported into another local FUSE database. It is not a full project file and does not replace `.fse`.
+
+Use **Edit -> Manage Composite Components...** to import, export, or delete local composite definitions.

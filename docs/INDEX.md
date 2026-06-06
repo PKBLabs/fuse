@@ -9,6 +9,7 @@ This documentation is organized by audience and topic.
 - [Quickstart](user/quickstart.md)
 - [User guide](user/user-guide.md)
 - [Model editor workflow](user/model-editor-workflow.md)
+- [Composite components](user/composite-components.md)
 - [Properties and validation](user/properties-and-validation.md)
 - [Project files and save/load](user/project-files.md)
 - [Troubleshooting](user/troubleshooting.md)

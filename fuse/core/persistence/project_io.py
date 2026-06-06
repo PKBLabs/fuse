@@ -20,6 +20,8 @@ from pathlib import Path
 from fuse.core.ui.graphics_items import ComponentNodeItem, ConnectionItem, SubcompAttachmentItem
 from fuse.core.ui.model_scene import ModelScene
 from fuse.core.ui.model_view import ModelView
+from fuse.core.model.composite import CompositePortMapping
+from fuse.core.model.composite_mini_model import normalize_mini_model_and_port_mappings
 from fuse.core.model.models import ComponentDefinition, ModelLink, ModelSubcompAttachment, SCHEMA_VERSION
 from fuse.core.model.project_settings import ProjectSettings
 from fuse.core.persistence.model_serializer import finalize_project_dict, validate_serialized_project
@@ -32,7 +34,7 @@ def now_iso() -> str:
 def component_node_to_save_dict(node: ComponentNodeItem) -> dict:
     position = node.pos()
 
-    return {
+    saved = {
         "id": node.node_id,
         "element": node.component.element,
         "name": node.component.name,
@@ -48,6 +50,8 @@ def component_node_to_save_dict(node: ComponentNodeItem) -> dict:
         "iconPath": node.icon_path,
         "interface": node.component.iface,
         "displayNameOverride": node.component.display_name_override,
+        "isComposite": int(getattr(node.component, "is_composite", 0) or 0),
+        "compositeId": getattr(node.component, "composite_id", "") or "",
         "instanceName": node.instance_name,
         "parameters": node.parameters,
         "variablePortCounts": getattr(node, "variable_port_counts", {}),
@@ -56,6 +60,24 @@ def component_node_to_save_dict(node: ComponentNodeItem) -> dict:
             "y": position.y(),
         },
     }
+
+    if int(getattr(node.component, "is_composite", 0) or 0):
+        instance_model = getattr(node, "composite_instance_model", {}) or {}
+        port_mappings = getattr(node, "composite_port_mappings", []) or []
+        if isinstance(instance_model, dict) and bool(instance_model.get("components") or []):
+            normalized_model, normalized_mappings = normalize_mini_model_and_port_mappings(
+                instance_model,
+                port_mappings,
+            )
+            saved["compositeInstance"] = {
+                "miniModel": normalized_model,
+                "portMappings": [
+                    mapping.to_dict()
+                    for mapping in normalized_mappings
+                ],
+            }
+
+    return saved
 
 
 def model_link_to_save_dict(link: ModelLink) -> dict:
@@ -258,6 +280,8 @@ def load_project_into_scene(project: dict, scene: ModelScene) -> None:
             iface=component_data.get("interface", ""),
             icon_path=icon_path,
             display_name_override=component_data.get("displayNameOverride", ""),
+            is_composite=int(component_data.get("isComposite", 0) or 0),
+            composite_id=component_data.get("compositeId", ""),
         )
 
         node_id = int(component_data["id"])
@@ -268,6 +292,18 @@ def load_project_into_scene(project: dict, scene: ModelScene) -> None:
             instance_name=component_data.get("instanceName"),
             variable_port_counts=component_data.get("variablePortCounts", {}),
         )
+
+        composite_instance = component_data.get("compositeInstance", {}) or {}
+        if isinstance(composite_instance, dict):
+            mini_model = composite_instance.get("miniModel", {}) or {}
+            port_mappings = composite_instance.get("portMappings", []) or []
+            if isinstance(mini_model, dict) and bool(mini_model.get("components") or []):
+                normalized_model, normalized_mappings = normalize_mini_model_and_port_mappings(
+                    mini_model,
+                    port_mappings if isinstance(port_mappings, list) else [],
+                )
+                node.composite_instance_model = normalized_model
+                node.composite_port_mappings = normalized_mappings
 
         position = component_data.get("position", {})
         node.setPos(float(position.get("x", 0)), float(position.get("y", 0)))

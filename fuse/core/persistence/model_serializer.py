@@ -202,6 +202,16 @@ def validate_serialized_project(project: Any, *, strict_references: bool = True)
         if variable_counts is not None and not isinstance(variable_counts, dict):
             _issue(issues, f"{path}.variablePortCounts", "must be an object")
 
+        composite_instance = component.get("compositeInstance", {})
+        if composite_instance is not None and composite_instance != {}:
+            if _expect_object(issues, composite_instance, f"{path}.compositeInstance"):
+                mini_model = composite_instance.get("miniModel", {})
+                if mini_model is not None and not isinstance(mini_model, dict):
+                    _issue(issues, f"{path}.compositeInstance.miniModel", "must be an object")
+                port_mappings = composite_instance.get("portMappings", [])
+                if port_mappings is not None and not isinstance(port_mappings, list):
+                    _issue(issues, f"{path}.compositeInstance.portMappings", "must be a list")
+
     link_ids: set[int] = set()
 
     for index, link in enumerate(links):

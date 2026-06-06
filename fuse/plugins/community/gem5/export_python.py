@@ -89,6 +89,9 @@ def build_gem5_python(scene) -> str:
     exposed by the community gem5 plugin. It produces an editable Python config
     rather than replacing FUSE's native .fse project format.
     """
+    from fuse.core.model.composite_flattening import flatten_scene_for_export
+
+    scene = flatten_scene_for_export(scene)
     nodes = _gem5_nodes(scene)
     if not nodes:
         raise ValueError("There are no gem5 components to export.")

@@ -311,7 +311,9 @@ def validate_model_for_export(scene, plugin_id: str | None = None) -> list[Valid
     validation. A graph may be internally valid but not exportable to a
     particular simulator/plugin. Mixed-plugin models are allowed as editable
     FUSE projects, but export validation currently requires all components to
-    belong to the requested plugin until a hybrid exporter exists.
+    belong to the requested plugin until a hybrid exporter exists. Composite
+    components are a FUSE editor abstraction, so export validation runs against
+    the flattened simulator-facing graph.
     """
     issues = validate_model(scene)
     plugin_id = (plugin_id or getattr(scene, "active_plugin_id", "") or "").strip()
@@ -326,7 +328,21 @@ def validate_model_for_export(scene, plugin_id: str | None = None) -> list[Valid
         )
         return issues
 
-    present_plugin_ids = {item for item in model_plugin_ids(scene) if item}
+    try:
+        from fuse.core.model.composite_flattening import flatten_scene_for_export
+
+        export_scene = flatten_scene_for_export(scene)
+    except Exception as exc:
+        issues.append(
+            ValidationIssue(
+                issue_type="export_composite",
+                object_name="Project",
+                message=f"Composite component expansion failed: {exc}",
+            )
+        )
+        return issues
+
+    present_plugin_ids = {item for item in model_plugin_ids(export_scene) if item}
     unsupported = sorted(item for item in present_plugin_ids if item != plugin_id)
 
     if unsupported:
@@ -349,7 +365,7 @@ def validate_model_for_export(scene, plugin_id: str | None = None) -> list[Valid
 
     if hasattr(plugin, "validate_export"):
         try:
-            issues.extend(plugin.validate_export(scene))
+            issues.extend(plugin.validate_export(export_scene))
         except Exception as exc:
             issues.append(
                 ValidationIssue(

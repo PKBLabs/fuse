@@ -49,6 +49,7 @@
 | Unsaved status-bar indicator | `test_undo_redo_history.py` |
 | Validation results panel filters and object navigation | `test_validation_results_panel.py` |
 | Universal validation highlighting hooks for components, links, and subcomponent attachments | `test_validation_results_panel.py`, `test_validation_core_extended.py` |
+| Composite component selection, creation, storage, instance editing, flattening, import/export, and manager behavior | `test_composite_*.py`, `test_main_window.py` |
 
 ## SST plugin tests
 
@@ -81,7 +82,7 @@
 
 | Workflow | Command | Trigger summary |
 |---|---|---|
-| Core Tests | `pytest -q -m "not sst_live and not gem5_live"` | Pull requests and pushes to `main`/`develop` |
+| Core Tests | `pytest -q -m "not sst_live and not gem5_live and not sst_ext"` | Pull requests and pushes to `main`/`develop` |
 | SST Integration | `pytest -q -m "sst_live"` | Manual, weekly, relevant SST/plugin/core path pushes, and relevant PRs targeting `develop` |
 | gem5 Integration | `pytest -q -m "gem5_live"` | Manual, weekly, relevant gem5/plugin/core path pushes, and relevant PRs targeting `develop` |
 
@@ -148,23 +149,29 @@ The SST export documentation now defines the expected JSON contract, validation 
 | Golden-style export tests | `fuse/plugins/community/sst/tests/test_sst_export_json.py` |
 | Live SST acceptance tests | `fuse/plugins/community/sst/tests/test_sst_live_integration.py` |
 
-## v0.7.0 SST plugin backend conformance coverage
+## v0.7.0 composite component coverage
 
-The v0.7.0 SST external-validation tests are backend-only and live entirely inside the SST plugin. They are intended for developer, CI, and release validation rather than normal user workflows.
+v0.7.0 adds hierarchical composite components as core editor/model functionality. The tests are dependency-light and live primarily under `fuse/tests/` because composites are plugin-agnostic FUSE behavior.
 
 | Requirement | Coverage |
 |---|---|
-| SST-specific acceptance logic remains plugin-owned | `fuse/plugins/community/sst/external_validation/`, `fuse/plugins/community/sst/tests/test_sst_external_validation.py` |
-| External validation is skipped by default | `FUSE_ENABLE_SST_EXT_TESTS` gate in the SST plugin runner |
-| Fixture metadata is validated | `SSTExternalValidationMetadata.validation_errors()` tests |
-| JSON syntax is validated | `python -m json.tool` stage in generated fixture acceptance tests |
-| SST JSON export-readiness is checked before export | generated fixture acceptance tests call SST export validation before writing JSON |
-| Expected top-level SST JSON sections are checked | generated fixture acceptance tests compare emitted sections to fixture expectations |
-| Real SST init can be run when explicitly enabled | `run_mode="init"`, `sst --run-mode=init`, and `sst_ext` tests |
-| Real SST runtime smoke checks can be run when explicitly enabled | `run_mode="run"`, runtime argument, stdout/stderr, and output-file checks |
-| SST element/component dependencies are checked before real execution | `sst-info` element and component availability checks |
-| SST version bounds can skip incompatible fixtures | min/max SST version checks in the runner |
-| Optional `sst-ext-tests` root is recognized without vendoring | `SST_EXT_TESTS_ROOT` validation helper |
-| Representative FUSE-generated fixtures exist | `minimal_two_component_link`, `explicit_latency_parameters`, `subcomponent_slot_assignment`, `simple_element_example_init` |
+| Multiselect highlights only internally selected links | `test_composite_selection_foundation.py` |
+| Component selection uses explicit highlight styling | `test_composite_selection_foundation.py` |
+| Composite creation action follows multiselection state | `test_main_window.py` |
+| Selected fragments preserve components, links, parameters, positions, and external ports | `test_composite_component_creation.py` |
+| Boundary links to unselected components are blocked conservatively | `test_composite_component_creation.py` |
+| Local composite definitions are stored in `core_composite_components` | `test_composite_component_storage.py`, `test_database_initialization.py` |
+| Composite definitions appear in palette/catalog data | `test_composite_component_storage.py`, `test_component_palette.py` |
+| Composite instance names, icons, and template identity persist | `test_composite_component_instances.py` |
+| Properties panel distinguishes instance metadata from template metadata | `test_composite_component_instances.py` |
+| Composite flattening expands instances before SST/gem5 export | `test_composite_flattening.py` |
+| External links to composite ports remap to internal component ports | `test_composite_flattening.py` |
+| Multiple composite instances receive unique internal names | `test_composite_flattening.py` |
+| Instance-local edit state is saved, loaded, and used for flattening | `test_composite_instance_editor.py` |
+| Nested composite mini-model IDs are normalized | `test_composite_instance_editor.py` |
+| Tabbed composite instance editing opens and tracks nested contexts | `test_main_window.py` |
+| Active-tab Model Outline and Properties panels rebind correctly | `test_main_window.py` |
+| `.fcc` composite definition files round trip and validate kind/schema | `test_composite_component_files.py` |
+| Composite manager lists, imports, exports, and deletes definitions | `test_composite_component_manager.py` |
 
-Default release verification should continue to run dependency-light tests plus normal `sst_live` tests. The `sst_ext` suite is optional and should be enabled for SST-focused release candidates or CI environments that provide real SST/SST Elements installations.
+Default v0.7.0 release verification should run the full dependency-light suite with `sst_live`, `gem5_live`, and `sst_ext` excluded. Live simulator suites remain optional release-confidence checks.

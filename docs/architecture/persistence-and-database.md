@@ -2,8 +2,9 @@
 
 FUSE uses two persistence mechanisms:
 
-1. A local SQLite database for plugin catalogs and runtime metadata.
+1. A local SQLite database for plugin catalogs, composite definitions, and runtime metadata.
 2. `.fse` project files for user-created models and per-project settings.
+3. `.fcc` files for sharing individual composite component definitions.
 
 ## SQLite database
 
@@ -31,10 +32,11 @@ Core currently owns generic core tables:
 
 ```text
 core_plugins
+core_composite_components
 core_schema_migrations
 ```
 
-Core does not own simulator catalog tables.
+Core does not own simulator catalog tables. `core_composite_components` stores FUSE-owned reusable mini-model templates and remains simulator-agnostic.
 
 ## Plugin database tables
 
@@ -102,7 +104,7 @@ Project files are saved through:
 fuse/core/persistence/project_io.py
 ```
 
-Project files store the model the user created and the project settings needed to interpret it. They do not store the entire plugin catalog.
+Project files store the model the user created and the project settings needed to interpret it. They do not store the entire plugin catalog. They may store instance-local composite mini-model state for placed composite instances, while global reusable composite definitions live in `core_composite_components` unless exported as `.fcc` files.
 
 Saved project data includes:
 
@@ -114,6 +116,7 @@ Saved project data includes:
 - Component parameter overrides.
 - Component positions.
 - Links and link endpoints.
+- Composite instance identity and instance-local composite edit state.
 
 ## Test isolation
 
@@ -139,3 +142,21 @@ To force a fresh SST import:
 ```bash
 FUSE_SST_VERSION=15.1.2 FUSE_REFRESH_SSTINFO=1 ./scripts/setup_dev.sh
 ```
+
+
+## Composite component persistence
+
+Composite component persistence has three layers:
+
+```text
+core_composite_components
+  Global reusable local templates
+
+.fse project files
+  Placed composite instances and instance-local mini-model edits
+
+.fcc files
+  Exported/importable single composite definitions
+```
+
+This separation lets users delete obsolete local templates without rewriting every project file, and lets placed instances be customized without mutating the reusable template.

@@ -63,4 +63,18 @@ def initialize_core_database() -> None:
             )
         """)
 
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS core_composite_components (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL UNIQUE,
+                description TEXT NOT NULL DEFAULT '',
+                icon_path TEXT NOT NULL DEFAULT '',
+                mini_model_json TEXT NOT NULL,
+                port_map_json TEXT NOT NULL DEFAULT '[]',
+                schema_version TEXT NOT NULL DEFAULT '0.1.0',
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
         conn.commit()

@@ -172,6 +172,16 @@ SystemXBar_1
 
 The base name comes from the component type. FUSE increments a numeric suffix until the instance name is unique in the model.
 
+### Create and reuse composite components
+
+After a portion of the model is configured, it can be turned into a reusable composite component. Select the components with **Multiselect** or **Ctrl+click** and choose **Edit -> Create Composite Component from Selection**. FUSE saves the selected components, internal links, parameters, and layout as a local mini-model template and replaces the selected fragment with one composite instance.
+
+Composite templates appear in the component palette under **Composite Components** and can be dragged into the model view like normal components. Double-click a composite instance to open a model-view tab for editing that instance's internals. Nested composites open hierarchy-labeled tabs such as `Outer_1:Inner_1`.
+
+Use **Edit -> Manage Composite Components...** to import, export, or delete locally stored composite definitions. Composite definitions can be shared with other users as `.fcc` files.
+
+See [Composite Components](composite-components.md) for the complete workflow.
+
 ## 6. Navigate the model canvas
 
 Use the model canvas as a zoomable and pannable workspace.
@@ -179,7 +189,7 @@ Use the model canvas as a zoomable and pannable workspace.
 - Use the floating toolbar's zoom controls, the zoom percentage field, the mouse wheel, or keyboard zoom shortcuts to zoom in and out.
 - Drag empty canvas background in **Select/Move** mode to pan the view.
 - Drag a component or subcomponent to move only that item rather than panning the whole model.
-- Use **Multiselect** mode to draw a rectangular marquee around multiple items.
+- Use **Multiselect** mode to draw a rectangular marquee around multiple items. When several components are selected, FUSE highlights links whose endpoints are both selected.
 - The light grid is only a visual alignment aid; it does not change model coordinates or exported simulator output.
 
 Hit testing is view-aware. Component, port, and link selection should continue to work when the view is zoomed in or out. Ports are prioritized near link endpoints so connecting and selecting ports remains practical even when links overlap a port location.
@@ -215,7 +225,7 @@ Right-click a component on the canvas to open its context menu:
 - **Remove Component** deletes the component instance.
 - **Remove SubComponent** appears instead for subcomponent instances.
 
-The same component actions are available from the model outline context menu.
+The same component actions are available from the model outline context menu. When the selected items can form a composite, **Create Composite Component from Selection** is also available from the Edit menu and selected-item context menu.
 
 Click a component instance on the canvas. The properties panel updates to show:
 

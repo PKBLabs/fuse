@@ -32,6 +32,24 @@ Tracks discovered plugins.
 | `enabled` | Whether the plugin is enabled. |
 | `created_at` | Creation timestamp. |
 
+### `core_composite_components`
+
+Stores local reusable composite component definitions. These are FUSE mini-model templates, not simulator plugin catalog records.
+
+| Column | Meaning |
+|---|---|
+| `id` | Composite definition/template ID. |
+| `name` | User-facing composite template name. |
+| `description` | Optional user-facing description. |
+| `icon_path` | Optional icon path used for the template and new instances. |
+| `mini_model_json` | Serialized FUSE mini-model containing internal components, links, attachments, and layout. |
+| `port_map_json` | Serialized external-port mappings from composite ports to internal component ports. |
+| `schema_version` | Composite definition schema version. |
+| `created_at` | Creation timestamp. |
+| `updated_at` | Last update timestamp. |
+
+Composite definitions are listed in the component palette under **Composite Components** and can be managed through **Edit -> Manage Composite Components...**.
+
 ### `core_schema_migrations`
 
 Tracks schema migrations.

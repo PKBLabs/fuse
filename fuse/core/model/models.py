@@ -14,6 +14,8 @@
 from dataclasses import dataclass
 import json
 
+from fuse.core.model.composite import COMPOSITE_CATEGORY
+
 
 MIME_COMPONENT = "application/x-fuse-component"
 SCHEMA_VERSION = "0.1.0"
@@ -35,11 +37,16 @@ class ComponentDefinition:
     iface: str = ""
     icon_path: str = ""
     display_name_override: str = ""
+    is_composite: int = 0
+    composite_id: str = ""
 
     @property
     def display_name(self) -> str:
         if self.display_name_override:
             return self.display_name_override
+
+        if int(self.is_composite or 0):
+            return f"{self.name} (Composite)"
 
         kind = "SubComponent" if self.is_subcomp else "Component"
 
@@ -65,6 +72,8 @@ class ComponentDefinition:
                 "description": self.description or "",
                 "icon_path": self.icon_path or "",
                 "display_name_override": self.display_name_override or "",
+                "is_composite": int(self.is_composite or 0),
+                "composite_id": self.composite_id or "",
             }
         )
 
@@ -90,6 +99,8 @@ class ComponentDefinition:
                 iface=data.get("iface") or "",
                 icon_path=data.get("icon_path") or "",
                 display_name_override=data.get("display_name_override") or "",
+                is_composite=int(data.get("is_composite") or 0),
+                composite_id=data.get("composite_id") or "",
             )
 
         parts = text.split("|")
@@ -120,6 +131,8 @@ class ComponentDefinition:
                 iface=iface,
                 icon_path=icon_path,
                 display_name_override=display_name_override,
+                is_composite=1 if category == COMPOSITE_CATEGORY else 0,
+                composite_id=component_id_text if category == COMPOSITE_CATEGORY else "",
             )
 
         # Backward-compatible old SST-only format:

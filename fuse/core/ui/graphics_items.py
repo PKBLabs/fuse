@@ -20,6 +20,7 @@ from PySide6.QtGui import (
     QBrush,
     QColor,
     QCursor,
+    QPainter,
     QPainterPath,
     QPainterPathStroker,
     QPen,
@@ -35,6 +36,8 @@ from PySide6.QtWidgets import (
     QGraphicsRectItem,
     QGraphicsTextItem,
     QMenu,
+    QStyle,
+    QStyleOptionGraphicsItem,
 )
 
 from fuse.core.model.models import ComponentDefinition, ModelLink, ModelSubcompAttachment
@@ -243,7 +246,7 @@ class ConnectionItem(QGraphicsPathItem):
         self.route_points: list[QPointF] = []
 
         self.base_color = QColor("#38bdf8")
-        self.highlight_color = QColor("#f59e0b")
+        self.highlight_color = QColor("#2563eb")
         self.warning_color = QColor("#f59e0b")
         self.error_color = QColor("#ef4444")
         self.validation_messages: list[str] = []
@@ -266,11 +269,27 @@ class ConnectionItem(QGraphicsPathItem):
         scene = self.scene()
 
         menu = QMenu()
+        composite_action = None
+        if scene is not None:
+            from fuse.core.ui.selection_helpers import is_internal_selected_connection
+
+            if is_internal_selected_connection(scene, self):
+                composite_action = menu.addAction("Create Composite Component from Selection")
+                menu.addSeparator()
         remove_action = menu.addAction("Remove Link")
 
         action = menu.exec(event.screenPos())
 
-        if action == remove_action:
+        if composite_action is not None and action == composite_action:
+            if scene is not None:
+                from fuse.core.ui.selection_helpers import request_composite_from_selection
+
+                request_composite_from_selection(
+                    scene,
+                    getattr(scene, "composite_creation_requested_callback", None),
+                )
+
+        elif action == remove_action:
             if scene is not None and hasattr(scene, "delete_link"):
                 scene.delete_link(self)
 
@@ -847,10 +866,15 @@ class ComponentNodeItem(QGraphicsRectItem):
         self.subcomp_connectors: list[SubcompConnectorItem] = []
         self.add_ports_button: AddPortsButtonItem | None = None
         self.icon_path = component.icon_path or ""
+        self.composite_instance_model: dict = {}
+        self.composite_port_mappings: list = []
 
-        self.setBrush(QBrush(QColor("#ffffff")))
+        self.normal_brush = QBrush(QColor("#ffffff"))
+        self.selected_brush = QBrush(QColor("#eff6ff"))
         self.normal_pen = QPen(QColor("#cbd5e1"), 1.25)
+        self.selected_pen = QPen(QColor("#2563eb"), 2.5)
         self.validation_pen = QPen(QColor("#dc2626"), 2.5)
+        self.setBrush(self.normal_brush)
         self.setPen(self.normal_pen)
         self.validation_messages: list[str] = []
         self.setFlags(
@@ -921,11 +945,48 @@ class ComponentNodeItem(QGraphicsRectItem):
                     attachment.child_component_name = new_name
                 attachment_item.update_tooltip()
 
+    def paint(self, painter: QPainter, option: QStyleOptionGraphicsItem, widget=None):
+        paint_option = QStyleOptionGraphicsItem(option)
+        paint_option.state &= ~QStyle.State_Selected
+        super().paint(painter, paint_option, widget)
+
+    def mouseDoubleClickEvent(self, event):
+        component_is_composite = bool(int(getattr(self.component, "is_composite", 0) or 0))
+        scene = self.scene()
+        if (
+            component_is_composite
+            and event.button() == Qt.LeftButton
+            and scene is not None
+            and getattr(scene, "composite_instance_edit_requested_callback", None) is not None
+        ):
+            scene.composite_instance_edit_requested_callback(self)
+            event.accept()
+            return
+
+        super().mouseDoubleClickEvent(event)
+
+    def update_selection_style(self):
+        if self.isSelected():
+            self.setBrush(self.selected_brush)
+            self.setPen(self.selected_pen)
+        elif self.validation_messages:
+            self.setBrush(self.normal_brush)
+            self.setPen(self.validation_pen)
+        else:
+            self.setBrush(self.normal_brush)
+            self.setPen(self.normal_pen)
+
     def contextMenuEvent(self, event):
         scene = self.scene()
 
         menu = QMenu()
         add_action = menu.addAction("Add to Frequently Used")
+        composite_action = None
+        if scene is not None:
+            from fuse.core.ui.selection_helpers import can_create_composite_from_selection
+
+            if can_create_composite_from_selection(scene):
+                composite_action = menu.addAction("Create Composite Component from Selection")
         menu.addSeparator()
 
         remove_text = (
@@ -940,6 +1001,15 @@ class ComponentNodeItem(QGraphicsRectItem):
         if action == add_action:
             if scene is not None and hasattr(scene, "component_favorite_requested_callback"):
                 scene.component_favorite_requested_callback(self.component)
+
+        elif composite_action is not None and action == composite_action:
+            if scene is not None:
+                from fuse.core.ui.selection_helpers import request_composite_from_selection
+
+                request_composite_from_selection(
+                    scene,
+                    getattr(scene, "composite_creation_requested_callback", None),
+                )
 
         elif action == remove_action:
             if scene is not None and hasattr(scene, "delete_component_node"):
@@ -1458,6 +1528,9 @@ class ComponentNodeItem(QGraphicsRectItem):
             scene.end_node_drag(self)
 
     def itemChange(self, change, value):
+        if change == QGraphicsItem.ItemSelectedHasChanged:
+            self.update_selection_style()
+
         if change == QGraphicsItem.ItemPositionHasChanged:
             scene = self.scene()
 
