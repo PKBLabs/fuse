@@ -156,6 +156,7 @@ The model view also includes a floating canvas toolbar. It can be dragged within
 
 - **Select/Move** for normal component selection, link selection, port clicks, component movement, and empty-space panning.
 - **Multiselect** for rectangular marquee selection.
+- **Expose Ports** when editing a composite template or instance; left-click an internal port to toggle whether it is visible on the composite boundary.
 - **Undo** and **Redo**.
 - A zoom percentage selector plus **Zoom In** and **Zoom Out**.
 
@@ -176,9 +177,13 @@ The base name comes from the component type. FUSE increments a numeric suffix un
 
 After a portion of the model is configured, it can be turned into a reusable composite component. Select the components with **Multiselect** or **Ctrl+click** and choose **Edit -> Create Composite Component from Selection**. FUSE saves the selected components, internal links, parameters, and layout as a local mini-model template and replaces the selected fragment with one composite instance.
 
-Composite templates appear in the component palette under **Composite Components** and can be dragged into the model view like normal components. Double-click a composite instance to open a model-view tab for editing that instance's internals. Nested composites open hierarchy-labeled tabs such as `Outer_1:Inner_1`.
+Composite templates appear in the component palette under **Composite Components** and can be dragged into the model view like normal components. New composites expose no ports by default. Open a template or instance edit tab and explicitly expose the internal ports that should appear on the composite boundary.
 
-Use **Edit -> Manage Composite Components...** to import, export, or delete locally stored composite definitions. Composite definitions can be shared with other users as `.fcc` files.
+Use **Expose Ports** in the floating toolbar to rapidly toggle port exposure with left-clicks, or right-click a port and choose **Expose Port on Composite** / **Hide Port from Composite**. Exposed ports are highlighted in composite edit tabs. Only exposed ports can be linked from the parent model.
+
+Double-click a composite instance to open a model-view tab for editing that instance's internals. Nested composites open hierarchy-labeled tabs such as `Outer_1:Inner_1`.
+
+Use **Edit -> Manage Composite Components...** to import, export, delete, or edit locally stored composite definitions. Template edit tabs save back to the local database with **Save Template Changes**. Composite definitions can be shared with other users as `.fcc` files.
 
 See [Composite Components](composite-components.md) for the complete workflow.
 

@@ -176,7 +176,7 @@ Important component fields:
 
 ## Example composite component entry
 
-Composite instances are saved as component entries with core-owned composite identity. If a placed instance has instance-local edits, the `compositeInstance` block stores that mini-model state.
+Composite instances are saved as component entries with core-owned composite identity. If a placed instance has instance-local edits, the `compositeInstance` block stores that mini-model state, including exposed/hidden port mappings.
 
 ```json
 {
@@ -308,4 +308,4 @@ Save As appends the `.fse` extension when the user omits it. If Save As fails, F
 
 Reusable composite templates can be exported as `.fcc` files. A `.fcc` file stores one composite definition and can be imported into another local FUSE database. It is not a full project file and does not replace `.fse`.
 
-Use **Edit -> Manage Composite Components...** to import, export, or delete local composite definitions.
+Use **Edit -> Manage Composite Components...** to import, export, edit, or delete local composite definitions. `.fcc` files preserve exposed/hidden composite port state so imported templates keep the same default public interface.

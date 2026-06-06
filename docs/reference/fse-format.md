@@ -173,7 +173,17 @@ Composite component instances may include an optional `compositeInstance` block 
       "links": [],
       "subcomponentAttachments": []
     },
-    "portMappings": []
+    "portMappings": [
+      {
+        "external_port_name": "cache_a.cpu",
+        "internal_node_id": 1,
+        "internal_component_name": "cache_a",
+        "internal_port_name": "cpu",
+        "iface": "memHierarchy.memEvent",
+        "description": "CPU-side cache port",
+        "exposed": true
+      }
+    ]
   }
 }
 ```
@@ -185,11 +195,13 @@ Composite component instances may include an optional `compositeInstance` block 
 | `componentId` / `compositeId` | The local composite definition/template ID. |
 | `isComposite` | Marks the component as a FUSE composite instance. |
 | `compositeInstance.miniModel` | Instance-local editable mini-model for this placed instance. |
-| `compositeInstance.portMappings` | External port mappings for this instance. |
+| `compositeInstance.portMappings` | Candidate external-port mappings for this instance. Each mapping may include `exposed`; only exposed mappings are rendered as visible composite ports. |
 
 The `compositeInstance` block is omitted when there is no meaningful instance-local mini-model to save. The global reusable composite definition itself is stored in the local database and can be exported separately as a `.fcc` file.
 
 Composite instances are expanded before plugin validation/export. Simulator-specific output should not contain FUSE composite nodes.
+
+Port mappings describe possible boundary ports. A mapping with `"exposed": true` appears on the composite component and may be linked from the parent model. A mapping with `"exposed": false` remains hidden inside the composite edit context and is not linkable from the parent model. Older project files that omit `exposed` are interpreted as exposed for compatibility.
 
 ## `links`
 
@@ -289,7 +301,17 @@ Reusable composite definitions can be shared with other FUSE users as `.fcc` fil
     "description": "Reusable cache cluster",
     "icon_path": "icons/cache-cluster.png",
     "mini_model": {},
-    "port_mappings": [],
+    "port_mappings": [
+      {
+        "external_port_name": "cache_a.cpu",
+        "internal_node_id": 1,
+        "internal_component_name": "cache_a",
+        "internal_port_name": "cpu",
+        "iface": "memHierarchy.memEvent",
+        "description": "CPU-side cache port",
+        "exposed": true
+      }
+    ],
     "schema_version": "0.1.0",
     "created_at": "2026-01-01T00:00:00+00:00",
     "updated_at": "2026-01-01T00:00:00+00:00"
@@ -297,4 +319,4 @@ Reusable composite definitions can be shared with other FUSE users as `.fcc` fil
 }
 ```
 
-Importing a `.fcc` file adds the definition to the local `core_composite_components` table. Exporting writes one reusable definition, not a full project.
+Importing a `.fcc` file adds the definition to the local `core_composite_components` table. Exporting writes one reusable definition, not a full project. The `.fcc` file preserves exposed/hidden port state so shared composites keep the same default public interface after import. The `.fcc` file preserves exposed/hidden port state so shared composites keep the same default public interface after import.

@@ -158,20 +158,24 @@ v0.7.0 adds hierarchical composite components as core editor/model functionality
 | Multiselect highlights only internally selected links | `test_composite_selection_foundation.py` |
 | Component selection uses explicit highlight styling | `test_composite_selection_foundation.py` |
 | Composite creation action follows multiselection state | `test_main_window.py` |
-| Selected fragments preserve components, links, parameters, positions, and external ports | `test_composite_component_creation.py` |
+| Selected fragments preserve components, links, parameters, positions, and candidate port mappings | `test_composite_component_creation.py` |
+| New composites default candidate ports to hidden/unexposed | `test_composite_component_creation.py` |
 | Boundary links to unselected components are blocked conservatively | `test_composite_component_creation.py` |
 | Local composite definitions are stored in `core_composite_components` | `test_composite_component_storage.py`, `test_database_initialization.py` |
 | Composite definitions appear in palette/catalog data | `test_composite_component_storage.py`, `test_component_palette.py` |
 | Composite instance names, icons, and template identity persist | `test_composite_component_instances.py` |
 | Properties panel distinguishes instance metadata from template metadata | `test_composite_component_instances.py` |
 | Composite flattening expands instances before SST/gem5 export | `test_composite_flattening.py` |
-| External links to composite ports remap to internal component ports | `test_composite_flattening.py` |
+| External links to exposed composite ports remap to internal component ports | `test_composite_flattening.py` |
+| Links to hidden composite ports fail clearly during flattening | `test_composite_flattening.py` |
 | Multiple composite instances receive unique internal names | `test_composite_flattening.py` |
-| Instance-local edit state is saved, loaded, and used for flattening | `test_composite_instance_editor.py` |
+| Instance-local edit state, including exposed/hidden port state, is saved, loaded, and used for flattening | `test_composite_instance_editor.py` |
+| Composite edit tabs support Expose Ports toolbar mode and right-click expose/hide actions | `test_composite_instance_editor.py` |
+| Template edit tabs save exposed-port state and track dirty state | `test_composite_instance_editor.py`, `test_main_window.py` |
 | Nested composite mini-model IDs are normalized | `test_composite_instance_editor.py` |
 | Tabbed composite instance editing opens and tracks nested contexts | `test_main_window.py` |
 | Active-tab Model Outline and Properties panels rebind correctly | `test_main_window.py` |
-| `.fcc` composite definition files round trip and validate kind/schema | `test_composite_component_files.py` |
+| `.fcc` composite definition files round trip and preserve exposed/hidden port state | `test_composite_component_files.py` |
 | Composite manager lists, imports, exports, and deletes definitions | `test_composite_component_manager.py` |
 
 Default v0.7.0 release verification should run the full dependency-light suite with `sst_live`, `gem5_live`, and `sst_ext` excluded. Live simulator suites remain optional release-confidence checks.

@@ -176,11 +176,13 @@ The selected link is highlighted.
 
 Use composite components when you want to reuse a configured portion of the model. Select multiple components with **Multiselect** or **Ctrl+click**, then choose **Edit -> Create Composite Component from Selection** or the same action from the selected component context menu.
 
-FUSE stores the selected components, internal links, parameters, and relative positions as a local composite definition. It replaces the selected fragment with one composite instance. Only links whose endpoints are both selected become internal composite links. Unlinked internal ports become visible external ports on the composite box.
+FUSE stores the selected components, internal links, parameters, and relative positions as a local composite definition. It replaces the selected fragment with one composite instance. Only links whose endpoints are both selected become internal composite links.
 
-Double-click a composite instance to open an editable model-view tab for that instance. Edits in a composite tab affect only that placed instance, not the global composite template. Composite tabs can be nested; for example, opening a composite inside another composite creates a hierarchy-labeled tab such as `Outer_1:Inner_1`.
+Composite ports are explicit. New composites expose no ports by default. Open a composite template or instance edit tab, enable **Expose Ports** in the floating toolbar, or right-click an internal port to choose **Expose Port on Composite** / **Hide Port from Composite**. Only exposed ports appear on the composite box and can be linked from the parent model.
 
-Manage reusable templates with **Edit -> Manage Composite Components...**. The manager can import `.fcc` files, export selected definitions, and delete obsolete definitions from the local database.
+Double-click a composite instance to open an editable model-view tab for that instance. Edits in an instance tab affect only that placed instance, not the global composite template. Composite tabs can be nested; for example, opening a composite inside another composite creates a hierarchy-labeled tab such as `Outer_1:Inner_1`.
+
+Manage reusable templates with **Edit -> Manage Composite Components...**. The manager can import `.fcc` files, export selected definitions, delete obsolete definitions from the local database, and open global template edit tabs. Template edit tabs have a **Save Template Changes** button and prompt before closing with unsaved changes.
 
 For the full workflow, see [Composite Components](composite-components.md).
 

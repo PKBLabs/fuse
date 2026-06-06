@@ -102,9 +102,9 @@ Backward-compatible pipe-delimited formats are still parsed for older tests/file
 
 ## Composite component definitions
 
-Composite components are core-owned reusable mini-model definitions. A `CompositeComponentDefinition` stores a template ID, display name, description, optional icon path, a serialized mini-model, and external port mappings. A `CompositePortMapping` maps a visible composite port to the internal component port it represents.
+Composite components are core-owned reusable mini-model definitions. A `CompositeComponentDefinition` stores a template ID, display name, description, optional icon path, a serialized mini-model, and candidate port mappings. A `CompositePortMapping` maps a composite boundary port name to the internal component port it represents and records whether that mapping is currently exposed. Only exposed mappings become visible ports on the composite node.
 
-Placed composite instances are normal component nodes with composite identity fields. If an instance has been edited, its instance-local mini-model is stored with that placed node in the project file. Instance-local edits do not mutate the global composite definition in the local database.
+Placed composite instances are normal component nodes with composite identity fields. If an instance has been edited, its instance-local mini-model is stored with that placed node in the project file. Instance-local edits do not mutate the global composite definition in the local database. Instance-local edits may include exposed/hidden port state, so one placed instance can expose a different public interface than the reusable template.
 
 Before simulator validation/export, core flattening expands composite instances recursively into ordinary plugin-owned components and links. This keeps composite editing generic while preserving the rule that SST and gem5 plugins only receive simulator-native model objects.
 

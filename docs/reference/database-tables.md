@@ -43,12 +43,12 @@ Stores local reusable composite component definitions. These are FUSE mini-model
 | `description` | Optional user-facing description. |
 | `icon_path` | Optional icon path used for the template and new instances. |
 | `mini_model_json` | Serialized FUSE mini-model containing internal components, links, attachments, and layout. |
-| `port_map_json` | Serialized external-port mappings from composite ports to internal component ports. |
+| `port_map_json` | Serialized candidate port mappings from composite boundary ports to internal component ports, including exposed/hidden state. |
 | `schema_version` | Composite definition schema version. |
 | `created_at` | Creation timestamp. |
 | `updated_at` | Last update timestamp. |
 
-Composite definitions are listed in the component palette under **Composite Components** and can be managed through **Edit -> Manage Composite Components...**.
+Composite definitions are listed in the component palette under **Composite Components** and can be managed through **Edit -> Manage Composite Components...**. Template edits, including exposed/hidden port state, are saved back to this table.
 
 ### `core_schema_migrations`
 
