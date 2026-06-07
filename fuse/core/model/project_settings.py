@@ -7,6 +7,8 @@
 # terms of the GNU General Public License as published by the Free Software
 # Foundation, either version 3 of the License, or, at your option, any later
 # version.
+"""Project-level framework, target, and toolchain settings."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -72,6 +74,7 @@ class ToolchainSettings:
 
 @dataclass
 class PluginProjectSettings:
+    """Project settings for one simulator plugin, including selected target and toolchain details."""
     plugin_id: str
     enabled: bool = False
     target_id: str = ""
@@ -123,6 +126,7 @@ class PluginProjectSettings:
 
 @dataclass
 class ProjectSettings:
+    """Aggregate project settings for all enabled simulator plugins."""
     project_name: str = "Untitled FUSE Project"
     active_plugin_id: str = ""
     preferred_component_sorting_mode: str = "Alphabetical"

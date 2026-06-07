@@ -11,6 +11,10 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+"""Import and export helpers for standalone composite component files.
+
+FUSE uses .fcc files to share reusable composite component definitions outside a project file or local database."""
+
 from __future__ import annotations
 
 import json
@@ -32,10 +36,12 @@ COMPOSITE_FILE_EXTENSION = ".fcc"
 
 
 class CompositeComponentFileError(ValueError):
+    """Raised when a composite component file cannot be read, validated, or imported."""
     pass
 
 
 def composite_file_document(definition: CompositeComponentDefinition) -> dict[str, Any]:
+    """Wrap a composite definition in the on-disk .fcc document format."""
     return {
         "kind": COMPOSITE_FILE_KIND,
         "schema_version": COMPOSITE_SCHEMA_VERSION,
@@ -47,6 +53,7 @@ def write_composite_component_file(
     definition: CompositeComponentDefinition,
     file_path: str | Path,
 ) -> Path:
+    """Write a composite component definition to a .fcc file."""
     output_path = Path(file_path)
     if output_path.suffix.lower() != COMPOSITE_FILE_EXTENSION:
         output_path = output_path.with_suffix(COMPOSITE_FILE_EXTENSION)
@@ -60,6 +67,7 @@ def write_composite_component_file(
 
 
 def read_composite_component_file(file_path: str | Path) -> CompositeComponentDefinition:
+    """Read and validate a composite component definition from a .fcc file."""
     path = Path(file_path)
 
     try:
@@ -95,6 +103,7 @@ def read_composite_component_file(file_path: str | Path) -> CompositeComponentDe
 
 
 def unique_imported_composite_name(name: str, existing_names: set[str]) -> str:
+    """Choose a non-conflicting display name for an imported composite definition."""
     base_name = name.strip() or "Imported Composite"
     lowered_existing = {existing.lower() for existing in existing_names}
 
@@ -114,6 +123,7 @@ def unique_imported_composite_name(name: str, existing_names: set[str]) -> str:
 
 
 def import_composite_component_file(file_path: str | Path) -> CompositeComponentDefinition:
+    """Import a .fcc file into the local composite component database."""
     definition = read_composite_component_file(file_path)
 
     existing = get_composite_component_definition(definition.composite_id)

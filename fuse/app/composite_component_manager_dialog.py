@@ -11,6 +11,8 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+"""Dialog for importing, exporting, editing, and deleting reusable composite components."""
+
 from __future__ import annotations
 
 import re
@@ -43,11 +45,13 @@ from fuse.core.persistence.composite_components import (
 
 
 def safe_composite_file_stem(name: str) -> str:
+    """Return a filesystem-safe stem for a composite component export file."""
     stem = re.sub(r"[^A-Za-z0-9_.-]+", "_", name.strip()).strip("._")
     return stem or "composite_component"
 
 
 class CompositeComponentManagerDialog(QDialog):
+    """Qt dialog that manages composite component definitions stored in the local database."""
     def __init__(self, parent=None, edit_requested_callback=None):
         super().__init__(parent)
         self.edit_requested_callback = edit_requested_callback

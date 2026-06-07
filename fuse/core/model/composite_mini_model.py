@@ -2,6 +2,10 @@
 # Copyright (c) 2026 PKB Research Labs, LLC.
 #
 # This file is part of FUSE.
+"""Normalization helpers for composite component mini-model payloads.
+
+Composite definitions store embedded model fragments. These helpers remap ids and references so copied or nested fragments remain internally consistent."""
+
 from __future__ import annotations
 
 from copy import deepcopy
@@ -11,6 +15,7 @@ from fuse.core.model.composite import CompositePortMapping
 
 
 def next_available_integer(used_values: set[int], preferred_value: int, fallback_value: int) -> int:
+    """Return and reserve the next unused positive integer id."""
     candidate = preferred_value if preferred_value > 0 else fallback_value
     if candidate <= 0:
         candidate = 1
@@ -25,6 +30,7 @@ def remap_link_endpoint(
     component_id_map: dict[int, int],
     component_id_name_map: dict[tuple[int, str], int],
 ) -> None:
+    """Remap a serialized link endpoint to a normalized component id."""
     if not isinstance(endpoint, dict):
         return
     try:
@@ -45,6 +51,7 @@ def remap_subcomp_endpoint(
     component_id_map: dict[int, int],
     component_id_name_map: dict[tuple[int, str], int],
 ) -> None:
+    """Remap a serialized subcomponent endpoint to a normalized component id."""
     remap_link_endpoint(endpoint, component_id_map, component_id_name_map)
 
 
@@ -52,6 +59,7 @@ def normalize_port_mapping_ids(
     port_mappings: list[Any],
     component_id_map: dict[int, int],
 ) -> list[CompositePortMapping]:
+    """Normalize composite port mappings after component ids are remapped."""
     normalized: list[CompositePortMapping] = []
     for mapping_data in port_mappings or []:
         if isinstance(mapping_data, CompositePortMapping):
@@ -72,6 +80,7 @@ def normalize_serialized_port_mapping_ids(
     port_mappings: list[Any],
     component_id_map: dict[int, int],
 ) -> list[dict[str, Any]]:
+    """Normalize serialized port mappings and return dictionaries."""
     return [
         mapping.to_dict()
         for mapping in normalize_port_mapping_ids(port_mappings, component_id_map)
@@ -79,6 +88,7 @@ def normalize_serialized_port_mapping_ids(
 
 
 def normalize_composite_instance_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """Normalize a serialized composite-instance payload."""
     if not isinstance(payload, dict):
         return {}
 
@@ -177,5 +187,6 @@ def normalize_mini_model_and_port_mappings(
 
 
 def normalize_mini_model(mini_model: dict[str, Any]) -> dict[str, Any]:
+    """Normalize a mini-model payload and return only the normalized model dictionary."""
     normalized_model, ignored_mappings = normalize_mini_model_and_port_mappings(mini_model, [])
     return normalized_model

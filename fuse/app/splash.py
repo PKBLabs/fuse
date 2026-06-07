@@ -8,6 +8,8 @@
 # Foundation, either version 3 of the License, or, at your option, any later
 # version.
 
+"""Custom splash-screen widgets used during FUSE startup."""
+
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QFont, QGuiApplication, QPainter, QPixmap
 from PySide6.QtWidgets import (
@@ -29,6 +31,7 @@ from fuse.core.resource_paths import FUSE_LOGO_PATH
 
 
 class FuseSplashScreen(QWidget):
+    """Translucent splash screen that displays FUSE branding and startup status messages."""
     def __init__(self):
         super().__init__(
             None,
@@ -138,6 +141,7 @@ class FuseSplashScreen(QWidget):
 
 
 def build_splash_pixmap() -> QPixmap:
+    """Build the splash-screen logo pixmap with fallback rendering when the image asset is unavailable."""
     width = 960
     height = 455
 
@@ -241,4 +245,5 @@ def _draw_text_logo(painter: QPainter, width: int, color: QColor) -> None:
 
 
 def create_splash_screen() -> FuseSplashScreen:
+    """Create and show a splash screen centered on the primary display."""
     return FuseSplashScreen()

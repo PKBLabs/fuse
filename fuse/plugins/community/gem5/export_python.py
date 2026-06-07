@@ -193,5 +193,6 @@ def build_gem5_python(scene) -> str:
 
 
 def export_gem5_python(scene, output_path: str | Path) -> None:
+    """Export gem5 nodes from a FUSE scene into a readable Python configuration script."""
     path = Path(output_path)
     path.write_text(build_gem5_python(scene), encoding="utf-8")

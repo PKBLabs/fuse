@@ -8,6 +8,8 @@
 # Foundation, either version 3 of the License, or, at your option, any later
 # version.
 
+"""About dialog and application identity text for the FUSE desktop UI."""
+
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QGuiApplication, QPixmap
 from PySide6.QtWidgets import (
@@ -37,6 +39,7 @@ from fuse.core.resource_paths import FUSE_ICON_PATH
 
 
 def build_about_text() -> str:
+    """Build the plain-text content shown in the About dialog."""
     return (
         f"{APP_NAME} {APP_EDITION}\n"
         f"{APP_FULL_NAME}\n\n"
@@ -55,6 +58,7 @@ def build_about_text() -> str:
 
 
 class AboutDialog(QDialog):
+    """Frameless Qt dialog that displays product, version, license, and plugin policy information."""
     def __init__(self, parent=None):
         super().__init__(parent)
 
