@@ -7,6 +7,13 @@
 # terms of the GNU General Public License as published by the Free Software
 # Foundation, either version 3 of the License, or, at your option, any later
 # version.
+"""Generate simple gem5 Python configuration scripts from FUSE scenes.
+
+The exporter is intentionally conservative: it writes readable Python that
+instantiates supported gem5 objects, applies common parameters, and emits port
+connection statements where enough metadata is available.
+"""
+
 from __future__ import annotations
 
 from pathlib import Path

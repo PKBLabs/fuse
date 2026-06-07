@@ -11,6 +11,14 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+"""SST JSON export and validation helpers.
+
+This module converts a FUSE scene, including flattened composite scenes, into
+the SST JSON structure consumed by SST's Python input layer. It also performs
+export-readiness checks so users get actionable validation errors before a file
+is written.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -25,7 +33,7 @@ SST_EXPORT_SCHEMA_VERSION = "0.5.0"
 
 
 class SSTJsonExportError(RuntimeError):
-    pass
+    """Raised when a model cannot be converted to valid SST JSON."""
 
 
 @dataclass
@@ -37,13 +45,16 @@ class SSTExportReport:
 
     @property
     def can_export(self) -> bool:
+        """Return true when no blocking export errors are present."""
         return not self.errors
 
     @property
     def issues(self) -> list[Any]:
+        """Return errors followed by warnings for display/reporting."""
         return [*self.errors, *self.warnings]
 
     def raise_for_errors(self) -> None:
+        """Raise :class:`SSTJsonExportError` when blocking errors exist."""
         if not self.errors:
             return
 
@@ -99,6 +110,7 @@ def clean_value(value: Any) -> Any:
 
 
 def non_empty_params(parameters: dict[str, Any]) -> dict[str, Any]:
+    """Return parameters after dropping empty string/None values."""
     result: dict[str, Any] = {}
 
     for key, value in sorted(parameters.items(), key=lambda item: str(item[0])):
@@ -236,6 +248,7 @@ def build_sst_component_tree(
 
 
 def source_link_latency(link) -> str:
+    """Return the SST source latency for a link, including legacy fallback."""
     latency = (
         getattr(link, "source_latency", "")
         or getattr(link, "latency", "")
@@ -245,6 +258,7 @@ def source_link_latency(link) -> str:
 
 
 def target_link_latency(link) -> str:
+    """Return the SST target latency for a link, including legacy fallback."""
     latency = (
         getattr(link, "target_latency", "")
         or getattr(link, "latency", "")
@@ -254,14 +268,17 @@ def target_link_latency(link) -> str:
 
 
 def has_explicit_source_latency(link) -> bool:
+    """Return whether a link explicitly defines source latency."""
     return bool(str(getattr(link, "source_latency", "") or "").strip())
 
 
 def has_explicit_target_latency(link) -> bool:
+    """Return whether a link explicitly defines target latency."""
     return bool(str(getattr(link, "target_latency", "") or "").strip())
 
 
 def current_node_name(nodes_by_id: dict[int, object] | None, node_id: int, fallback: str) -> str:
+    """Resolve a node id to its current instance name for link export."""
     if nodes_by_id is None:
         return fallback
 
@@ -332,6 +349,7 @@ def build_sst_link(link, nodes_by_id: dict[int, object] | None = None) -> dict[s
 
 
 def port_names_for_node(node) -> set[str]:
+    """Return concrete port names available on a node."""
     names = set()
 
     if hasattr(node, "expanded_port_names"):
@@ -349,10 +367,12 @@ def port_names_for_node(node) -> set[str]:
 
 
 def node_is_sst(node) -> bool:
+    """Return true when a node belongs to the SST plugin."""
     return (getattr(node.component, "plugin_id", "") or "core") == "sst"
 
 
 def node_is_subcomponent(node) -> bool:
+    """Return true when a node represents an SST SubComponent."""
     return bool(int(getattr(node.component, "is_subcomp", 0) or 0))
 
 
@@ -807,6 +827,7 @@ def export_sst_json(
 
 
 def export_sst_report(report: SSTExportReport, output_path: str | Path) -> Path:
+    """Write an SST export validation report beside the exported artifact."""
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 

@@ -11,6 +11,14 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+"""Composite component data structures and file-format helpers.
+
+Composite components let users group an internal mini-model behind a reusable
+external component-like boundary. This module owns the persisted definition,
+external-to-internal port mappings, and conversion helpers used by the palette,
+instance editor, project serializer, and composite import/export logic.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -30,6 +38,11 @@ COMPOSITE_FILE_KIND = "fuse.composite-component"
 
 @dataclass
 class CompositePortMapping:
+    """Mapping from an external composite port to an internal component port.
+
+    Only mappings with ``exposed`` set to true are displayed on composite
+    instances and used when links cross the composite boundary.
+    """
     external_port_name: str
     internal_node_id: int
     internal_component_name: str
@@ -40,6 +53,7 @@ class CompositePortMapping:
     exposed: bool = True
 
     def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-serializable representation of the port mapping."""
         return {
             "external_port_name": self.external_port_name,
             "internal_node_id": int(self.internal_node_id),
@@ -53,6 +67,7 @@ class CompositePortMapping:
 
     @staticmethod
     def from_dict(data: dict[str, Any]) -> "CompositePortMapping":
+        """Build a port mapping from persisted project or composite-file data."""
         return CompositePortMapping(
             external_port_name=str(data.get("external_port_name") or ""),
             internal_node_id=int(data.get("internal_node_id") or 0),
@@ -67,6 +82,12 @@ class CompositePortMapping:
 
 @dataclass
 class CompositeComponentDefinition:
+    """Reusable composite component template stored in the FUSE database.
+
+    A definition contains metadata shown in the palette plus a normalized
+    mini-model describing the internal components, links, attachments, and
+    exposed boundary ports used when a composite instance is placed.
+    """
     composite_id: str
     name: str
     description: str = ""
@@ -86,6 +107,7 @@ class CompositeComponentDefinition:
         port_mappings: list[CompositePortMapping] | None = None,
         composite_id: str | None = None,
     ) -> "CompositeComponentDefinition":
+        """Create a new composite definition with timestamps and optional id."""
         timestamp = datetime.now(timezone.utc).isoformat()
         return CompositeComponentDefinition(
             composite_id=composite_id or str(uuid4()),
@@ -99,6 +121,7 @@ class CompositeComponentDefinition:
         )
 
     def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-serializable representation of this definition."""
         return {
             "composite_id": self.composite_id,
             "name": self.name,
@@ -113,6 +136,7 @@ class CompositeComponentDefinition:
 
     @staticmethod
     def from_dict(data: dict[str, Any]) -> "CompositeComponentDefinition":
+        """Build a composite definition from saved project/database data."""
         return CompositeComponentDefinition(
             composite_id=str(data.get("composite_id") or ""),
             name=str(data.get("name") or ""),
@@ -130,6 +154,7 @@ class CompositeComponentDefinition:
         )
 
     def to_storage_values(self) -> dict[str, str]:
+        """Return column values used by the composite definition database table."""
         return {
             "id": self.composite_id,
             "name": self.name,
@@ -147,6 +172,7 @@ class CompositeComponentDefinition:
 
     @staticmethod
     def from_storage_row(row) -> "CompositeComponentDefinition":
+        """Build a composite definition from a database result row."""
         mini_model = {}
         port_mappings = []
 

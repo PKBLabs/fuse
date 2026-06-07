@@ -11,6 +11,14 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+"""Community SST framework plugin.
+
+The SST plugin translates metadata imported from ``sst-info`` into FUSE palette
+items, item details, compatibility checks, toolchain validation, and SST JSON
+export support. Core code talks to this plugin through the public
+``fuse.plugin_api`` contracts.
+"""
+
 from dataclasses import dataclass
 import os
 from pathlib import Path
@@ -38,13 +46,17 @@ from fuse.plugins.community.sst.get_sstinfo import (
 
 @dataclass
 class SSTPlugin:
+    """FUSE plugin implementation for Structural Simulation Toolkit models."""
+
     plugin_id: str = "sst"
     name: str = "FUSE SST Plugin"
 
     def initialize_database(self, conn) -> None:
+        """Create or migrate SST-specific metadata tables."""
         initialize_sst_schema(conn)
 
     def bootstrap_database(self) -> None:
+        """Import local SST metadata when ``sst-info`` is available."""
         if shutil.which("sst-info") is None:
             print("SST plugin: sst-info not found; skipping SST import.")
             return
@@ -76,6 +88,7 @@ class SSTPlugin:
         )
 
     def list_targets(self) -> list[FrameworkTarget]:
+        """Return SST versions available in the local metadata database."""
         with get_connection() as conn:
             rows = conn.execute("""
                 SELECT id, version, label, is_default
@@ -112,6 +125,7 @@ class SSTPlugin:
         return targets[0].target_id
 
     def load_palette_items(self, target_id: str | None = None) -> list[PaletteItem]:
+        """Return SST components/subcomponents for the selected target."""
         if target_id is None:
             target_id = self._default_target_id()
 
@@ -171,6 +185,7 @@ class SSTPlugin:
         return items
 
     def load_item_details(self, item_id: str, target_id: str | None = None) -> ItemDetails:
+        """Load connectors, parameters, and statistics for one SST item."""
         component_id = int(item_id)
         params = [component_id]
         target_filter = ""
@@ -384,6 +399,7 @@ class SSTPlugin:
         )
 
     def export_formats(self) -> list[ExportFormat]:
+        """Return SST export formats advertised to the core UI."""
         return [
             ExportFormat(
                 format_id="sst.json",
@@ -442,6 +458,7 @@ class SSTPlugin:
         return validate_sst_json_export(flatten_scene_for_export(scene)).issues
 
     def validate_toolchain(self, plugin_settings) -> tuple[bool, str]:
+        """Validate the configured local or remote SST toolchain."""
         expected_version = getattr(plugin_settings, "framework_version", "") or ""
         ok, message, _ = validate_sst_toolchain(
             toolchain=plugin_settings.toolchain,
@@ -450,6 +467,7 @@ class SSTPlugin:
         return ok, message
 
     def import_metadata_for_toolchain(self, plugin_settings) -> None:
+        """Import ``sst-info`` metadata using configured toolchain settings."""
         version = getattr(plugin_settings, "framework_version", "") or os.environ.get("FUSE_SST_VERSION", "15.0.0")
         label = getattr(plugin_settings, "target_label", "") or f"SST {version}"
 
