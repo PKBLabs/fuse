@@ -6,14 +6,14 @@ on:
   pull_request:
     paths:
       - "fuse/**"
-      - "pyproject.toml"
+      - "fuse/requirements*.txt"
       - "packaging/**"
       - ".github/workflows/package.yml"
   push:
     branches: [develop, main, stable-release-prep]
     paths:
       - "fuse/**"
-      - "pyproject.toml"
+      - "fuse/requirements*.txt"
       - "packaging/**"
       - ".github/workflows/package.yml"
 
@@ -37,7 +37,7 @@ jobs:
       - name: Install package dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[dev]"
+          python -m pip install -r fuse/requirements-dev.txt
           python -m pip install pyinstaller
 
       - name: Build app
