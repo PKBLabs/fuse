@@ -11,6 +11,14 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+"""Component palette widgets for browsing and dragging model elements.
+
+The palette presents framework/plugin-provided ``ComponentDefinition`` objects
+as tree entries and quick-access tiles. It supports grouping, filtering,
+recent/frequent usage tracking, compatibility-context filtering, and context
+menu actions for composite templates. Drag operations serialize component data
+using the shared component MIME type consumed by ``ModelView``.
+"""
 from __future__ import annotations
 import json
 from collections import defaultdict
@@ -52,6 +60,12 @@ MAX_FREQUENT_COMPONENTS = 9
 
 
 class ComponentTree(QTreeWidget):
+    """Tree widget that starts component drag operations.
+
+    Each draggable tree item stores a ``ComponentDefinition`` in Qt item data.
+    When the user drags an item, the tree encodes the component definition into
+    the FUSE component MIME payload used by the canvas drop handler.
+    """
     def __init__(self, palette: "ComponentPalette"):
         super().__init__()
         self.palette = palette
@@ -121,6 +135,12 @@ class ComponentTree(QTreeWidget):
 
 
 class ComponentTileButton(QToolButton):
+    """Quick-access tile used for recent and frequently used components.
+
+    Tiles provide a compact drag source outside the main tree and share the
+    same MIME payload format as ``ComponentTree`` so drops are handled
+    identically by the canvas.
+    """
     def __init__(self, palette: "ComponentPalette", component: ComponentDefinition):
         super().__init__()
         self.palette = palette
@@ -174,6 +194,13 @@ class ComponentTileButton(QToolButton):
 
 
 class ComponentPalette(QWidget):
+    """Dockable palette for plugin, simulator, and composite components.
+
+    ``ComponentPalette`` loads component definitions for the active framework
+    target, organizes them into user-selectable views, persists display and
+    usage preferences through ``QSettings``, and emits requests for component
+    editing or preference changes back to the main window.
+    """
     VIEW_ELEMENT = "Element"
     VIEW_FUNCTION = "Function"
     VIEW_FLAT = "Flat"

@@ -11,6 +11,14 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+"""Graphics view and toolbar behavior for the FUSE model canvas.
+
+The scene owns model items; this module owns how the user views and navigates
+them. ``ModelView`` provides zooming, panning, drag-and-drop component creation,
+grid drawing, persisted editor viewport state, and a small floating toolbar for
+interaction modes. It intentionally delegates model mutations to ``ModelScene``
+so that view code stays focused on input interpretation and presentation.
+"""
 from __future__ import annotations
 
 from PySide6.QtCore import QPoint, Qt, QRectF
@@ -30,6 +38,13 @@ from fuse.core.ui.selection_helpers import update_selection_dependent_highlights
 
 
 class FloatingModelToolbar(QFrame):
+    """Floating control strip for canvas interaction modes and zoom.
+
+    The toolbar is parented to the view viewport so it moves with the editor
+    surface rather than with model contents. It exposes common canvas commands
+    such as select/move, multiselect, composite port exposure mode, zoom, and
+    undo/redo hooks.
+    """
     def __init__(self, view: "ModelView"):
         super().__init__(view.viewport())
         self.view = view
@@ -183,6 +198,13 @@ class FloatingModelToolbar(QFrame):
 
 
 class ModelView(QGraphicsView):
+    """Qt graphics view used to display and navigate a ``ModelScene``.
+
+    ``ModelView`` translates viewport input into editor commands. It handles
+    wheel zoom, middle-button panning, rubber-band/multiselect behavior,
+    drop-to-create-component interactions, and persistence of the viewport
+    center/zoom/toolbar position in project files.
+    """
     ZOOM_LEVELS = [12.5, 25.0, 50.0, 100.0, 200.0]
     GRID_SPACING = 200.0
 

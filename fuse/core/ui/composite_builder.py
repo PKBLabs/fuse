@@ -2,6 +2,18 @@
 # Copyright (c) 2026 PKB Research Labs, LLC.
 #
 # This file is part of FUSE.
+"""Build composite component definitions from canvas selections.
+
+This module converts selected ``ComponentNodeItem`` objects and their internal
+connections into reusable ``CompositeComponentDefinition`` records. It is used
+by the main editor when the user groups part of a model into a composite and
+needs to replace that selection with a single composite instance.
+
+The builder works at the UI/model boundary: it reads selected Qt graphics items,
+serializes them into the same mini-model shape used by persistence, derives
+boundary port mappings, and constructs the component definition shown in the
+palette.
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -33,6 +45,12 @@ from fuse.core.ui.graphics_items import (
 
 @dataclass(frozen=True)
 class CompositeSelectionBoundaryReport:
+    """Summary of selected items that still connect to the outside model.
+
+    A selection with boundary connections cannot be naively replaced by a
+    composite without either exposing boundary ports or removing those external
+    relationships. The report lets the UI warn the user before conversion.
+    """
     boundary_connections: list[ConnectionItem]
     boundary_attachments: list[SubcompAttachmentItem]
 
@@ -43,6 +61,12 @@ class CompositeSelectionBoundaryReport:
 
 @dataclass(frozen=True)
 class CompositeSelectionFragment:
+    """Serialized mini-model produced from a selected set of components.
+
+    The fragment contains the normalized internal model, derived composite port
+    mappings, and the original canvas origin used to position the replacement
+    composite instance.
+    """
     mini_model: dict[str, Any]
     port_mappings: list[CompositePortMapping]
     origin: QPointF
@@ -54,6 +78,18 @@ def selection_boundary_report(
     internal_connections: list[ConnectionItem],
     internal_attachments: list[SubcompAttachmentItem],
 ) -> CompositeSelectionBoundaryReport:
+    """Identify external links or attachments touching a component selection.
+
+    Args:
+        scene: Scene containing the selected items.
+        components: Component nodes selected for conversion.
+        internal_connections: Connections fully contained in the selection.
+        internal_attachments: Subcomponent attachments fully contained in the selection.
+
+    Returns:
+        Report listing selected-boundary relationships that would be affected
+        by composite creation.
+    """
     component_set = set(components)
     internal_connection_set = set(internal_connections)
     internal_attachment_set = set(internal_attachments)
@@ -85,6 +121,7 @@ def selection_boundary_report(
 
 
 def selected_fragment_origin(components: list[ComponentNodeItem]) -> QPointF:
+    """Return the upper-left origin used to normalize selected node positions."""
     if not components:
         return QPointF(0.0, 0.0)
 
@@ -98,6 +135,7 @@ def normalized_component_dict(
     component: ComponentNodeItem,
     origin: QPointF,
 ) -> dict[str, Any]:
+    """Serialize a selected component relative to the composite fragment origin."""
     saved = component_node_to_save_dict(component)
     position = saved.setdefault("position", {})
     position["x"] = float(position.get("x", 0.0)) - origin.x()
@@ -110,6 +148,7 @@ def external_port_name(
     port_name: str,
     used_names: set[str],
 ) -> str:
+    """Generate the public composite port name for an internal port mapping."""
     base = f"{component.instance_name}.{port_name}"
     candidate = base
     index = 2
@@ -126,6 +165,12 @@ def composite_port_mappings_for_fragment(
     components: list[ComponentNodeItem],
     internal_connections: list[ConnectionItem],
 ) -> list[CompositePortMapping]:
+    """Create composite boundary-port mappings for a selected mini-model.
+
+    The mappings describe which internal component ports should be exposed on
+    the composite boundary and preserve enough identity information to reconnect
+    the composite during editing and export flattening.
+    """
     internally_connected_ports = set()
 
     for connection in internal_connections:
@@ -167,6 +212,7 @@ def build_composite_fragment(
     internal_connections: list[ConnectionItem],
     internal_attachments: list[SubcompAttachmentItem],
 ) -> CompositeSelectionFragment:
+    """Serialize selected canvas items into a normalized composite mini-model."""
     ordered_components = sorted(components, key=lambda item: item.node_id)
     ordered_connections = sorted(internal_connections, key=lambda item: item.link.link_id)
     ordered_attachments = sorted(
@@ -216,6 +262,7 @@ def build_composite_definition_from_selection(
     internal_attachments: list[SubcompAttachmentItem],
     description: str = "",
 ) -> CompositeComponentDefinition:
+    """Create a reusable composite component definition from a canvas selection."""
     fragment = build_composite_fragment(
         components,
         internal_connections,
@@ -234,6 +281,7 @@ def build_composite_definition_from_selection(
 def component_definition_for_composite(
     definition: CompositeComponentDefinition,
 ) -> ComponentDefinition:
+    """Create the palette/canvas component definition for a composite template."""
     return ComponentDefinition(
         plugin_id=COMPOSITE_PLUGIN_ID,
         target_id=COMPOSITE_TARGET_ID,
@@ -260,6 +308,7 @@ def replace_selection_with_composite_instance(
     internal_connections: list[ConnectionItem],
     internal_attachments: list[SubcompAttachmentItem],
 ) -> ComponentNodeItem:
+    """Replace selected nodes and internal links with one composite instance."""
     origin = selected_fragment_origin(components)
 
     for connection in list(internal_connections):

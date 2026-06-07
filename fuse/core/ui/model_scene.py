@@ -11,6 +11,19 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+"""Graphics-scene model editor for FUSE diagrams.
+
+``ModelScene`` is the canvas data owner for one open model. It manages
+component nodes, port-to-port links, subcomponent attachments, selection state,
+drag rerouting, compatibility feedback, and pending connection gestures. The
+scene exposes editor-oriented operations that ``MainWindow`` and ``ModelView``
+can call without needing to manipulate individual ``QGraphicsItem`` instances
+directly.
+
+The scene stores lightweight Python model records in parallel with Qt graphics
+items. Persistence and exporters consume the model records, while the graphics
+items provide interaction and rendering.
+"""
 from __future__ import annotations
 
 from typing import Optional
@@ -37,6 +50,17 @@ from fuse.plugin_api.interfaces import LinkCompatibilityResult, LinkEndpoint
 
 
 class ModelScene(QGraphicsScene):
+    """Interactive graphics scene for a single FUSE model document.
+
+    The scene owns component-node items and connection items, coordinates
+    connection gestures, and notifies the application when the model changes.
+    It is also responsible for local canvas behaviors such as route updates,
+    selection highlights, compatibility warnings, and deletion cascades.
+
+    ``ModelScene`` should remain simulator-neutral. Framework-specific rules are
+    queried through plugin compatibility helpers and are reflected in generic UI
+    warnings/highlights rather than embedded directly in the scene.
+    """
     def __init__(self):
         super().__init__()
         self.setSceneRect(0, 0, 2000, 1500)
