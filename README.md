@@ -10,6 +10,21 @@ FUSE is being developed by **PKB Research Labs, LLC**.
 
 The goal of FUSE is to provide an extensible editor where users can drag architecture components into a model canvas, connect them using typed links, inspect and edit component parameters, validate model configuration, and support multiple simulation/modeling backends through a plugin system.
 
+
+
+## v0.9.x release-preparation focus
+
+The v0.9.x line is focused on preparing FUSE for a stable v1.0 release. The emphasis is CI hardening, packaging, documentation, release process, and public project workflow.
+
+In-app creation of new SST and gem5 component definitions is intentionally deferred to a future major release, likely v2.0.0 or later.
+
+Useful documentation:
+
+- [Installation](docs/user/installation.md)
+- [Developer setup](docs/developer/developer-setup.md)
+- [Troubleshooting](docs/user/troubleshooting.md)
+- [v1.0 release readiness](docs/maintainer/v1-release-readiness.md)
+
 ## Testing status
 
 [![Core Tests](https://github.com/PKBLabs/fuse/actions/workflows/core-tests.yml/badge.svg?branch=develop)](https://github.com/PKBLabs/fuse/actions/workflows/core-tests.yml)

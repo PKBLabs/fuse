@@ -1,0 +1,89 @@
+name: Bug report
+description: Report a reproducible problem in FUSE.
+title: "[Bug]: "
+labels: ["type: bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve FUSE. Please include enough detail for maintainers to reproduce the problem.
+  - type: input
+    id: fuse-version
+    attributes:
+      label: FUSE version
+      description: Release tag, commit SHA, or branch name.
+      placeholder: v0.9.0, develop@abc123, stable-release-prep
+    validations:
+      required: true
+  - type: dropdown
+    id: install-method
+    attributes:
+      label: Installation method
+      options:
+        - Release artifact
+        - Source checkout
+        - Editable/development install
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: Ubuntu 24.04, Windows 11, macOS 15
+    validations:
+      required: true
+  - type: input
+    id: python-version
+    attributes:
+      label: Python version
+      description: Required when running from source.
+      placeholder: Python 3.11.8
+  - type: dropdown
+    id: simulator-target
+    attributes:
+      label: Simulator target
+      options:
+        - None / core editor
+        - SST
+        - gem5
+        - Both SST and gem5
+        - Not sure
+    validations:
+      required: true
+  - type: input
+    id: simulator-version
+    attributes:
+      label: Simulator/toolchain version
+      placeholder: SST 14.x, gem5 24.x, or N/A
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open FUSE
+        2. Add ...
+        3. Click ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs, screenshots, or project file
+      description: Paste logs or attach screenshots/project files when shareable.
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context

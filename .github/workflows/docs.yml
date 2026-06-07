@@ -1,0 +1,40 @@
+name: Documentation
+
+on:
+  pull_request:
+    paths:
+      - "docs/**"
+      - "Doxyfile"
+      - ".github/workflows/docs.yml"
+  push:
+    branches: [develop, main, stable-release-prep]
+    paths:
+      - "docs/**"
+      - "Doxyfile"
+      - ".github/workflows/docs.yml"
+
+jobs:
+  markdown-links:
+    name: Check internal Markdown links
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check internal docs links
+        run: python docs/scripts/check_internal_links.py
+
+  doxygen:
+    name: Build generated API docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Doxygen and Graphviz
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y doxygen graphviz
+      - name: Build Doxygen docs
+        run: doxygen Doxyfile
+      - name: Upload generated docs
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuse-doxygen-html
+          path: docs/generated/html
