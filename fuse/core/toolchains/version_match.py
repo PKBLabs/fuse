@@ -11,6 +11,12 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+"""Version parsing and matching helpers for simulator toolchains.
+
+The helpers compare free-form tool output with target version requirements.
+They intentionally accept imperfect version strings because simulator commands
+may include prefixes, suffixes, or build labels."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -19,12 +25,14 @@ import re
 
 @dataclass(frozen=True)
 class ParsedVersion:
+    """Normalized representation of a version string."""
     parts: tuple[int, ...]
     text: str
 
 
 @dataclass(frozen=True)
 class VersionMatchResult:
+    """Result of comparing an expected version with a discovered version."""
     matched: bool
     expected: str
     detected: str
@@ -33,6 +41,7 @@ class VersionMatchResult:
 
 
 def parse_version_text(text: str) -> ParsedVersion | None:
+    """Extract comparable numeric version parts from text."""
     if not text:
         return None
 
@@ -57,6 +66,7 @@ def compare_version_prefix(
     detected_text: str,
     policy: str = "major",
 ) -> VersionMatchResult:
+    """Compare an expected version prefix with discovered version text."""
     expected = parse_version_text(expected_version)
     detected = parse_version_text(detected_text)
 

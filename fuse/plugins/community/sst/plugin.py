@@ -480,4 +480,5 @@ class SSTPlugin:
 
 
 def register_plugin():
+    """Return the plugin instance consumed by the FUSE plugin runtime."""
     return SSTPlugin()

@@ -11,6 +11,12 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+"""Toolchain discovery helpers for simulator integrations.
+
+These probes locate local SST and gem5 executables or install directories.
+Plugins use them to pre-populate toolchain settings and to help users diagnose
+missing simulator dependencies."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -19,10 +25,12 @@ import shutil
 
 
 def _is_executable_file(path: Path) -> bool:
+    """Return whether a path exists and can be executed."""
     return path.exists() and path.is_file() and os.access(path, os.X_OK)
 
 
 def _expand_candidate(path: str) -> Path:
+    """Expand environment variables and user markers in a candidate path."""
     return Path(path).expanduser().resolve()
 
 
@@ -57,6 +65,7 @@ def discover_local_executable(
 def discover_local_directory(
     extra_candidates: list[str] | None = None,
 ) -> str:
+    """Find an existing directory from explicit paths or environment variables."""
     for candidate in extra_candidates or []:
         candidate_path = _expand_candidate(candidate)
 
@@ -67,6 +76,7 @@ def discover_local_directory(
 
 
 def _sst_prefix_candidates() -> list[Path]:
+    """Return likely SST installation prefixes from environment and common paths."""
     candidates: list[Path] = []
 
     for env_name in (
@@ -98,6 +108,7 @@ def _sst_prefix_candidates() -> list[Path]:
 
 
 def _gem5_prefix_candidates() -> list[Path]:
+    """Return likely gem5 source/build prefixes from environment and common paths."""
     candidates: list[Path] = []
 
     for env_name in (
@@ -123,6 +134,7 @@ def _gem5_prefix_candidates() -> list[Path]:
 
 
 def discover_local_sst_info() -> str:
+    """Locate the local sst-info executable when available."""
     candidates: list[str] = []
 
     for prefix in _sst_prefix_candidates():
@@ -145,6 +157,7 @@ def discover_local_sst_info() -> str:
 
 
 def discover_local_sst() -> str:
+    """Locate the local sst executable when available."""
     candidates: list[str] = []
 
     for prefix in _sst_prefix_candidates():
@@ -167,12 +180,14 @@ def discover_local_sst() -> str:
 
 
 def discover_local_gem5_root() -> str:
+    """Locate a likely local gem5 checkout or install root."""
     return discover_local_directory(
         [str(path) for path in _gem5_prefix_candidates()]
     )
 
 
 def discover_local_gem5_binary() -> str:
+    """Locate a likely local gem5 executable."""
     candidates: list[str] = []
 
     for prefix in _gem5_prefix_candidates():
