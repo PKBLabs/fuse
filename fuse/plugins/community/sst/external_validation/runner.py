@@ -7,6 +7,14 @@
 # terms of the GNU General Public License as published by the Free Software
 # Foundation, either version 3 of the License, or, at your option, any later
 # version.
+"""Optional backend runner for SST external validation fixtures.
+
+This module exports generated SST JSON fixtures and, when explicitly enabled,
+checks them against a real SST command-line installation and/or the external
+``sst-ext-tests`` suite. All execution is opt-in through environment variables
+so normal unit tests remain fast and do not require SST to be installed.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -43,6 +51,7 @@ class SSTExternalValidationResult:
 
     @property
     def failed(self) -> bool:
+        """Return true when this stage failed instead of passing or skipping."""
         return not self.ok and not self.skipped
 
 
@@ -58,6 +67,7 @@ class SSTFixtureAcceptanceResult:
 
     @property
     def ok(self) -> bool:
+        """Return true when export and all enabled validation stages succeeded."""
         return (
             self.export_can_export
             and self.expected_top_level_sections_present
@@ -66,6 +76,7 @@ class SSTFixtureAcceptanceResult:
 
     @property
     def failed_results(self) -> tuple[SSTExternalValidationResult, ...]:
+        """Return only failing validation stages for this fixture."""
         return tuple(result for result in self.results if result.failed)
 
 
@@ -77,14 +88,17 @@ class SSTExternalValidationSuiteReport:
 
     @property
     def passed(self) -> tuple[SSTFixtureAcceptanceResult, ...]:
+        """Return fixtures that passed all required checks."""
         return tuple(result for result in self.results if result.ok)
 
     @property
     def failed(self) -> tuple[SSTFixtureAcceptanceResult, ...]:
+        """Return fixtures with at least one failing validation stage."""
         return tuple(result for result in self.results if result.failed_results)
 
     @property
     def skipped(self) -> tuple[SSTFixtureAcceptanceResult, ...]:
+        """Return fixtures for which all runtime validation stages were skipped."""
         return tuple(
             result
             for result in self.results
@@ -92,6 +106,7 @@ class SSTExternalValidationSuiteReport:
         )
 
     def to_mapping(self) -> dict[str, object]:
+        """Serialize the suite report to a JSON-compatible summary mapping."""
         return {
             "total": len(self.results),
             "passed": len(self.passed),
@@ -118,18 +133,22 @@ class SSTExternalValidationSuiteReport:
 
 
 def successful_stage_result(stage: str, message: str) -> SSTExternalValidationResult:
+    """Create a successful external-validation stage result."""
     return SSTExternalValidationResult(ok=True, stage=stage, message=message)
 
 
 def failed_stage_result(stage: str, message: str) -> SSTExternalValidationResult:
+    """Create a failed external-validation stage result."""
     return SSTExternalValidationResult(ok=False, stage=stage, message=message)
 
 
 def skipped_stage_result(stage: str, message: str) -> SSTExternalValidationResult:
+    """Create a skipped external-validation stage result."""
     return SSTExternalValidationResult(ok=False, skipped=True, stage=stage, message=message)
 
 
 def external_validation_enabled(environ: dict[str, str] | None = None) -> bool:
+    """Return whether optional SST external validation has been enabled."""
     values = environ if environ is not None else os.environ
     value = str(values.get(ENABLE_EXTERNAL_VALIDATION_ENV, "")).strip().lower()
 
@@ -137,6 +156,7 @@ def external_validation_enabled(environ: dict[str, str] | None = None) -> bool:
 
 
 def external_suite_root(environ: dict[str, str] | None = None) -> Path | None:
+    """Return the configured ``sst-ext-tests`` root directory, if any."""
     values = environ if environ is not None else os.environ
     value = str(values.get(SST_EXT_TESTS_ROOT_ENV, "")).strip()
 
@@ -149,6 +169,7 @@ def external_suite_root(environ: dict[str, str] | None = None) -> Path | None:
 def validate_external_suite_root(
     environ: dict[str, str] | None = None,
 ) -> SSTExternalValidationResult:
+    """Validate that the optional external suite root exists and is usable."""
     root = external_suite_root(environ)
 
     if root is None:
@@ -174,10 +195,12 @@ def validate_external_suite_root(
 
 
 def find_executable(name: str) -> str | None:
+    """Return the executable path for ``name`` from ``PATH`` when present."""
     return shutil.which(name)
 
 
 def parse_version_tuple(value: str) -> tuple[int, ...]:
+    """Extract comparable numeric version components from free-form text."""
     match = re.search(r"(\d+(?:\.\d+){0,3})", value)
     if match is None:
         return ()
@@ -185,6 +208,7 @@ def parse_version_tuple(value: str) -> tuple[int, ...]:
 
 
 def compare_versions(left: str, right: str) -> int:
+    """Compare two version strings using their numeric components."""
     left_parts = parse_version_tuple(left)
     right_parts = parse_version_tuple(right)
     width = max(len(left_parts), len(right_parts))
@@ -205,6 +229,7 @@ def run_command(
     timeout_seconds: int,
     expected_return_code: int = 0,
 ) -> SSTExternalValidationResult:
+    """Run an external command and wrap its result for validation reporting."""
     try:
         completed = subprocess.run(
             list(command),
@@ -250,6 +275,7 @@ def run_json_syntax_check(
     python_executable: str | None = None,
     timeout_seconds: int = 30,
 ) -> SSTExternalValidationResult:
+    """Validate that a generated SST JSON file is syntactically valid JSON."""
     path = Path(json_path)
 
     if not path.exists():
@@ -271,6 +297,7 @@ def run_json_syntax_check(
 def run_metadata_validation_check(
     metadata: SSTExternalValidationMetadata,
 ) -> SSTExternalValidationResult:
+    """Validate fixture metadata before runtime checks are attempted."""
     errors = metadata.validation_errors()
 
     if errors:
@@ -291,6 +318,7 @@ def run_sst_version_check(
     sst_binary: str | None = None,
     timeout_seconds: int = 30,
 ) -> SSTExternalValidationResult:
+    """Check the installed SST version against fixture metadata constraints."""
     if not metadata.min_sst_version and not metadata.max_sst_version:
         return skipped_stage_result(
             "sst_version",
@@ -383,6 +411,7 @@ def run_sst_init_check(
     timeout_seconds: int = 60,
     expected_return_code: int = 0,
 ) -> SSTExternalValidationResult:
+    """Run SST initialization validation for a generated fixture."""
     path = Path(json_path)
 
     if not path.exists():
@@ -420,6 +449,7 @@ def run_sst_runtime_check(
     expected_stdout_fragments: Sequence[str] = (),
     expected_stderr_fragments: Sequence[str] = (),
 ) -> SSTExternalValidationResult:
+    """Run a generated fixture under SST and validate expected output fragments."""
     path = Path(json_path)
 
     if not path.exists():
@@ -485,6 +515,7 @@ def run_expected_output_file_check(
     output_dir: str | Path,
     metadata: SSTExternalValidationMetadata,
 ) -> SSTExternalValidationResult:
+    """Check that runtime validation produced the files declared by metadata."""
     if not metadata.expected_output_files:
         return skipped_stage_result(
             "expected_files",
@@ -512,6 +543,7 @@ def run_sst_element_availability_check(
     sst_info_binary: str | None = None,
     timeout_seconds: int = 30,
 ) -> SSTExternalValidationResult:
+    """Check that required SST element libraries are visible to ``sst-info``."""
     if not elements:
         return successful_stage_result(
             "sst_elements",
@@ -576,6 +608,7 @@ def run_sst_component_availability_check(
     sst_info_binary: str | None = None,
     timeout_seconds: int = 30,
 ) -> SSTExternalValidationResult:
+    """Check that required SST components are visible to ``sst-info``."""
     if not metadata.required_components:
         return successful_stage_result(
             "sst_components",
@@ -923,6 +956,7 @@ def run_generated_fixture_suite(
     environ: dict[str, str] | None = None,
     sst_binary: str | None = None,
 ) -> SSTExternalValidationSuiteReport:
+    """Export fixtures and run all configured optional SST validation stages."""
     output_directory = Path(output_dir)
     results = tuple(
         run_generated_fixture_acceptance(

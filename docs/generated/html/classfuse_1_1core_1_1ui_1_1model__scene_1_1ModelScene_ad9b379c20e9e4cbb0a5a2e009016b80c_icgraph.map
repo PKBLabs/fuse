@@ -1,0 +1,18 @@
+<map id="fuse.core.ui.model_scene.ModelScene.cancel_pending_connection" name="fuse.core.ui.model_scene.ModelScene.cancel_pending_connection">
+<area shape="rect" id="Node000001" title=" " alt="" coords="527,173,723,228"/>
+<area shape="rect" id="Node000002" href="$classfuse_1_1core_1_1ui_1_1model__scene_1_1ModelScene.html#a6135bfefd770a9430f7c19766940caf1" title=" " alt="" coords="266,5,457,60"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="587,165,538,119,477,75,452,62,455,58,480,70,541,115,591,161"/>
+<area shape="rect" id="Node000003" href="$classfuse_1_1core_1_1ui_1_1model__scene_1_1ModelScene.html#aac14b1a85e85289cbf3effc3a7c4ac4f" title=" " alt="" coords="244,85,479,125"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="553,170,478,139,441,127,443,122,480,134,555,165"/>
+<area shape="rect" id="Node000004" href="$classfuse_1_1core_1_1ui_1_1model__scene_1_1ModelScene.html#a7ca6bc5b0cf8a71fd1d8737a3d7e1de7" title=" " alt="" coords="245,173,478,228"/>
+<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="513,203,478,203,478,198,513,198"/>
+<area shape="rect" id="Node000005" href="$classfuse_1_1core_1_1ui_1_1model__scene_1_1ModelScene.html#a73b27fefb6aeadfba6c07aec0be4b7e9" title=" " alt="" coords="271,252,451,307"/>
+<area shape="poly" id="edge5_Node000001_Node000005" title=" " alt="" coords="520,235,452,255,451,250,519,229"/>
+<area shape="rect" id="Node000007" href="$classfuse_1_1core_1_1ui_1_1model__scene_1_1ModelScene.html#a9c08e79fbf4644dda6647d84be0fa047" title=" " alt="" coords="255,331,468,385"/>
+<area shape="poly" id="edge7_Node000001_Node000007" title=" " alt="" coords="588,240,539,282,480,322,456,333,454,328,477,317,535,278,585,236"/>
+<area shape="poly" id="edge4_Node000004_Node000004" title=" " alt="" coords="405,162,389,155,361,152,338,154,323,159,316,165,316,173,311,173,311,163,320,154,337,149,361,147,390,150,407,158"/>
+<area shape="rect" id="Node000006" href="$classfuse_1_1core_1_1ui_1_1model__scene_1_1ModelScene.html#adad831b86717db18e0b006d01b427bd3" title=" " alt="" coords="6,252,195,307"/>
+<area shape="poly" id="edge6_Node000005_Node000006" title=" " alt="" coords="258,282,195,282,195,277,258,277"/>
+<area shape="rect" id="Node000008" href="$classfuse_1_1core_1_1ui_1_1model__scene_1_1ModelScene.html#add947700eed22dba9a449097d40839ee" title=" " alt="" coords="5,331,196,385"/>
+<area shape="poly" id="edge8_Node000007_Node000008" title=" " alt="" coords="241,361,196,361,196,355,241,355"/>
+</map>

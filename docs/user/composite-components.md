@@ -21,6 +21,11 @@ Composite components are a FUSE editing abstraction. They are not SST components
 
 ## Creating a composite from selected components
 
+<!-- FUSE-MEDIA-TODO id=composite-selection type=screenshot path=../assets/screenshots/composite-selection.png -->
+> **Media TODO (composite-selection)**: Add a screenshot showing multiple selected components before creating a composite.
+> Planned asset: `../assets/screenshots/composite-selection.png`
+
+
 1. Place, connect, and configure the components that should become the reusable group.
 2. Use **Multiselect** in the model-view toolbar, or hold **Ctrl** and click components, to select the components that should be included.
 3. FUSE highlights selected components and highlights only the links whose endpoints are both selected.
@@ -78,6 +83,11 @@ When you connect a normal component to an exposed composite port, the link is dr
 
 ## Composite entries in the component palette
 
+<!-- FUSE-MEDIA-TODO id=composite-instance type=screenshot path=../assets/screenshots/composite-instance.png -->
+> **Media TODO (composite-instance)**: Add a screenshot showing the resulting composite component instance on the main canvas.
+> Planned asset: `../assets/screenshots/composite-instance.png`
+
+
 Created or imported composites appear in the component palette under **Composite Components**. They can be dragged into the model view like normal components.
 
 A new composite instance receives a generated default name based on the template name:
@@ -91,6 +101,15 @@ CacheCluster_3
 The properties panel for a selected composite instance shows both instance-local metadata and template metadata, including the composite template name and template ID.
 
 ## Instance-local editing
+
+<!-- FUSE-MEDIA-TODO id=composite-edit-tab type=screenshot path=../assets/screenshots/composite-edit-tab.png -->
+> **Media TODO (composite-edit-tab)**: Add a screenshot showing the composite template/instance editor with the internal mini-model visible.
+> Planned asset: `../assets/screenshots/composite-edit-tab.png`
+
+<!-- FUSE-MEDIA-TODO id=video-composite-workflow type=video path=../assets/videos/composite-workflow.mp4 -->
+> **Media TODO (video-composite-workflow)**: Add a short video showing select components, create composite, place instance, open editor, and expose a port.
+> Planned asset: `../assets/videos/composite-workflow.mp4`
+
 
 Double-click a composite instance to edit its internal mini-model. FUSE opens a model-view tab for that placed instance.
 

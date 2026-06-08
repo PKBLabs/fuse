@@ -7,6 +7,13 @@
 # terms of the GNU General Public License as published by the Free Software
 # Foundation, either version 3 of the License, or, at your option, any later
 # version.
+"""Synthetic SST fixtures used by backend external validation.
+
+The fixtures in this module build small, Qt-free scene objects that exercise the
+SST JSON exporter. They provide acceptance-test coverage for the exporter
+without requiring the full FUSE desktop application to start.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -49,6 +56,7 @@ class SSTExternalValidationFixture:
 
     @property
     def output_filename(self) -> str:
+        """Return the generated SST JSON filename for this fixture."""
         name = self.metadata.name.strip() or "sst_external_fixture"
         return f"{name}.sst.json"
 
@@ -67,6 +75,7 @@ class SSTExternalValidationScene:
         self.subcomp_attachments = list(attachments or [])
 
     def component_items(self) -> list[object]:
+        """Return component-like scene nodes for exporter iteration."""
         return list(self.nodes)
 
 
@@ -80,6 +89,7 @@ def make_fixture_component(
     is_subcomp: int = 0,
     iface: str = "",
 ) -> ComponentDefinition:
+    """Create an SST component definition for a synthetic validation fixture."""
     return ComponentDefinition(
         plugin_id="sst",
         target_id=target_id,
@@ -103,6 +113,7 @@ def make_fixture_node(
     ports: tuple[str, ...],
     parameters: dict[str, Any] | None = None,
 ):
+    """Create a lightweight component-node object for a validation fixture."""
     return SimpleNamespace(
         node_id=node_id,
         instance_name=instance_name,

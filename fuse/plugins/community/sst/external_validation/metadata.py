@@ -7,6 +7,13 @@
 # terms of the GNU General Public License as published by the Free Software
 # Foundation, either version 3 of the License, or, at your option, any later
 # version.
+"""Metadata model for optional backend SST external validation fixtures.
+
+External validation fixtures are exported by FUSE and can optionally be checked
+against a real SST installation or the separate ``sst-ext-tests`` suite. This
+module keeps the fixture metadata serializable and independent of Qt objects.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -17,6 +24,7 @@ VALID_RUN_MODES = ("json", "init", "run")
 
 
 def tuple_of_strings(value: Any) -> tuple[str, ...]:
+    """Normalize a scalar or iterable value into a tuple of strings."""
     if value is None:
         return ()
     if isinstance(value, str):
@@ -49,6 +57,7 @@ class SSTExternalValidationMetadata:
 
     @classmethod
     def from_mapping(cls, data: dict[str, Any]) -> "SSTExternalValidationMetadata":
+        """Build fixture metadata from a JSON/YAML-style mapping."""
         return cls(
             name=str(data.get("name", "")).strip(),
             description=str(data.get("description", "")).strip(),
@@ -71,6 +80,7 @@ class SSTExternalValidationMetadata:
         )
 
     def to_mapping(self) -> dict[str, Any]:
+        """Serialize this metadata to a JSON-compatible mapping."""
         return {
             "name": self.name,
             "description": self.description,
@@ -89,6 +99,7 @@ class SSTExternalValidationMetadata:
         }
 
     def validation_errors(self) -> tuple[str, ...]:
+        """Return human-readable configuration errors for this fixture."""
         errors: list[str] = []
 
         if not self.name.strip():
@@ -115,4 +126,5 @@ class SSTExternalValidationMetadata:
 
     @property
     def valid(self) -> bool:
+        """Return true when the metadata is internally consistent."""
         return not self.validation_errors()

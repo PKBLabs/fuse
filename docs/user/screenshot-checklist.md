@@ -1,6 +1,8 @@
-# Screenshot checklist
+# Screenshot and Video Checklist
 
-Use this checklist when adding user-facing screenshots for the v1.0 documentation set.
+This checklist summarizes the media needed for the v1.0 documentation set.
+
+For the complete table of target files, planned asset paths, and capture notes, see the [Media Capture Plan](../operations/media-capture-plan.md).
 
 ## Required screenshots
 
@@ -10,17 +12,26 @@ Use this checklist when adding user-facing screenshots for the v1.0 documentatio
 4. Two components connected by a visible link.
 5. Properties editor for a selected component.
 6. Validation panel with at least one warning or error.
-7. Several selected components before creating a composite.
-8. Resulting composite instance on the canvas.
-9. Composite edit tab showing the internal model.
-10. Export workflow for SST JSON or gem5 Python.
-11. Project settings or framework target selection.
-12. Toolchain configuration, if available.
+7. Validation panel showing a successful validation.
+8. Several selected components before creating a composite.
+9. Resulting composite instance on the canvas.
+10. Composite edit tab showing the internal model.
+11. Export workflow for SST JSON or gem5 Python.
+12. Project settings or framework target selection.
+13. Toolchain configuration, if available.
+
+## Recommended videos
+
+1. First model workflow.
+2. Composite component workflow.
+3. Validation and export workflow.
 
 ## Capture guidance
 
 - Use a clean example project.
 - Avoid personal paths, tokens, hostnames, or private simulator paths.
 - Prefer a 16:9 screenshot size.
-- Use consistent theme and window size.
-- Store images under `docs/assets/screenshots/`.
+- Use a consistent theme and window size.
+- Store screenshots under `docs/assets/screenshots/`.
+- Store videos under `docs/assets/videos/`.
+- Search for `FUSE-MEDIA-TODO` before replacing placeholders.

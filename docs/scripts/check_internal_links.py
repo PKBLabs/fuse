@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Check internal Markdown links in docs and top-level Markdown files."""
+"""Check repository-local Markdown links used by the documentation site."""
+
 from __future__ import annotations
 
 import re
@@ -7,62 +8,110 @@ import sys
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
-ROOT = Path(__file__).resolve().parents[2]
-DOCS = ROOT / "docs"
-LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
-SKIP_PREFIXES = ("http://", "https://", "mailto:", "#")
+DOCS_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = DOCS_ROOT.parent
+
+LINK_RE = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
+IMAGE_RE = re.compile(r"!\[[^\]]*\]\(([^)]+)\)")
+HTML_LINK_RE = re.compile(r"""href=["']([^"']+)["']""")
+
+SKIP_SCHEMES = {"http", "https", "mailto", "tel"}
 
 
-def iter_markdown_files() -> list[Path]:
-    files = list(DOCS.rglob("*.md"))
-    for name in ("README.md", "CONTRIBUTING.md", "CLA.md"):
-        path = ROOT / name
-        if path.exists():
-            files.append(path)
-    return sorted(files)
+def _strip_title(target: str) -> str:
+    """Remove optional Markdown link title text from a target."""
+    target = target.strip()
+    if " " not in target:
+        return target
+    if target.startswith("<") and ">" in target:
+        return target[1:target.index(">")]
+    return target.split()[0]
 
 
-def strip_anchor(target: str) -> str:
-    return target.split("#", 1)[0]
+def _iter_links(text: str) -> list[str]:
+    """Return Markdown and simple HTML links from a Markdown document."""
+    links = []
+    links.extend(match.group(1) for match in LINK_RE.finditer(text))
+    links.extend(match.group(1) for match in IMAGE_RE.finditer(text))
+    links.extend(match.group(1) for match in HTML_LINK_RE.finditer(text))
+    return links
+
+
+def _anchor_exists(path: Path, anchor: str) -> bool:
+    """Best-effort check that a Markdown heading anchor exists."""
+    if not anchor:
+        return True
+    if path.suffix.lower() not in {".md", ".markdown"}:
+        return True
+    text = path.read_text(encoding="utf-8", errors="ignore")
+    requested = anchor.lower()
+    requested = requested.replace("%20", "-")
+    headings = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("#"):
+            continue
+        title = stripped.lstrip("#").strip()
+        slug = re.sub(r"[^\w\s-]", "", title.lower())
+        slug = re.sub(r"\s+", "-", slug).strip("-")
+        headings.append(slug)
+    return requested in headings
 
 
 def main() -> int:
-    errors: list[str] = []
-    files = iter_markdown_files()
+    """Run the documentation link check."""
+    failures: list[str] = []
+    markdown_files = sorted(DOCS_ROOT.rglob("*.md"))
 
-    for path in files:
-        text = path.read_text(encoding="utf-8", errors="replace")
-        for match in LINK_RE.finditer(text):
-            raw = match.group(1).strip()
-            if not raw or raw.startswith(SKIP_PREFIXES):
-                continue
-            parsed = urlparse(raw)
-            if parsed.scheme:
-                continue
-
-            target = strip_anchor(unquote(parsed.path))
-            if not target:
+    for md_file in markdown_files:
+        if "generated" in md_file.parts:
+            continue
+        text = md_file.read_text(encoding="utf-8", errors="ignore")
+        for raw_target in _iter_links(text):
+            target = _strip_title(raw_target)
+            if not target or target.startswith("#"):
                 continue
 
-            candidate = (path.parent / target).resolve()
+            parsed = urlparse(target)
+            if parsed.scheme in SKIP_SCHEMES:
+                continue
+            if parsed.scheme and parsed.scheme not in {"file"}:
+                continue
+
+            target_path = unquote(parsed.path)
+            if not target_path:
+                continue
+
+            # MkDocs/Doxygen generated HTML is produced during docs builds. If it
+            # already exists locally this still passes the normal file check.
+            candidate = (md_file.parent / target_path).resolve()
             try:
-                candidate.relative_to(ROOT)
+                candidate.relative_to(REPO_ROOT)
             except ValueError:
-                errors.append(f"{path.relative_to(ROOT)}: link escapes repo: {raw}")
+                failures.append(f"{md_file.relative_to(REPO_ROOT)} -> {target} points outside repository")
                 continue
 
             if not candidate.exists():
-                errors.append(f"{path.relative_to(ROOT)}: missing link target: {raw}")
+                # Doxygen HTML is generated during documentation builds and is
+                # intentionally not required in a clean checkout.
+                rel_candidate = candidate.relative_to(REPO_ROOT)
+                if rel_candidate.parts[:3] == ("docs", "generated", "html"):
+                    continue
+                failures.append(f"{md_file.relative_to(REPO_ROOT)} -> {target} not found")
+                continue
 
-    if errors:
-        print("Internal Markdown link check failed:")
-        for error in errors:
-            print(f"  - {error}")
+            if not _anchor_exists(candidate, parsed.fragment):
+                failures.append(f"{md_file.relative_to(REPO_ROOT)} -> {target} anchor not found")
+
+    if failures:
+        print("Broken documentation links:")
+        for failure in failures:
+            print(f"  - {failure}")
         return 1
 
-    print(f"Checked {len(files)} Markdown files.")
+    print(f"Checked {len(markdown_files)} Markdown files.")
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

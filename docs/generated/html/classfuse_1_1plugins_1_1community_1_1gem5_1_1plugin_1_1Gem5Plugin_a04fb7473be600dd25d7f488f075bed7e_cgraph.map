@@ -1,0 +1,9 @@
+<map id="fuse.plugins.community.gem5.plugin.Gem5Plugin.validate_toolchain" name="fuse.plugins.community.gem5.plugin.Gem5Plugin.validate_toolchain">
+<area shape="rect" id="Node000001" title=" " alt="" coords="5,37,272,77"/>
+<area shape="rect" id="Node000002" href="$namespacefuse_1_1plugins_1_1community_1_1gem5_1_1plugin.html#a3c69beb1c99d2b8bc425ed884891c6e3" title=" " alt="" coords="320,37,639,77"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="272,55,306,55,306,60,272,60"/>
+<area shape="rect" id="Node000003" href="$namespacefuse_1_1plugins_1_1community_1_1gem5_1_1plugin.html#aae62a69dc20f92bddf286bc5d6b5d99c" title=" " alt="" coords="705,5,971,45"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="639,40,691,36,691,41,639,46"/>
+<area shape="rect" id="Node000004" href="$namespacefuse_1_1plugins_1_1community_1_1gem5_1_1plugin.html#ae92645113d49e2756c9fe77c4ecd9f0f" title=" " alt="" coords="687,69,989,109"/>
+<area shape="poly" id="edge3_Node000002_Node000004" title=" " alt="" coords="639,69,673,72,673,77,639,74"/>
+</map>

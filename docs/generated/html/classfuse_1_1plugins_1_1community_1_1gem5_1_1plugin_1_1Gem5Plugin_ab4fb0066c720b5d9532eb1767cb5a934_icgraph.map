@@ -1,0 +1,10 @@
+<map id="fuse.plugins.community.gem5.plugin.Gem5Plugin._node_category" name="fuse.plugins.community.gem5.plugin.Gem5Plugin._node_category">
+<area shape="rect" id="Node000001" title=" " alt="" coords="949,35,1216,75"/>
+<area shape="rect" id="Node000002" href="$classfuse_1_1plugins_1_1community_1_1gem5_1_1plugin_1_1Gem5Plugin.html#ae72ce36d07e8cfce3e54c133a8612f0c" title=" " alt="" coords="635,5,901,45"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="935,44,901,40,902,35,936,38"/>
+<area shape="rect" id="Node000003" href="$classfuse_1_1plugins_1_1community_1_1gem5_1_1plugin_1_1Gem5Plugin.html#a4aafac03c3e06012c23941c1624dd07d" title=" " alt="" coords="320,35,587,75"/>
+<area shape="poly" id="edge4_Node000001_Node000003" title=" " alt="" coords="936,60,901,60,635,60,587,60,587,54,635,55,901,55,936,54"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="621,42,587,45,586,40,621,36"/>
+<area shape="rect" id="Node000004" href="$classfuse_1_1plugins_1_1community_1_1gem5_1_1plugin_1_1Gem5Plugin.html#ae208ac81282e0172c4ba95fa506ffcdc" title=" " alt="" coords="5,35,272,75"/>
+<area shape="poly" id="edge3_Node000003_Node000004" title=" " alt="" coords="306,57,272,57,272,52,306,52"/>
+</map>

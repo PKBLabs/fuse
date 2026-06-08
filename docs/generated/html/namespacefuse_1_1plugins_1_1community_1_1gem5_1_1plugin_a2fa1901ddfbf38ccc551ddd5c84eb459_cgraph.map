@@ -1,0 +1,8 @@
+<map id="fuse.plugins.community.gem5.plugin.gem5_component_role" name="fuse.plugins.community.gem5.plugin.gem5_component_role">
+<area shape="rect" id="Node000001" title=" " alt="" coords="5,5,308,45"/>
+<area shape="rect" id="Node000002" href="$namespacefuse_1_1plugins_1_1community_1_1gem5_1_1plugin.html#aec705822fedd2e5ecd4a5a52eaa730ea" title=" " alt="" coords="707,5,973,45"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="308,19,356,19,659,19,693,19,693,24,659,24,356,24,308,25"/>
+<area shape="rect" id="Node000003" href="$namespacefuse_1_1plugins_1_1community_1_1gem5_1_1plugin.html#ae01da31743a16f0accef41846d52d1bc" title=" " alt="" coords="356,33,659,73"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="308,35,343,38,342,43,308,40"/>
+<area shape="poly" id="edge3_Node000003_Node000002" title=" " alt="" coords="658,38,692,35,693,40,659,43"/>
+</map>

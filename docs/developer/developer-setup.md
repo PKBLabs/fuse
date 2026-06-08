@@ -1,39 +1,38 @@
-# Developer setup
+# Developer Setup
 
-This page describes a source checkout suitable for development and testing.
+This page describes the basic source-based setup for contributors.
 
 ## Prerequisites
 
-- Git
-- Python 3.10 or newer
-- A working compiler toolchain for packages that build native extensions
-- PySide6-compatible Qt platform libraries
-- Optional: Doxygen and Graphviz for generated API documentation
-- Optional: SST and/or gem5 for live integration testing
+Install:
 
-## Setup
+- Python 3.12 or newer.
+- Git.
+- Qt runtime libraries required by PySide6 on your platform.
+- Doxygen and Graphviz when building generated API documentation.
+- MkDocs dependencies when building the documentation website.
+
+## Create a virtual environment
+
+From the repository root:
 
 ```bash
-git clone https://github.com/PKBLabs/fuse.git
-cd fuse
 python -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
-python -m pip install -e ".[dev]"
+python -m pip install -r fuse/requirements-dev.txt
 ```
 
-Windows PowerShell:
+On Windows PowerShell:
 
 ```powershell
-git clone https://github.com/PKBLabs/fuse.git
-cd fuse
 py -m venv .venv
 .venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-python -m pip install -e ".[dev]"
+python -m pip install -r fuse\requirements-dev.txt
 ```
 
-## Run the application
+## Run the app
 
 ```bash
 python -m fuse.app.main
@@ -42,23 +41,23 @@ python -m fuse.app.main
 ## Run tests
 
 ```bash
-python -m pytest -q -m "not sst_live and not gem5_live"
+python -m pytest -q
 ```
 
-Live simulator tests require the corresponding simulator/toolchain to be installed and configured.
+Some tests require simulator-specific toolchains or containers. See the [testing guide](../testing/testing-guide.md) for details.
 
-## Build documentation checks locally
+## Build documentation
 
 ```bash
-python docs/scripts/check_internal_links.py
+python -m pip install -r docs/requirements.txt
 doxygen Doxyfile
+mkdocs build
 ```
 
-## Packaging smoke test
+The generated Doxygen HTML is expected at:
 
-```bash
-python -m pip install pyinstaller
-pyinstaller --clean --noconfirm packaging/pyinstaller/fuse.spec
+```text
+docs/generated/html/index.html
 ```
 
-The packaged app appears under `dist/FUSE/`.
+The MkDocs site is the user-facing documentation website and links to the Doxygen output as generated API reference.

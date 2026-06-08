@@ -35,6 +35,11 @@ A FUSE project stores project-specific settings and the user's model. Project se
 
 ## 3. Configure Project Settings
 
+<!-- FUSE-MEDIA-TODO id=workflow-project-settings type=screenshot path=../assets/screenshots/project-settings-target-selection.png -->
+> **Media TODO (workflow-project-settings)**: Add a screenshot focused on plugin enablement and target/catalog selection.
+> Planned asset: `../assets/screenshots/project-settings-target-selection.png`
+
+
 Open:
 
 ```text
@@ -136,6 +141,11 @@ For SST, metadata is imported from `sst-info` into the local database. If the pa
 For gem5, the community plugin can import live SimObject metadata from the configured local gem5 binary. When live metadata has not been imported yet, FUSE falls back to the built-in gem5 catalog for supported objects.
 
 ## 5. Add components to the model
+
+<!-- FUSE-MEDIA-TODO id=workflow-component-on-canvas type=screenshot path=../assets/screenshots/component-on-canvas.png -->
+> **Media TODO (workflow-component-on-canvas)**: Add a screenshot showing one framework component placed on the canvas.
+> Planned asset: `../assets/screenshots/component-on-canvas.png`
+
 
 Drag a component from the palette and drop it on the canvas.
 
@@ -300,6 +310,11 @@ If an entered value is invalid, FUSE warns the user and restores the previous va
 
 ## 11. Connect ports
 
+<!-- FUSE-MEDIA-TODO id=workflow-connected-components type=screenshot path=../assets/screenshots/connected-components.png -->
+> **Media TODO (workflow-connected-components)**: Add a screenshot showing two or more compatible components connected by visible links.
+> Planned asset: `../assets/screenshots/connected-components.png`
+
+
 FUSE currently supports point-to-point links.
 
 To create a link:
@@ -416,6 +431,15 @@ A project file stores the model and project settings, including:
 Project files do **not** store entire plugin catalogs. Catalogs are regenerated from plugin metadata, imported toolchain data, or built-in plugin records.
 
 ## 16. Export simulator-specific output
+
+<!-- FUSE-MEDIA-TODO id=workflow-export-dialog type=screenshot path=../assets/screenshots/export-dialog.png -->
+> **Media TODO (workflow-export-dialog)**: Add a screenshot of the export menu/dialog or export destination prompt.
+> Planned asset: `../assets/screenshots/export-dialog.png`
+
+<!-- FUSE-MEDIA-TODO id=video-validation-export type=video path=../assets/videos/validation-and-export.mp4 -->
+> **Media TODO (video-validation-export)**: Add a short video showing validation followed by SST JSON or gem5 Python export.
+> Planned asset: `../assets/videos/validation-and-export.mp4`
+
 
 When a plugin supports export, use the appropriate export action from the application menu.
 

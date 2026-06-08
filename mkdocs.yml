@@ -1,0 +1,117 @@
+site_name: FUSE Community Edition Documentation
+site_description: User, developer, maintainer, and generated API documentation for FUSE.
+site_url: https://pkblabs.github.io/fuse/
+repo_url: https://github.com/PKBLabs/fuse
+repo_name: PKBLabs/fuse
+edit_uri: edit/main/docs/
+
+docs_dir: docs
+site_dir: site
+
+theme:
+  name: material
+  logo: assets/diagrams/fuse-logo-placeholder.svg
+  favicon: assets/diagrams/fuse-logo-placeholder.svg
+  features:
+    - navigation.instant
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - navigation.footer
+    - toc.follow
+    - search.highlight
+    - search.suggest
+    - content.code.copy
+
+plugins:
+  - search
+  - mermaid2
+  - git-revision-date-localized:
+      enable_creation_date: true
+      fallback_to_build_date: true
+  - redirects:
+      redirect_maps:
+        INDEX.md: index.md
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+  - tables
+  - pymdownx.details
+  - pymdownx.superfences
+
+watch:
+  - fuse
+
+exclude_docs: |
+  generated/xml/**
+  generated/latex/**
+
+nav:
+  - Home: index.md
+  - User Guide:
+      - Installation: user/installation.md
+      - Quickstart: user/quickstart.md
+      - User Guide: user/user-guide.md
+      - Model Editor Workflow: user/model-editor-workflow.md
+      - Composite Components: user/composite-components.md
+      - Properties and Validation: user/properties-and-validation.md
+      - Project Files: user/project-files.md
+      - Troubleshooting: user/troubleshooting.md
+      - Screenshot Checklist: user/screenshot-checklist.md
+  - Examples:
+      - Simple Model: examples/simple-model.md
+      - Validation Walkthrough: examples/validation-walkthrough.md
+      - Import SST Metadata: examples/import-sst-metadata.md
+      - Write a Plugin: examples/write-a-plugin.md
+      - Component Definitions: examples/component-definitions.md
+  - Plugins:
+      - Plugin System: plugins/plugin-system.md
+      - Plugin Development Guide: plugins/plugin-development-guide.md
+      - SST Plugin: plugins/sst/sst-plugin.md
+      - SST Import Workflow: plugins/sst/sst-import-workflow.md
+      - SST JSON Export: plugins/sst/sst-json-export-guide.md
+      - SST Database Schema: plugins/sst/sst-database-schema.md
+      - SST External Validation: plugins/sst/sst-external-validation.md
+      - gem5 Plugin: plugins/gem5/gem5-plugin.md
+  - Architecture:
+      - Overview: architecture/architecture-overview.md
+      - Application Startup: architecture/application-startup.md
+      - Data Model: architecture/data-model.md
+      - Persistence and Database: architecture/persistence-and-database.md
+      - Routing and Canvas: architecture/routing-and-canvas.md
+  - Developer:
+      - Developer Setup: developer/developer-setup.md
+      - Development Guide: developer/development-guide.md
+      - Codebase Tour: developer/codebase-tour.md
+      - Resources and Icons: developer/resources-and-icons.md
+      - Generated API Docs: developer/generated-docs.md
+      - Maintenance Checklist: developer/maintenance-checklist.md
+      - Release Process: developer/release-process.md
+  - Reference:
+      - Generated API Reference: reference/generated-api.md
+      - Plugin API: reference/plugin-api.md
+      - Plugin Manifest: reference/plugin-manifest.md
+      - FSE Format: reference/fse-format.md
+      - Component Metadata: reference/component-metadata.md
+      - Database Tables: reference/database-tables.md
+      - Commands: reference/commands.md
+      - Environment Variables: reference/environment-variables.md
+      - Glossary: reference/glossary.md
+  - Operations:
+      - GitHub Actions: ci/github-actions.md
+      - SST CI Container: ci/sst-ci-container.md
+      - gem5 CI Container: ci/gem5-ci-container.md
+      - Common Maintenance Tasks: operations/common-maintenance-tasks.md
+      - Known Limitations: operations/known-limitations.md
+      - Licensing and Policy: operations/licensing-and-policy.md
+      - Media Capture Plan: operations/media-capture-plan.md
+  - Testing:
+      - Testing Guide: testing/testing-guide.md
+      - Test Matrix: testing/test-matrix.md
+  - Releases:
+      - v0.7.0: releases/v0.7.0.md
+      - v0.6.0: releases/v0.6.0.md

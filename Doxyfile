@@ -14,6 +14,5 @@ WARN_IF_UNDOCUMENTED   = NO
 HAVE_DOT               = YES
 CALL_GRAPH             = YES
 CALLER_GRAPH           = YES
-CLASS_DIAGRAMS         = YES
 COLLABORATION_GRAPH    = YES
 DOT_IMAGE_FORMAT       = svg

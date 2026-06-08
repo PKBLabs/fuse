@@ -1,0 +1,15 @@
+<map id="fuse.core.ui.model_view.ModelView.enable_composite_port_exposure_mode" name="fuse.core.ui.model_view.ModelView.enable_composite_port_exposure_mode">
+<area shape="rect" id="Node000001" title=" " alt="" coords="5,91,247,145"/>
+<area shape="rect" id="Node000002" href="$classfuse_1_1core_1_1ui_1_1model__view_1_1ModelView.html#a08307d6956d2e2378039f5afbde6d31e" title=" " alt="" coords="301,57,483,112"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="246,100,287,95,287,100,247,106"/>
+<area shape="rect" id="Node000003" href="$classfuse_1_1core_1_1ui_1_1model__view_1_1ModelView.html#a86a4598bb637aa71d09b77bed3b9f86f" title=" " alt="" coords="555,5,730,60"/>
+<area shape="poly" id="edge5_Node000001_Node000003" title=" " alt="" coords="175,88,231,62,294,42,357,31,422,25,541,24,541,29,423,30,358,36,295,47,233,67,178,93"/>
+<area shape="rect" id="Node000005" href="$classfuse_1_1core_1_1ui_1_1model__view_1_1ModelView.html#a5d2ff51b42d08c5fa9021f1d702cbd0b" title=" " alt="" coords="537,97,748,152"/>
+<area shape="poly" id="edge7_Node000001_Node000005" title=" " alt="" coords="247,121,295,122,523,123,523,128,295,127,247,126"/>
+<area shape="rect" id="Node000006" href="$classfuse_1_1core_1_1ui_1_1model__view_1_1ModelView.html#a186c0e0359350e11bdc009c610345e03" title=" " alt="" coords="295,188,489,243"/>
+<area shape="poly" id="edge6_Node000001_Node000006" title=" " alt="" coords="202,143,305,181,303,186,200,148"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="483,63,542,51,543,56,484,68"/>
+<area shape="poly" id="edge4_Node000002_Node000005" title=" " alt="" coords="484,97,524,103,523,108,483,102"/>
+<area shape="rect" id="Node000004" href="$classfuse_1_1core_1_1ui_1_1model__view_1_1ModelView.html#ac3665b4feeedab798cc4b073765ba4be" title=" " alt="" coords="796,13,1012,53"/>
+<area shape="poly" id="edge3_Node000003_Node000004" title=" " alt="" coords="730,30,782,30,782,35,730,35"/>
+</map>

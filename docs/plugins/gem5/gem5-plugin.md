@@ -10,6 +10,11 @@ fuse/plugins/community/gem5/
 
 ## Current status
 
+<!-- FUSE-MEDIA-TODO id=gem5-export-dialog type=screenshot path=../../assets/screenshots/gem5-python-export-dialog.png -->
+> **Media TODO (gem5-export-dialog)**: Add a screenshot of the gem5 Python export action, destination chooser, or export result panel.
+> Planned asset: `../../assets/screenshots/gem5-python-export-dialog.png`
+
+
 The current gem5 plugin is no longer only a placeholder. It provides:
 
 - Plugin discovery through `plugin.toml`.

@@ -81,6 +81,7 @@ def validation_issue(
     attachment_id: int | None = None,
     parameter_name: str | None = None,
 ):
+    """Create a core validation issue from SST exporter context."""
     from fuse.core.model.validation import ValidationIssue
 
     return ValidationIssue(

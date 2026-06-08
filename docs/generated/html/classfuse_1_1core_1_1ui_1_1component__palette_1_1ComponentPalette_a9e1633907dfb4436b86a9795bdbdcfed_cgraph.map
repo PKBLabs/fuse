@@ -1,0 +1,12 @@
+<map id="fuse.core.ui.component_palette.ComponentPalette.refresh_quick_sections" name="fuse.core.ui.component_palette.ComponentPalette.refresh_quick_sections">
+<area shape="rect" id="Node000001" title=" " alt="" coords="5,34,255,89"/>
+<area shape="rect" id="Node000002" href="$classfuse_1_1core_1_1ui_1_1component__palette_1_1ComponentPalette.html#a9971d7d15e02b1a8edd62d6b49a759da" title=" " alt="" coords="303,5,569,45"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="254,44,289,40,289,45,255,49"/>
+<area shape="rect" id="Node000003" href="$classfuse_1_1core_1_1ui_1_1component__palette_1_1ComponentPalette.html#a8c29d19266ab56ef1d1fc3c3e234325f" title=" " alt="" coords="307,70,565,125"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="255,73,293,78,293,83,254,79"/>
+<area shape="rect" id="Node000004" href="$classfuse_1_1core_1_1ui_1_1component__palette_1_1ComponentPalette.html#afefe29454bbac0fdf40d9745ea8be2cc" title=" " alt="" coords="617,37,893,91"/>
+<area shape="poly" id="edge3_Node000003_Node000004" title=" " alt="" coords="565,81,604,77,604,82,566,86"/>
+<area shape="rect" id="Node000005" href="$classfuse_1_1core_1_1ui_1_1component__palette_1_1ComponentPalette.html#aca894a499664b5a824e7785211f7873d" title=" " alt="" coords="941,77,1248,117"/>
+<area shape="poly" id="edge5_Node000003_Node000005" title=" " alt="" coords="566,99,617,100,893,100,927,99,927,105,893,105,617,105,566,104"/>
+<area shape="poly" id="edge4_Node000004_Node000005" title=" " alt="" coords="894,75,928,78,927,84,893,80"/>
+</map>

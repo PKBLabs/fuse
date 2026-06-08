@@ -4,6 +4,11 @@ FUSE provides an IDE-style model-building workspace for architecture and systems
 
 ## Main window
 
+<!-- FUSE-MEDIA-TODO id=user-main-window type=screenshot path=../assets/screenshots/main-window-annotated.png -->
+> **Media TODO (user-main-window)**: Add an annotated screenshot of the main window showing menu bar, palette, canvas, properties panel, and status/validation areas.
+> Planned asset: `../assets/screenshots/main-window-annotated.png`
+
+
 The main window contains:
 
 - A menu bar.
@@ -13,6 +18,11 @@ The main window contains:
 - A status bar.
 
 ## Projects and Project Settings
+
+<!-- FUSE-MEDIA-TODO id=user-project-settings type=screenshot path=../assets/screenshots/project-settings.png -->
+> **Media TODO (user-project-settings)**: Add a screenshot of Project Settings with plugin/framework target controls visible.
+> Planned asset: `../assets/screenshots/project-settings.png`
+
 
 FUSE projects are configured through:
 
@@ -36,6 +46,11 @@ Project Settings define:
 Project-specific settings are saved in the `.fse` file. This lets one project target SST 15.1.2 while another targets SST 16.0.0 or gem5 25.1.0.1.
 
 ## Component palette
+
+<!-- FUSE-MEDIA-TODO id=user-component-palette type=screenshot path=../assets/screenshots/component-palette-sst.png -->
+> **Media TODO (user-component-palette)**: Add a screenshot of the component palette populated with SST or gem5 items.
+> Planned asset: `../assets/screenshots/component-palette-sst.png`
+
 
 The component palette lists components provided by the active plugin and selected target/catalog. It also lists locally stored composite components under **Composite Components** when reusable mini-model templates are available.
 

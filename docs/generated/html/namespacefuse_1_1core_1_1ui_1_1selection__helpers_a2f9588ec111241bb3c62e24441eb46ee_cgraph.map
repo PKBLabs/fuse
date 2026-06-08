@@ -1,0 +1,9 @@
+<map id="fuse.core.ui.selection_helpers.is_internal_selected_connection" name="fuse.core.ui.selection_helpers.is_internal_selected_connection">
+<area shape="rect" id="Node000001" title=" " alt="" coords="5,41,216,96"/>
+<area shape="rect" id="Node000002" href="$namespacefuse_1_1core_1_1ui_1_1selection__helpers.html#ab61bc2f51d6009c3a9f0dba3f5d5958d" title=" " alt="" coords="264,41,457,96"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="216,66,250,66,250,71,216,71"/>
+<area shape="rect" id="Node000003" href="$namespacefuse_1_1core_1_1ui_1_1selection__helpers.html#af6c698216b4da914f54d480a9ca990d1" title=" " alt="" coords="531,5,740,60"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="457,53,516,46,517,51,458,59"/>
+<area shape="rect" id="Node000004" href="$namespacefuse_1_1core_1_1ui_1_1selection__helpers.html#af00d175b5c8614321c591a49d294d756" title=" " alt="" coords="505,85,765,125"/>
+<area shape="poly" id="edge3_Node000002_Node000004" title=" " alt="" coords="458,79,492,83,491,88,457,84"/>
+</map>

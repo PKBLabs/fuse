@@ -1,0 +1,8 @@
+<map id="fuse.core.ui.graphics_items.ConnectionItem.contains" name="fuse.core.ui.graphics_items.ConnectionItem.contains">
+<area shape="rect" id="Node000001" title=" " alt="" coords="5,37,237,77"/>
+<area shape="poly" id="edge1_Node000001_Node000001" title=" " alt="" coords="71,38,68,28,76,18,94,13,121,11,153,13,170,21,168,26,152,19,121,16,95,18,79,23,73,29,76,36"/>
+<area shape="rect" id="Node000002" href="$classfuse_1_1core_1_1ui_1_1graphics__items_1_1PortItem.html#a4a81ee5cad8075f9e89c393fa8084d5d" title=" " alt="" coords="309,5,478,45"/>
+<area shape="poly" id="edge2_Node000001_Node000002" title=" " alt="" coords="237,41,295,34,295,40,238,46"/>
+<area shape="rect" id="Node000003" href="$classfuse_1_1core_1_1ui_1_1graphics__items_1_1ConnectionItem.html#a3b82f688e3e8a9dbf934848dce13049e" title=" " alt="" coords="285,69,501,109"/>
+<area shape="poly" id="edge3_Node000001_Node000003" title=" " alt="" coords="238,68,272,72,272,78,237,74"/>
+</map>

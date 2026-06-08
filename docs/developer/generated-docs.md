@@ -1,8 +1,29 @@
-# Generated API documentation
+# Generated Documentation
 
-FUSE uses Doxygen and Graphviz to produce generated API documentation and diagrams.
+FUSE uses two documentation systems with different purposes.
 
-## Build locally
+## MkDocs
+
+MkDocs is the primary user-facing and developer-facing documentation site. It contains installation guides, tutorials, screenshots, workflow documentation, architecture notes, maintainer processes, and release documentation.
+
+Build it locally with:
+
+```bash
+python -m pip install -r docs/requirements.txt
+mkdocs build
+```
+
+Run a local preview server with:
+
+```bash
+mkdocs serve
+```
+
+## Doxygen
+
+Doxygen generates API/class/function reference documentation from Python docstrings and source structure.
+
+Build it locally with:
 
 ```bash
 doxygen Doxyfile
@@ -14,18 +35,18 @@ Generated HTML output is written to:
 docs/generated/html/
 ```
 
-## CI
+The MkDocs site links to the generated Doxygen index at:
 
-The documentation workflow builds Doxygen output and uploads the generated HTML as a workflow artifact.
+[Generated API Reference](../generated/html/index.html)
 
-## Scope
+## Recommended release build order
 
-The Doxygen configuration covers:
+For CI and release builds, use this order:
 
-- `fuse/app`
-- `fuse/core`
-- `fuse/plugin_api`
-- `fuse/plugins/community/sst`
-- `fuse/plugins/community/gem5`
+```bash
+python docs/scripts/check_internal_links.py
+doxygen Doxyfile
+mkdocs build --strict
+```
 
-The intent is to document architecture and important interfaces, not every private helper before v1.0.
+This ensures that generated API files exist before MkDocs validates links to them.

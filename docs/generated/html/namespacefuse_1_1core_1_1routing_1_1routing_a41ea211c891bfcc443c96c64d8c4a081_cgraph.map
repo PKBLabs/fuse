@@ -1,0 +1,7 @@
+<map id="fuse.core.routing.routing.segment_intersects_rect" name="fuse.core.routing.routing.segment_intersects_rect">
+<area shape="rect" id="Node000001" title=" " alt="" coords="5,23,248,63"/>
+<area shape="rect" id="Node000002" href="$namespacefuse_1_1core_1_1routing_1_1routing.html#a5380b2985f8056d924690b96af9629c5" title=" " alt="" coords="296,5,533,31"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="248,30,282,27,283,32,248,35"/>
+<area shape="rect" id="Node000003" href="$namespacefuse_1_1core_1_1routing_1_1routing.html#a2a1b1906c0629a0eaf3ae4ef312ab4cc" title=" " alt="" coords="296,55,533,80"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="248,51,282,54,282,59,248,56"/>
+</map>
