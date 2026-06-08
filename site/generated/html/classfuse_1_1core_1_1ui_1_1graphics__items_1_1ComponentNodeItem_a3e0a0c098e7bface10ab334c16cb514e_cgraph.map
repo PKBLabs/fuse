@@ -1,0 +1,8 @@
+<map id="fuse.core.ui.graphics_items.ComponentNodeItem.set_icon_path" name="fuse.core.ui.graphics_items.ComponentNodeItem.set_icon_path">
+<area shape="rect" id="Node000001" title=" " alt="" coords="5,27,239,82"/>
+<area shape="rect" id="Node000002" href="$classfuse_1_1core_1_1ui_1_1graphics__items_1_1ComponentNodeItem.html#ab37dbf447560ed133ce81547d5ba441f" title=" " alt="" coords="287,5,557,45"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="238,41,273,37,273,43,239,46"/>
+<area shape="rect" id="Node000003" href="$classcomposite__component__dialog_1_1CompositeComponentDialog.html#a919ad7fcb8e28a52372805d0ca9f0c68" title=" " alt="" coords="605,27,824,82"/>
+<area shape="poly" id="edge3_Node000001_Node000003" title=" " alt="" coords="239,54,287,55,557,55,591,54,592,60,557,60,287,60,239,59"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="558,36,592,40,591,45,557,42"/>
+</map>

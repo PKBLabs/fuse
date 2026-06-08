@@ -1,0 +1,7 @@
+<map id="fuse.core.routing.routing.simplify_points" name="fuse.core.routing.routing.simplify_points">
+<area shape="rect" id="Node000001" title=" " alt="" coords="5,23,244,63"/>
+<area shape="rect" id="Node000002" href="$namespacefuse_1_1core_1_1routing_1_1routing.html#a5380b2985f8056d924690b96af9629c5" title=" " alt="" coords="292,5,529,31"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="244,30,278,27,279,32,244,35"/>
+<area shape="rect" id="Node000003" href="$namespacefuse_1_1core_1_1routing_1_1routing.html#a2a1b1906c0629a0eaf3ae4ef312ab4cc" title=" " alt="" coords="292,55,529,80"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="244,51,279,54,278,59,244,56"/>
+</map>

@@ -1,0 +1,11 @@
+<map id="fuse.plugins.community.sst.sst_analysis.compare_latest_two_sstinfo_runs" name="fuse.plugins.community.sst.sst_analysis.compare_latest_two_sstinfo_runs">
+<area shape="rect" id="Node000001" title=" " alt="" coords="5,30,228,85"/>
+<area shape="rect" id="Node000002" href="$namespacefuse_1_1plugins_1_1community_1_1sst_1_1sst__analysis.html#a1082f9111488da8e3cd53aa6cc9a095b" title=" " alt="" coords="283,5,528,45"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="228,42,269,38,269,43,228,48"/>
+<area shape="rect" id="Node000004" href="$namespacefuse_1_1plugins_1_1community_1_1sst_1_1sst__analysis.html#a73cbabd0b94615a689bbfa0175215e68" title=" " alt="" coords="276,69,535,109"/>
+<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="228,67,263,71,262,76,228,72"/>
+<area shape="rect" id="Node000003" href="$namespacefuse_1_1plugins_1_1community_1_1sst_1_1sst__analysis.html#a7cd2a1d54c6627a10fb7c8491fda78ae" title=" " alt="" coords="585,5,808,45"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="528,23,571,23,571,28,528,28"/>
+<area shape="rect" id="Node000005" href="$namespacefuse_1_1plugins_1_1community_1_1sst_1_1sst__analysis.html#a56aefb9686c2dedd75f1eced0e66de13" title=" " alt="" coords="583,69,811,109"/>
+<area shape="poly" id="edge4_Node000004_Node000005" title=" " alt="" coords="535,87,569,87,569,92,535,92"/>
+</map>

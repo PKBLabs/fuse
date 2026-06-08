@@ -1,0 +1,13 @@
+<map id="fuse.core.ui.graphics_items.ComponentNodeItem.sync_composite_ports_from_mappings" name="fuse.core.ui.graphics_items.ComponentNodeItem.sync_composite_ports_from_mappings">
+<area shape="rect" id="Node000001" title=" " alt="" coords="5,84,252,139"/>
+<area shape="rect" id="Node000002" href="$classfuse_1_1core_1_1ui_1_1graphics__items_1_1ComponentNodeItem.html#a0925905734cb465c6b7681d9f0cc0465" title=" " alt="" coords="308,44,551,99"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="252,92,294,87,295,92,252,98"/>
+<area shape="rect" id="Node000006" href="$classfuse_1_1core_1_1ui_1_1graphics__items_1_1ComponentNodeItem.html#a1e4b4c3b67599d4f7a220c00ff5e5f5e" title=" " alt="" coords="300,123,559,177"/>
+<area shape="poly" id="edge5_Node000001_Node000006" title=" " alt="" coords="252,125,287,129,286,134,252,130"/>
+<area shape="rect" id="Node000003" href="$classfuse_1_1core_1_1model_1_1composite__flattening_1_1FlattenedComponentNode.html#aa789d1c36dafe08b1313b858972d96cf" title=" " alt="" coords="629,5,861,60"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="551,54,616,46,616,51,551,59"/>
+<area shape="rect" id="Node000004" href="$classfuse_1_1core_1_1ui_1_1graphics__items_1_1ComponentNodeItem.html#a42aee494a481f8032abb1f71654c5dc4" title=" " alt="" coords="607,84,884,139"/>
+<area shape="poly" id="edge3_Node000002_Node000004" title=" " alt="" coords="551,84,593,89,593,95,551,89"/>
+<area shape="rect" id="Node000005" href="$namespacefuse_1_1core_1_1ui_1_1graphics__items.html#a2b729f0f73a5e2ca6a0c556d42d9af5b" title=" " alt="" coords="932,91,1089,131"/>
+<area shape="poly" id="edge4_Node000004_Node000005" title=" " alt="" coords="884,109,919,109,919,114,884,114"/>
+</map>

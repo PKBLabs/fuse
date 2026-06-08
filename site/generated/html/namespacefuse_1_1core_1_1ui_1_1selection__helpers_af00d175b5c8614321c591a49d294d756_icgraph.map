@@ -1,0 +1,17 @@
+<map id="fuse.core.ui.selection_helpers.selected_component_items" name="fuse.core.ui.selection_helpers.selected_component_items">
+<area shape="rect" id="Node000001" title=" " alt="" coords="539,143,799,183"/>
+<area shape="rect" id="Node000002" href="$namespacefuse_1_1core_1_1ui_1_1selection__helpers.html#a23d5814efa3fc16ff5412b6d5f06b64f" title=" " alt="" coords="264,5,491,60"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="613,140,490,82,445,62,447,58,492,77,615,135"/>
+<area shape="rect" id="Node000003" href="$namespacefuse_1_1core_1_1ui_1_1selection__helpers.html#a379c7d80d56d804ccfe15b1ab0fb27b3" title=" " alt="" coords="8,136,213,191"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="582,143,490,126,377,117,328,119,264,126,201,139,200,133,264,121,327,114,377,112,491,121,583,138"/>
+<area shape="rect" id="Node000004" href="$namespacefuse_1_1core_1_1ui_1_1selection__helpers.html#ab61bc2f51d6009c3a9f0dba3f5d5958d" title=" " alt="" coords="281,215,474,269"/>
+<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="581,190,475,218,474,213,580,184"/>
+<area shape="rect" id="Node000006" href="$namespacefuse_1_1core_1_1ui_1_1selection__helpers.html#ad001b02c50d257ae52464fdc2d62cf50" title=" " alt="" coords="270,136,485,191"/>
+<area shape="poly" id="edge6_Node000001_Node000006" title=" " alt="" coords="525,166,485,166,485,161,525,161"/>
+<area shape="rect" id="Node000007" href="$namespacefuse_1_1core_1_1ui_1_1selection__helpers.html#af4c02028ee19c2217379ff545f20dbb7" title=" " alt="" coords="281,293,473,348"/>
+<area shape="poly" id="edge8_Node000001_Node000007" title=" " alt="" coords="632,194,568,239,492,284,467,296,465,291,489,280,566,235,629,190"/>
+<area shape="poly" id="edge5_Node000004_Node000003" title=" " alt="" coords="270,213,203,193,205,188,272,208"/>
+<area shape="rect" id="Node000005" href="$namespacefuse_1_1core_1_1ui_1_1selection__helpers.html#a2f9588ec111241bb3c62e24441eb46ee" title=" " alt="" coords="5,215,216,269"/>
+<area shape="poly" id="edge4_Node000004_Node000005" title=" " alt="" coords="266,245,216,245,216,239,266,239"/>
+<area shape="poly" id="edge7_Node000006_Node000003" title=" " alt="" coords="256,166,214,166,214,161,256,161"/>
+</map>

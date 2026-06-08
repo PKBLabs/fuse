@@ -1,0 +1,17 @@
+<map id="fuse.core.model.validation.validate_model" name="fuse.core.model.validation.validate_model">
+<area shape="rect" id="Node000001" title=" " alt="" coords="5,133,259,173"/>
+<area shape="rect" id="Node000002" href="$namespacefuse_1_1core_1_1model_1_1validation.html#a3b8391ab56d11d5b8b7e160adb802546" title=" " alt="" coords="307,5,560,45"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="163,131,227,93,306,55,328,47,330,52,308,60,230,97,165,135"/>
+<area shape="rect" id="Node000003" href="$namespacefuse_1_1core_1_1model_1_1validation.html#aae7fd139fcdfc8ae92e264174872f0c5" title=" " alt="" coords="307,69,560,109"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="226,131,325,110,326,115,228,136"/>
+<area shape="rect" id="Node000004" href="$namespacefuse_1_1core_1_1model_1_1validation.html#ad0abed9eaa2c1d80473fffd80f5dfe63" title=" " alt="" coords="307,133,560,173"/>
+<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="259,151,293,151,293,156,259,156"/>
+<area shape="rect" id="Node000007" href="$namespacefuse_1_1core_1_1model_1_1validation.html#a7debd28b913317e816a090d0605464d8" title=" " alt="" coords="307,197,560,237"/>
+<area shape="poly" id="edge6_Node000001_Node000007" title=" " alt="" coords="228,171,326,192,325,197,226,176"/>
+<area shape="rect" id="Node000008" href="$namespacefuse_1_1core_1_1model_1_1validation.html#a834478a31a8e6c9ea6d9a9af9feec507" title=" " alt="" coords="307,261,560,301"/>
+<area shape="poly" id="edge7_Node000001_Node000008" title=" " alt="" coords="165,171,230,209,308,247,330,255,328,260,306,252,227,214,163,176"/>
+<area shape="rect" id="Node000005" href="$namespacefuse_1_1core_1_1model_1_1validation.html#a5c222f24f1c59b881e78876c518ab810" title=" " alt="" coords="608,133,865,173"/>
+<area shape="poly" id="edge4_Node000004_Node000005" title=" " alt="" coords="560,151,594,151,594,156,560,156"/>
+<area shape="rect" id="Node000006" href="$namespacefuse_1_1core_1_1model_1_1validation.html#a9ecff56002e582b847c2499031f9c052" title=" " alt="" coords="913,133,1179,173"/>
+<area shape="poly" id="edge5_Node000005_Node000006" title=" " alt="" coords="865,151,900,151,900,156,865,156"/>
+</map>

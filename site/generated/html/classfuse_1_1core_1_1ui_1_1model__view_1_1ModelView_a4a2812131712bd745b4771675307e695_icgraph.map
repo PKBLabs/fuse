@@ -1,0 +1,9 @@
+<map id="fuse.core.ui.model_view.ModelView.itemAt" name="fuse.core.ui.model_view.ModelView.itemAt">
+<area shape="rect" id="Node000001" title=" " alt="" coords="272,77,455,117"/>
+<area shape="poly" id="edge1_Node000001_Node000001" title=" " alt="" coords="406,65,391,58,363,55,339,57,325,62,320,68,322,76,317,77,314,67,322,58,338,52,363,50,392,53,408,60"/>
+<area shape="rect" id="Node000002" href="$classfuse_1_1core_1_1ui_1_1model__view_1_1ModelView.html#a0c9e20922aa20eff0d78c54a313a5393" title=" " alt="" coords="6,29,223,84"/>
+<area shape="poly" id="edge2_Node000001_Node000002" title=" " alt="" coords="258,82,223,77,224,72,259,77"/>
+<area shape="rect" id="Node000003" href="$classfuse_1_1core_1_1ui_1_1component__palette_1_1ComponentTree.html#ab83ee4ebe81a60a88c95937b4ef7c640" title=" " alt="" coords="5,108,224,163"/>
+<area shape="poly" id="edge4_Node000001_Node000003" title=" " alt="" coords="259,116,225,121,224,116,258,110"/>
+<area shape="poly" id="edge3_Node000002_Node000002" title=" " alt="" coords="156,18,141,11,115,8,92,10,78,15,72,21,72,29,66,29,67,19,75,10,91,5,115,3,143,6,159,14"/>
+</map>

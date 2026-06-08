@@ -1,0 +1,15 @@
+<map id="fuse.plugins.community.sst.get_sstinfo.resolve_framework_version_id" name="fuse.plugins.community.sst.get_sstinfo.resolve_framework_version_id">
+<area shape="rect" id="Node000001" title=" " alt="" coords="871,89,1096,143"/>
+<area shape="rect" id="Node000002" href="$namespacefuse_1_1plugins_1_1community_1_1sst_1_1get__sstinfo.html#a1e127ccc84b39619976fb82cb69ccd16" title=" " alt="" coords="572,5,823,45"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="885,87,822,67,763,48,765,43,823,61,887,82"/>
+<area shape="rect" id="Node000003" href="$namespacefuse_1_1plugins_1_1community_1_1sst_1_1get__sstinfo.html#a73bd9b9c60d347a60a3fee569c0bc444" title=" " alt="" coords="585,121,810,175"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="857,133,810,138,810,133,857,127"/>
+<area shape="rect" id="Node000004" href="$namespacefuse_1_1plugins_1_1community_1_1sst_1_1get__sstinfo.html#a272a7e1e019386f9ce11753f0ce2e031" title=" " alt="" coords="289,70,514,125"/>
+<area shape="poly" id="edge6_Node000001_Node000004" title=" " alt="" coords="857,112,823,111,514,102,514,97,823,105,857,107"/>
+<area shape="rect" id="Node000006" href="$namespacefuse_1_1plugins_1_1community_1_1sst_1_1get__sstinfo.html#a10b0185768b65d93f73062a41ba9a437" title=" " alt="" coords="279,164,524,204"/>
+<area shape="poly" id="edge7_Node000001_Node000006" title=" " alt="" coords="924,152,876,174,823,191,746,202,668,207,592,206,524,202,524,196,593,201,668,202,746,197,822,185,874,169,922,147"/>
+<area shape="poly" id="edge3_Node000003_Node000004" title=" " alt="" coords="570,129,514,119,515,114,571,124"/>
+<area shape="poly" id="edge5_Node000003_Node000006" title=" " alt="" coords="571,166,525,172,524,166,571,161"/>
+<area shape="rect" id="Node000005" href="$namespacefuse_1_1plugins_1_1community_1_1sst_1_1get__sstinfo.html#a3b8748a2004681369f87b0a2acd19608" title=" " alt="" coords="5,77,231,117"/>
+<area shape="poly" id="edge4_Node000004_Node000005" title=" " alt="" coords="275,100,231,100,231,95,275,95"/>
+</map>

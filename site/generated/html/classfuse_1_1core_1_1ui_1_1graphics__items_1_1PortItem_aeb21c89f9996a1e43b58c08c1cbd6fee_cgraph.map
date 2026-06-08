@@ -1,0 +1,5 @@
+<map id="fuse.core.ui.graphics_items.PortItem.update_connection_state" name="fuse.core.ui.graphics_items.PortItem.update_connection_state">
+<area shape="rect" id="Node000001" title=" " alt="" coords="5,5,180,60"/>
+<area shape="rect" id="Node000002" href="$classfuse_1_1core_1_1ui_1_1graphics__items_1_1PortItem.html#a3f32c14d4421ea58f6b6e79da0a0c3a1" title=" " alt="" coords="228,13,443,53"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="180,30,214,30,214,35,180,35"/>
+</map>

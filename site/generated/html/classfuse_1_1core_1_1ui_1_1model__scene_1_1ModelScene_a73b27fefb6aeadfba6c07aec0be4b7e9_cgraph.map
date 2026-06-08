@@ -1,0 +1,29 @@
+<map id="fuse.core.ui.model_scene.ModelScene.port_clicked" name="fuse.core.ui.model_scene.ModelScene.port_clicked">
+<area shape="rect" id="Node000001" title=" " alt="" coords="5,164,185,219"/>
+<area shape="rect" id="Node000002" href="$classfuse_1_1core_1_1ui_1_1model__scene_1_1ModelScene.html#ad9b379c20e9e4cbb0a5a2e009016b80c" title=" " alt="" coords="250,45,446,100"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="139,161,232,110,249,103,251,108,235,115,141,166"/>
+<area shape="rect" id="Node000008" href="$classfuse_1_1core_1_1ui_1_1model__scene_1_1ModelScene.html#a0e316a2028c80a60e62e913747a38e7a" title=" " alt="" coords="233,124,463,179"/>
+<area shape="poly" id="edge7_Node000001_Node000008" title=" " alt="" coords="185,174,219,169,220,174,186,180"/>
+<area shape="rect" id="Node000011" href="$classfuse_1_1core_1_1ui_1_1model__scene_1_1ModelScene.html#a4e0c9ec20ab69561216367aed8b8acc5" title=" " alt="" coords="255,203,441,257"/>
+<area shape="poly" id="edge14_Node000001_Node000011" title=" " alt="" coords="186,202,241,211,241,216,185,208"/>
+<area shape="rect" id="Node000012" href="$classfuse_1_1core_1_1ui_1_1model__scene_1_1ModelScene.html#ae7dc691b5f32b3d8183a97a21191b503" title=" " alt="" coords="255,281,441,336"/>
+<area shape="poly" id="edge15_Node000001_Node000012" title=" " alt="" coords="141,216,234,268,249,274,247,279,232,272,138,221"/>
+<area shape="rect" id="Node000003" href="$classfuse_1_1core_1_1ui_1_1model__scene_1_1ModelScene.html#a190440722bafd0fd259ebcedce6fb1a8" title=" " alt="" coords="539,84,735,139"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="447,83,526,94,525,99,446,88"/>
+<area shape="rect" id="Node000004" href="$classfuse_1_1core_1_1ui_1_1model__scene_1_1ModelScene.html#adde75ca69d667d858e338091b62b790d" title=" " alt="" coords="527,5,746,60"/>
+<area shape="poly" id="edge3_Node000002_Node000004" title=" " alt="" coords="446,56,514,47,514,52,447,62"/>
+<area shape="rect" id="Node000005" href="$classfuse_1_1core_1_1model_1_1composite__flattening_1_1FlattenedScene.html#adafd82e063db893d7978e3f46c633c28" title=" " alt="" coords="811,13,1128,53"/>
+<area shape="poly" id="edge4_Node000004_Node000005" title=" " alt="" coords="746,30,797,30,797,35,746,35"/>
+<area shape="rect" id="Node000006" href="$classfuse_1_1core_1_1ui_1_1model__scene_1_1ModelScene.html#afe1202d65f4678c1893739c38b42dd01" title=" " alt="" coords="834,77,1105,117"/>
+<area shape="poly" id="edge5_Node000004_Node000006" title=" " alt="" coords="747,51,852,71,851,77,746,56"/>
+<area shape="rect" id="Node000007" href="$classfuse_1_1plugins_1_1community_1_1sst_1_1external__validation_1_1fixtures_1_1SSTExternalValidationScene.html#a4689f4250a8d0755e053ec4b746ba53e" title=" " alt="" coords="822,141,1117,196"/>
+<area shape="poly" id="edge6_Node000004_Node000007" title=" " alt="" coords="744,58,764,69,780,84,789,99,797,113,812,127,824,133,821,138,809,131,793,117,784,102,776,87,761,73,742,62"/>
+<area shape="poly" id="edge8_Node000008_Node000003" title=" " alt="" coords="462,133,525,124,526,129,463,138"/>
+<area shape="rect" id="Node000009" href="$classfuse_1_1core_1_1ui_1_1model__scene_1_1ModelScene.html#af7c5a6eca7ed14750eaaaece5da06a2b" title=" " alt="" coords="511,163,763,233"/>
+<area shape="poly" id="edge9_Node000008_Node000009" title=" " alt="" coords="463,167,497,173,496,178,462,172"/>
+<area shape="poly" id="edge10_Node000009_Node000005" title=" " alt="" coords="745,161,761,149,777,128,783,106,791,84,809,63,817,57,820,62,812,67,795,86,788,108,782,131,765,153,748,165"/>
+<area shape="poly" id="edge11_Node000009_Node000006" title=" " alt="" coords="732,161,762,149,810,127,845,117,847,122,812,133,764,154,733,166"/>
+<area shape="poly" id="edge12_Node000009_Node000007" title=" " alt="" coords="763,184,808,180,808,186,763,190"/>
+<area shape="rect" id="Node000010" href="$classfuse_1_1core_1_1ui_1_1model__scene_1_1ModelScene.html#a2e4b960fa7b5c3b6de837ec9c2b085d4" title=" " alt="" coords="863,220,1076,275"/>
+<area shape="poly" id="edge13_Node000009_Node000010" title=" " alt="" coords="763,214,850,227,849,232,762,219"/>
+</map>

@@ -1,0 +1,22 @@
+<map id="project_settings_dialog.ProjectSettingsDialog._target_data_for_plugin" name="project_settings_dialog.ProjectSettingsDialog._target_data_for_plugin">
+<area shape="rect" id="Node000001" title=" " alt="" coords="1107,84,1284,139"/>
+<area shape="rect" id="Node000002" href="$classproject__settings__dialog_1_1ProjectSettingsDialog.html#ac725bcae00b66755edebfda190d2b437" title=" " alt="" coords="869,5,1046,60"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="1098,82,1040,63,1041,58,1099,77"/>
+<area shape="rect" id="Node000004" href="$classproject__settings__dialog_1_1ProjectSettingsDialog.html#a93791f3b83a5f472799f19e53a28675e" title=" " alt="" coords="869,84,1046,139"/>
+<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="1093,114,1046,114,1046,109,1093,109"/>
+<area shape="rect" id="Node000005" href="$classproject__settings__dialog_1_1ProjectSettingsDialog.html#a52d12fc26cee3028f06626f9c2e1aff3" title=" " alt="" coords="856,163,1059,217"/>
+<area shape="poly" id="edge5_Node000001_Node000005" title=" " alt="" coords="1099,146,1041,165,1040,160,1098,141"/>
+<area shape="rect" id="Node000003" href="$classproject__settings__dialog_1_1ProjectSettingsDialog.html#a2233dbfbf902bc9a036a071cfc3ae526" title=" " alt="" coords="589,45,808,100"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="856,51,809,58,808,53,855,46"/>
+<area shape="poly" id="edge4_Node000004_Node000003" title=" " alt="" coords="855,99,808,92,809,86,856,93"/>
+<area shape="rect" id="Node000006" href="$classproject__settings__dialog_1_1ProjectSettingsDialog.html#abf1cf440ebfba34412e713af801b4bce" title=" " alt="" coords="589,170,808,210"/>
+<area shape="poly" id="edge6_Node000005_Node000006" title=" " alt="" coords="843,193,808,193,808,187,843,187"/>
+<area shape="rect" id="Node000007" href="$classfuse_1_1core_1_1ui_1_1component__palette_1_1ComponentPalette.html#a9173b14924bfc1cc872210996ec36445" title=" " alt="" coords="309,123,539,177"/>
+<area shape="poly" id="edge7_Node000006_Node000007" title=" " alt="" coords="575,175,539,169,540,164,576,169"/>
+<area shape="rect" id="Node000008" href="$classfuse_1_1core_1_1ui_1_1component__palette_1_1ComponentPalette.html#aac74c2949655feb51cb46274626f7703" title=" " alt="" coords="307,201,541,256"/>
+<area shape="poly" id="edge8_Node000006_Node000008" title=" " alt="" coords="576,210,542,215,541,209,575,205"/>
+<area shape="rect" id="Node000009" href="$classfuse_1_1core_1_1ui_1_1component__palette_1_1ComponentPalette.html#a34a69d361def2c1a2347d0b6541bb270" title=" " alt="" coords="19,161,245,216"/>
+<area shape="poly" id="edge9_Node000008_Node000009" title=" " alt="" coords="293,213,245,207,246,202,294,208"/>
+<area shape="rect" id="Node000010" href="$classfuse_1_1core_1_1ui_1_1component__palette_1_1ComponentPalette.html#a88b8150233879f3ac8f639c92875a225" title=" " alt="" coords="5,240,259,295"/>
+<area shape="poly" id="edge10_Node000008_Node000010" title=" " alt="" coords="294,249,259,253,259,248,293,243"/>
+</map>

@@ -1,0 +1,21 @@
+<map id="fuse.core.persistence.model_serializer.validate_serialized_project" name="fuse.core.persistence.model_serializer.validate_serialized_project">
+<area shape="rect" id="Node000001" title=" " alt="" coords="5,145,220,199"/>
+<area shape="rect" id="Node000002" href="$namespacefuse_1_1core_1_1persistence_1_1model__serializer.html#ae4fe048f041aaaf00f26b807d055c190" title=" " alt="" coords="268,5,475,45"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="146,142,201,102,267,62,296,48,298,53,269,66,204,106,149,147"/>
+<area shape="rect" id="Node000003" href="$namespacefuse_1_1core_1_1persistence_1_1model__serializer.html#a56f3cd1f8371d4f37e8ed6a9e2853a1f" title=" " alt="" coords="523,120,729,160"/>
+<area shape="poly" id="edge10_Node000001_Node000003" title=" " alt="" coords="164,142,213,121,267,105,336,97,406,98,473,105,532,115,531,120,472,110,406,103,337,103,269,111,215,126,167,147"/>
+<area shape="rect" id="Node000004" href="$namespacefuse_1_1core_1_1persistence_1_1model__serializer.html#aed1647a910631df17936713d8fc1fa49" title=" " alt="" coords="268,249,475,303"/>
+<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="180,197,269,234,288,241,286,246,267,238,178,202"/>
+<area shape="rect" id="Node000006" href="$namespacefuse_1_1core_1_1persistence_1_1model__serializer.html#a84305ff9c3861d38c22e546e88278159" title=" " alt="" coords="268,120,475,160"/>
+<area shape="poly" id="edge6_Node000001_Node000006" title=" " alt="" coords="220,156,254,152,255,157,221,161"/>
+<area shape="rect" id="Node000007" href="$namespacefuse_1_1core_1_1persistence_1_1model__serializer.html#a8f35a38fbef3670619c2b5d0e2a64ab6" title=" " alt="" coords="268,184,475,224"/>
+<area shape="poly" id="edge8_Node000001_Node000007" title=" " alt="" coords="221,183,255,187,254,192,220,188"/>
+<area shape="rect" id="Node000008" href="$namespacefuse_1_1core_1_1persistence_1_1model__serializer.html#adcba531fb815833d5ea2ce7c473c8a84" title=" " alt="" coords="268,328,475,368"/>
+<area shape="poly" id="edge11_Node000001_Node000008" title=" " alt="" coords="139,198,195,256,230,287,269,314,282,320,279,325,267,318,227,291,191,260,135,202"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="430,43,476,62,577,111,575,116,474,66,428,48"/>
+<area shape="poly" id="edge5_Node000004_Node000003" title=" " alt="" coords="446,246,473,234,533,200,584,166,587,170,535,204,476,238,449,251"/>
+<area shape="rect" id="Node000005" href="$namespacefuse_1_1core_1_1persistence_1_1model__serializer.html#a63d2ed3da3e3fc05596c871a3aa8d372" title=" " alt="" coords="523,256,729,296"/>
+<area shape="poly" id="edge4_Node000004_Node000005" title=" " alt="" coords="475,273,509,273,509,279,475,279"/>
+<area shape="poly" id="edge7_Node000006_Node000003" title=" " alt="" coords="475,137,509,137,509,143,475,143"/>
+<area shape="poly" id="edge9_Node000007_Node000003" title=" " alt="" coords="451,181,532,161,533,166,452,187"/>
+</map>

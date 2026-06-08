@@ -1,0 +1,11 @@
+<map id="fuse.plugins.community.sst.plugin.SSTPlugin.load_palette_items" name="fuse.plugins.community.sst.plugin.SSTPlugin.load_palette_items">
+<area shape="rect" id="Node000001" title=" " alt="" coords="5,69,253,109"/>
+<area shape="rect" id="Node000002" href="$classfuse_1_1plugins_1_1community_1_1sst_1_1plugin_1_1SSTPlugin.html#a409f3fc3009b64962af88c56a8f0582d" title=" " alt="" coords="301,69,549,109"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="253,87,288,87,288,92,253,92"/>
+<area shape="rect" id="Node000003" href="$classfuse_1_1plugin__api_1_1interfaces_1_1FusePlugin.html#a3ed051660469a9e06def20b16c064e40" title=" " alt="" coords="633,5,828,45"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="521,67,621,46,622,51,522,72"/>
+<area shape="rect" id="Node000004" href="$classfuse_1_1plugins_1_1community_1_1gem5_1_1plugin_1_1Gem5Plugin.html#aea17600cc7ca6b1905a7522d739f25b2" title=" " alt="" coords="597,69,864,109"/>
+<area shape="poly" id="edge3_Node000002_Node000004" title=" " alt="" coords="549,87,584,87,584,92,549,92"/>
+<area shape="rect" id="Node000005" href="$classfuse_1_1plugins_1_1community_1_1sst_1_1plugin_1_1SSTPlugin.html#acdbed2d44f044dc68cba27e9f236a283" title=" " alt="" coords="607,133,855,173"/>
+<area shape="poly" id="edge4_Node000002_Node000005" title=" " alt="" coords="522,107,622,128,621,133,521,112"/>
+</map>

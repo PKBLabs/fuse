@@ -1,0 +1,7 @@
+<map id="fuse.plugins.community.sst.external_validation.runner.SSTExternalValidationResult.failed" name="fuse.plugins.community.sst.external_validation.runner.SSTExternalValidationResult.failed">
+<area shape="rect" id="Node000001" title=" " alt="" coords="5,45,292,100"/>
+<area shape="rect" id="Node000002" href="$classfuse_1_1plugins_1_1community_1_1sst_1_1external__validation_1_1runner_1_1SSTFixtureAcceptanceResult.html#a65ad44b498f35d81557012d7e961b80f" title=" " alt="" coords="340,5,627,60"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="292,53,326,49,327,54,293,58"/>
+<area shape="rect" id="Node000003" href="$classfuse_1_1plugins_1_1community_1_1sst_1_1external__validation_1_1runner_1_1SSTExternalValidationSuiteReport.html#a2a2a3893e09ea5464fca6c427f33e0af" title=" " alt="" coords="340,84,627,139"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="293,87,327,91,326,96,292,92"/>
+</map>
