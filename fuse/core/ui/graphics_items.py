@@ -1036,14 +1036,38 @@ class ComponentNodeItem(QGraphicsRectItem):
     def contextMenuEvent(self, event):
         scene = self.scene()
 
+        if scene is not None and not self.isSelected():
+            scene.clearSelection()
+            self.setSelected(True)
+
         menu = QMenu()
         add_action = menu.addAction("Add to Frequently Used")
+
+        copy_action = None
+        paste_action = None
+        group_action = None
+        ungroup_action = None
         composite_action = None
+
         if scene is not None:
+            menu.addSeparator()
+            copy_action = menu.addAction("Copy")
+            paste_action = menu.addAction("Paste")
+            paste_action.setEnabled(bool(getattr(scene.__class__, "_entity_clipboard", None)))
+            group_action = menu.addAction("Group")
+            group_action.setEnabled(len(scene.selected_component_nodes(expand_groups=False)) >= 2)
+            ungroup_action = menu.addAction("Ungroup")
+            ungroup_action.setEnabled(any(
+                node.node_id in getattr(scene, "node_group_ids", {})
+                for node in scene.selected_component_nodes(expand_groups=True)
+            ))
+
             from fuse.core.ui.selection_helpers import can_create_composite_from_selection
 
             if can_create_composite_from_selection(scene):
+                menu.addSeparator()
                 composite_action = menu.addAction("Create Composite Component from Selection")
+
         menu.addSeparator()
 
         remove_text = (
@@ -1058,6 +1082,22 @@ class ComponentNodeItem(QGraphicsRectItem):
         if action == add_action:
             if scene is not None and hasattr(scene, "component_favorite_requested_callback"):
                 scene.component_favorite_requested_callback(self.component)
+
+        elif copy_action is not None and action == copy_action:
+            if scene is not None:
+                scene.copy_selection_to_clipboard()
+
+        elif paste_action is not None and action == paste_action:
+            if scene is not None:
+                scene.paste_clipboard(event.scenePos())
+
+        elif group_action is not None and action == group_action:
+            if scene is not None:
+                scene.group_selection()
+
+        elif ungroup_action is not None and action == ungroup_action:
+            if scene is not None:
+                scene.ungroup_selection()
 
         elif composite_action is not None and action == composite_action:
             if scene is not None:
@@ -1620,6 +1660,9 @@ class ComponentNodeItem(QGraphicsRectItem):
 
         if change == QGraphicsItem.ItemPositionHasChanged:
             scene = self.scene()
+
+            if scene is not None and hasattr(scene, "apply_group_drag"):
+                scene.apply_group_drag(self)
 
             if scene is not None and hasattr(scene, "reroute_links_for_node"):
                 scene.reroute_links_for_node(self)

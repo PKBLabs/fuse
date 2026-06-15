@@ -128,7 +128,7 @@ class ComponentTileButton(QToolButton):
 
         self.setText(component.name)
         self.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
-        self.setIconSize(QSize(42, 42))
+        self.setIconSize(QSize(60, 60))
         self.setFixedSize(QSize(92, 76))
         self.setToolTip(palette.tooltip_for_component(component))
 
@@ -589,6 +589,12 @@ class ComponentPalette(QWidget):
 
         for simulator_name in self.sorted_group_names(by_simulator):
             simulator_item = self.make_group_item(simulator_name)
+
+            if simulator_name == "Composite Components":
+                for component in self.sorted_components(by_simulator[simulator_name]):
+                    self.make_component_item(component, simulator_item)
+                continue
+
             by_element: dict[str, list[ComponentDefinition]] = defaultdict(list)
 
             for component in by_simulator[simulator_name]:
@@ -642,6 +648,12 @@ class ComponentPalette(QWidget):
 
         for simulator_name in self.sorted_group_names(by_simulator):
             simulator_item = self.make_group_item(simulator_name)
+
+            if simulator_name == "Composite Components":
+                for component in self.sorted_components(by_simulator[simulator_name]):
+                    self.make_component_item(component, simulator_item)
+                continue
+
             by_function: dict[str, list[ComponentDefinition]] = defaultdict(list)
 
             for component in by_simulator[simulator_name]:

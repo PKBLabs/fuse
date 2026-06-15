@@ -101,7 +101,7 @@ def test_properties_panel_labels_composite_instance_and_keeps_template_metadata(
 
     panel.show_component(node)
 
-    assert panel.title.text() == "Composite Component Instance"
+    assert panel.title.text() == "Composite Component Properties"
     assert tree_item_by_name(panel, "Kind").text(1) == "Composite Component"
     assert tree_item_by_name(panel, "Template Name").text(1) == "Pair"
     assert tree_item_by_name(panel, "Template ID").text(1) == "pair-template"

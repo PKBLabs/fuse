@@ -13,13 +13,16 @@
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 from __future__ import annotations
 
-from PySide6.QtCore import QPoint, Qt, QRectF
-from PySide6.QtGui import QAction, QKeySequence, QPainter, QPen
+from pathlib import Path
+
+from PySide6.QtCore import QPoint, QPointF, QSize, Qt, QRectF
+from PySide6.QtGui import QAction, QIcon, QKeySequence, QPainter, QPen
 from PySide6.QtWidgets import (
     QComboBox,
     QFrame,
     QGraphicsView,
     QHBoxLayout,
+    QMenu,
     QSizePolicy,
     QToolButton,
 )
@@ -27,6 +30,25 @@ from PySide6.QtWidgets import (
 from fuse.core.model.models import ComponentDefinition, MIME_COMPONENT
 from fuse.core.ui.model_scene import ModelScene
 from fuse.core.ui.selection_helpers import update_selection_dependent_highlights
+
+
+
+MODEL_VIEW_TOOLBAR_ICON_DIR = (
+    Path(__file__).resolve().parents[1]
+    / "resources"
+    / "icons"
+)
+
+MODEL_VIEW_TOOLBAR_ICONS = {
+    "select_move": "pointer_cursor.svg",
+    "multiselect": "selection_drag.svg",
+    "undo": "undo.svg",
+    "redo": "redo.svg",
+    "zoom_in": "zoom_in.svg",
+    "zoom_out": "zoom_out.svg",
+    "group": "group.svg",
+    "ungroup": "ungroup.svg",
+}
 
 
 class FloatingModelToolbar(QFrame):
@@ -47,9 +69,9 @@ class FloatingModelToolbar(QFrame):
                 border-radius: 6px;
             }
             QToolButton {
-                min-width: 28px;
-                min-height: 24px;
-                padding: 2px 6px;
+                min-width: 30px;
+                min-height: 28px;
+                padding: 2px 4px;
             }
             QToolButton:checked {
                 background: #dbeafe;
@@ -57,7 +79,8 @@ class FloatingModelToolbar(QFrame):
                 border-radius: 4px;
             }
             QComboBox {
-                min-width: 84px;
+                min-width: 50px;
+                max-width: 50px;
             }
             """
         )
@@ -66,12 +89,12 @@ class FloatingModelToolbar(QFrame):
         layout.setContentsMargins(6, 4, 6, 4)
         layout.setSpacing(4)
 
-        self.select_button = self.make_button("Select/Move", checkable=True)
+        self.select_button = self.make_button("Select/Move", checkable=True, icon_name="select_move")
         self.select_button.setChecked(True)
         self.select_button.clicked.connect(view.enable_select_move_mode)
         layout.addWidget(self.select_button)
 
-        self.multiselect_button = self.make_button("Multiselect", checkable=True)
+        self.multiselect_button = self.make_button("Multiselect", checkable=True, icon_name="multiselect")
         self.multiselect_button.clicked.connect(view.enable_multiselect_mode)
         layout.addWidget(self.multiselect_button)
 
@@ -79,15 +102,16 @@ class FloatingModelToolbar(QFrame):
         self.expose_ports_button.setToolTip("Toggle whether internal ports are exposed on the composite boundary")
         self.expose_ports_button.clicked.connect(view.enable_composite_port_exposure_mode)
         self.expose_ports_button.setEnabled(False)
+        self.expose_ports_button.setVisible(False)
         layout.addWidget(self.expose_ports_button)
 
         layout.addWidget(self.make_separator())
 
-        self.undo_button = self.make_button("Undo")
+        self.undo_button = self.make_button("Undo", icon_name="undo")
         self.undo_button.clicked.connect(view.request_undo)
         layout.addWidget(self.undo_button)
 
-        self.redo_button = self.make_button("Redo")
+        self.redo_button = self.make_button("Redo", icon_name="redo")
         self.redo_button.clicked.connect(view.request_redo)
         layout.addWidget(self.redo_button)
 
@@ -100,21 +124,45 @@ class FloatingModelToolbar(QFrame):
         self.zoom_selector.currentTextChanged.connect(self.on_zoom_text_changed)
         layout.addWidget(self.zoom_selector)
 
-        self.zoom_in_button = self.make_button("Zoom In")
+        self.zoom_in_button = self.make_button("Zoom In", icon_name="zoom_in")
         self.zoom_in_button.clicked.connect(view.zoom_in)
         layout.addWidget(self.zoom_in_button)
 
-        self.zoom_out_button = self.make_button("Zoom Out")
+        self.zoom_out_button = self.make_button("Zoom Out", icon_name="zoom_out")
         self.zoom_out_button.clicked.connect(view.zoom_out)
         layout.addWidget(self.zoom_out_button)
 
+        layout.addWidget(self.make_separator())
+
+        self.group_button = self.make_button("Group", icon_name="group")
+        self.group_button.clicked.connect(view.group_selection)
+        layout.addWidget(self.group_button)
+
+        self.ungroup_button = self.make_button("Ungroup", icon_name="ungroup")
+        self.ungroup_button.clicked.connect(view.ungroup_selection)
+        layout.addWidget(self.ungroup_button)
+
         self.adjustSize()
 
-    def make_button(self, text: str, checkable: bool = False) -> QToolButton:
+    def make_button(
+        self,
+        text: str,
+        checkable: bool = False,
+        icon_name: str | None = None,
+    ) -> QToolButton:
         button = QToolButton(self)
-        button.setText(text)
         button.setToolTip(text)
         button.setCheckable(checkable)
+
+        if icon_name:
+            icon_path = MODEL_VIEW_TOOLBAR_ICON_DIR / MODEL_VIEW_TOOLBAR_ICONS[icon_name]
+            button.setIcon(QIcon(str(icon_path)))
+            button.setIconSize(QSize(30, 30))
+            button.setToolButtonStyle(Qt.ToolButtonIconOnly)
+            button.setText("")
+        else:
+            button.setText(text)
+
         return button
 
     def make_separator(self) -> QFrame:
@@ -152,9 +200,12 @@ class FloatingModelToolbar(QFrame):
         self.expose_ports_button.blockSignals(False)
 
     def set_port_exposure_tools_available(self, available: bool) -> None:
-        self.expose_ports_button.setEnabled(bool(available))
+        available = bool(available)
+        self.expose_ports_button.setEnabled(available)
+        self.expose_ports_button.setVisible(available)
         if not available and self.expose_ports_button.isChecked():
             self.view.enable_select_move_mode()
+        self.adjustSize()
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -220,6 +271,22 @@ class ModelView(QGraphicsView):
         self.zoom_out_action.setShortcuts([QKeySequence.ZoomOut, QKeySequence("Shift+-"), QKeySequence("Ctrl+-")])
         self.zoom_out_action.triggered.connect(self.zoom_out)
         self.addAction(self.zoom_out_action)
+
+        self.copy_action = QAction("Copy", self)
+        self.copy_action.triggered.connect(self.copy_selection)
+        self.addAction(self.copy_action)
+
+        self.paste_action = QAction("Paste", self)
+        self.paste_action.triggered.connect(self.paste_clipboard)
+        self.addAction(self.paste_action)
+
+        self.group_action = QAction("Group", self)
+        self.group_action.triggered.connect(self.group_selection)
+        self.addAction(self.group_action)
+
+        self.ungroup_action = QAction("Ungroup", self)
+        self.ungroup_action.triggered.connect(self.ungroup_selection)
+        self.addAction(self.ungroup_action)
 
 
     def update_selection_highlights(self) -> None:
@@ -360,7 +427,10 @@ class ModelView(QGraphicsView):
         self.toolbar.set_port_exposure_tools_available(bool(available))
 
     def port_exposure_tools_available(self) -> bool:
-        return bool(self.toolbar.expose_ports_button.isEnabled())
+        return bool(
+            self.toolbar.expose_ports_button.isEnabled()
+            and self.toolbar.expose_ports_button.isVisible()
+        )
 
     def set_scene_port_exposure_mode(self, enabled: bool) -> None:
         scene = self.scene()
@@ -471,6 +541,75 @@ class ModelView(QGraphicsView):
             event.accept()
             return
         super().mouseReleaseEvent(event)
+
+
+    def copy_selection(self) -> None:
+        scene = self.scene()
+        if scene is not None and hasattr(scene, "copy_selection_to_clipboard"):
+            scene.copy_selection_to_clipboard()
+
+    def paste_clipboard(self, scene_pos: QPointF | None = None) -> None:
+        scene = self.scene()
+        if scene is None or not hasattr(scene, "paste_clipboard"):
+            return
+        if scene_pos is None:
+            scene_pos = self.mapToScene(self.viewport().rect().center())
+        scene.paste_clipboard(scene_pos)
+
+    def group_selection(self) -> None:
+        scene = self.scene()
+        if scene is not None and hasattr(scene, "group_selection"):
+            scene.group_selection()
+
+    def ungroup_selection(self) -> None:
+        scene = self.scene()
+        if scene is not None and hasattr(scene, "ungroup_selection"):
+            scene.ungroup_selection()
+
+    def contextMenuEvent(self, event):
+        scene = self.scene()
+        if scene is None:
+            super().contextMenuEvent(event)
+            return
+
+        # Let graphics items own their context menus. Without this guard, a
+        # right-click on a component can first show the view-level copy/paste
+        # menu and then the component-level menu.
+        if self.itemAt(event.pos()) is not None:
+            super().contextMenuEvent(event)
+            return
+
+        menu = QMenu(self)
+        copy_action = menu.addAction("Copy")
+        copy_action.setEnabled(bool(getattr(scene, "selected_component_nodes", lambda: [])()))
+        paste_action = menu.addAction("Paste")
+        paste_action.setEnabled(bool(getattr(scene.__class__, "_entity_clipboard", None)))
+        menu.addSeparator()
+        group_action = menu.addAction("Group")
+        group_action.setEnabled(len(getattr(scene, "selected_component_nodes", lambda expand_groups=False: [])(expand_groups=False)) >= 2)
+        ungroup_action = menu.addAction("Ungroup")
+        selected_nodes = getattr(scene, "selected_component_nodes", lambda expand_groups=True: [])(expand_groups=True)
+        ungroup_action.setEnabled(any(node.node_id in getattr(scene, "node_group_ids", {}) for node in selected_nodes))
+
+        action = menu.exec(event.globalPos())
+        if action == copy_action:
+            self.copy_selection()
+            event.accept()
+            return
+        if action == paste_action:
+            self.paste_clipboard(self.mapToScene(event.pos()))
+            event.accept()
+            return
+        if action == group_action:
+            self.group_selection()
+            event.accept()
+            return
+        if action == ungroup_action:
+            self.ungroup_selection()
+            event.accept()
+            return
+
+        super().contextMenuEvent(event)
 
     def drawBackground(self, painter: QPainter, rect):
         super().drawBackground(painter, rect)
