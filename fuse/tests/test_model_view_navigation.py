@@ -59,12 +59,99 @@ def test_model_view_anchor_zoom_keeps_cursor_scene_position_stable(qtbot):
 
 
 
-def test_model_view_grid_is_coarse_at_normal_zoom(qtbot):
+def test_model_view_grid_matches_component_box_size(qtbot):
     scene = ModelScene()
     view = ModelView(scene)
     qtbot.addWidget(view)
 
-    assert view.GRID_SPACING == 200.0
+    assert view.GRID_CELL_WIDTH == float(ComponentNodeItem.WIDTH)
+    assert view.GRID_CELL_HEIGHT == float(ComponentNodeItem.HEIGHT)
+    assert scene.snap_grid_width == float(ComponentNodeItem.WIDTH)
+    assert scene.snap_grid_height == float(ComponentNodeItem.HEIGHT)
+
+
+def test_model_view_snap_to_grid_toggle_updates_scene_toolbar_and_state(qtbot):
+    scene = ModelScene()
+    view = ModelView(scene)
+    qtbot.addWidget(view)
+
+    view.set_snap_to_grid(True)
+
+    assert view.snap_to_grid_enabled is True
+    assert scene.snap_to_grid_enabled is True
+    assert view.toolbar.snap_to_grid_button.isChecked() is True
+    assert view.editor_state()["snapToGrid"] is True
+
+    view.set_snap_to_grid(False)
+
+    assert view.snap_to_grid_enabled is False
+    assert scene.snap_to_grid_enabled is False
+    assert view.toolbar.snap_to_grid_button.isChecked() is False
+
+
+def test_model_view_snap_to_grid_state_restores(qtbot):
+    scene = ModelScene()
+    view = ModelView(scene)
+    qtbot.addWidget(view)
+    view.set_snap_to_grid(True)
+
+    restored = ModelView(scene)
+    qtbot.addWidget(restored)
+    restored.apply_editor_state(view.editor_state())
+
+    assert restored.snap_to_grid_enabled is True
+    assert scene.snap_to_grid_enabled is True
+    assert restored.toolbar.snap_to_grid_button.isChecked() is True
+
+
+def test_model_view_snap_to_grid_snaps_new_and_moved_components(qtbot, monkeypatch):
+    monkeypatch.setattr(
+        "fuse.core.ui.graphics_items.load_port_names_for_component",
+        lambda *args, **kwargs: ["in", "out"],
+    )
+
+    scene = ModelScene()
+    view = ModelView(scene)
+    qtbot.addWidget(view)
+    view.set_snap_to_grid(True)
+
+    node = scene.create_component_node(
+        ComponentDefinition(plugin_id="core", component_id="a", element="test", name="CPU"),
+        QPointF(91.0, 88.0),
+    )
+
+    assert node.pos() == QPointF(view.GRID_CELL_WIDTH, view.GRID_CELL_HEIGHT)
+
+    node.setPos(QPointF(275.0, 260.0))
+
+    assert node.pos() == QPointF(view.GRID_CELL_WIDTH * 2.0, view.GRID_CELL_HEIGHT * 2.0)
+
+
+def test_model_view_snap_to_grid_allows_free_drag_and_snaps_on_release(qtbot, monkeypatch):
+    monkeypatch.setattr(
+        "fuse.core.ui.graphics_items.load_port_names_for_component",
+        lambda *args, **kwargs: ["in", "out"],
+    )
+
+    scene = ModelScene()
+    view = ModelView(scene)
+    qtbot.addWidget(view)
+    view.set_snap_to_grid(True)
+
+    node = scene.create_component_node(
+        ComponentDefinition(plugin_id="core", component_id="a", element="test", name="CPU"),
+        QPointF(91.0, 88.0),
+    )
+
+    scene.begin_node_drag()
+    unsnapped_drag_position = QPointF(275.0, 260.0)
+    node.setPos(unsnapped_drag_position)
+
+    assert node.pos() == unsnapped_drag_position
+
+    scene.end_node_drag(node)
+
+    assert node.pos() == QPointF(view.GRID_CELL_WIDTH * 2.0, view.GRID_CELL_HEIGHT * 2.0)
 
 
 def test_model_view_select_and_multiselect_modes_toggle_drag_behavior(qtbot):

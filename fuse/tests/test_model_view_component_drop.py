@@ -69,3 +69,39 @@ def test_model_view_drop_creates_component_at_model_coordinates(qtbot, monkeypat
     assert nodes[0].component.name == "CPU"
     assert nodes[0].instance_name == "CPU_1"
     assert nodes[0].pos() == expected_scene_position
+
+
+def test_model_view_drop_snaps_component_when_snap_to_grid_is_enabled(qtbot, monkeypatch):
+    monkeypatch.setattr(
+        "fuse.core.ui.graphics_items.load_port_names_for_component",
+        lambda *args, **kwargs: ["in", "out"],
+    )
+
+    scene = ModelScene()
+    view = ModelView(scene)
+    qtbot.addWidget(view)
+    view.resize(640, 480)
+    view.show()
+    qtbot.waitExposed(view)
+    view.set_snap_to_grid(True)
+
+    component = ComponentDefinition(
+        plugin_id="core",
+        component_id="cpu",
+        element="test",
+        name="CPU",
+        category="processor",
+    )
+    mime = QMimeData()
+    mime.setData(MIME_COMPONENT, component.to_drag_text().encode("utf-8"))
+
+    viewport_position = QPoint(180, 140)
+    expected_scene_position = scene.snap_position_to_grid(view.mapToScene(viewport_position))
+    event = _DropEvent(mime, viewport_position)
+
+    view.dropEvent(event)
+
+    nodes = scene.component_items()
+    assert event.accepted is True
+    assert len(nodes) == 1
+    assert nodes[0].pos() == expected_scene_position

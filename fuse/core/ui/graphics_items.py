@@ -1658,6 +1658,17 @@ class ComponentNodeItem(QGraphicsRectItem):
         if change == QGraphicsItem.ItemSelectedHasChanged:
             self.update_selection_style()
 
+        if change == QGraphicsItem.ItemPositionChange:
+            scene = self.scene()
+            if (
+                scene is not None
+                and bool(getattr(scene, "snap_to_grid_enabled", False))
+                and not bool(getattr(scene, "_dragging_node", False))
+                and isinstance(value, QPointF)
+                and hasattr(scene, "snap_position_to_grid")
+            ):
+                return scene.snap_position_to_grid(value)
+
         if change == QGraphicsItem.ItemPositionHasChanged:
             scene = self.scene()
 

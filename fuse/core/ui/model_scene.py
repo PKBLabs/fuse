@@ -58,6 +58,11 @@ class ModelScene(QGraphicsScene):
         self.node_group_ids: dict[int, int] = {}
         self._moving_group = False
 
+        self.snap_to_grid_enabled = False
+        self.snap_grid_width = float(ComponentNodeItem.WIDTH)
+        self.snap_grid_height = float(ComponentNodeItem.HEIGHT)
+        self.snap_grid_origin = QPointF(0.0, 0.0)
+
         self.model_changed_callback = None
         self.component_added_callback = None
         self.component_used_callback = None
@@ -110,6 +115,28 @@ class ModelScene(QGraphicsScene):
         self.node_group_ids = {}
         ComponentNodeItem._next_node_id = 1
         self.notify_model_changed()
+
+    def set_snap_grid_size(self, width: float, height: float) -> None:
+        self.snap_grid_width = max(1.0, float(width))
+        self.snap_grid_height = max(1.0, float(height))
+
+    def set_snap_to_grid(self, enabled: bool) -> None:
+        self.snap_to_grid_enabled = bool(enabled)
+
+    def snap_position_to_grid(self, position: QPointF) -> QPointF:
+        width = max(1.0, float(getattr(self, "snap_grid_width", ComponentNodeItem.WIDTH)))
+        height = max(1.0, float(getattr(self, "snap_grid_height", ComponentNodeItem.HEIGHT)))
+        origin = getattr(self, "snap_grid_origin", QPointF(0.0, 0.0))
+
+        x_units = (position.x() - origin.x()) / width
+        y_units = (position.y() - origin.y()) / height
+        x_index = int(x_units + 0.5) if x_units >= 0 else int(x_units - 0.5)
+        y_index = int(y_units + 0.5) if y_units >= 0 else int(y_units - 0.5)
+
+        return QPointF(
+            origin.x() + x_index * width,
+            origin.y() + y_index * height,
+        )
 
     def notify_model_changed(self):
         if self.model_changed_callback is not None:
@@ -435,6 +462,9 @@ class ModelScene(QGraphicsScene):
             self._moving_group = False
 
     def create_component_node(self, component, scene_pos, instance_name: str | None = None):
+        if self.snap_to_grid_enabled:
+            scene_pos = self.snap_position_to_grid(scene_pos)
+
         node = ComponentNodeItem(
             component,
             instance_name=instance_name or self.generate_unique_component_name(component),
@@ -566,18 +596,28 @@ class ModelScene(QGraphicsScene):
           1. links attached to the moved node,
           2. subcomponent attachment edges attached to the moved node, and
           3. existing links whose current route now intersects the moved node box.
+
+        Snap-to-grid intentionally happens here, not during ItemPositionChange,
+        so dragged components move smoothly while the mouse button is held and
+        settle onto the grid only when the user drops them.
         """
-        self._dragging_node = False
-
-        if node is not None:
-            self.reroute_links_affected_by_node(node)
-            self.update_subcomp_attachments_for_node(node)
-
         changed = self._drag_changed
         if node is not None:
             start = self._drag_start_positions.get(node.node_id)
             if start is not None:
                 changed = changed or (node.pos().x(), node.pos().y()) != start
+
+        if changed and node is not None and self.snap_to_grid_enabled:
+            snapped_position = self.snap_position_to_grid(node.pos())
+            if snapped_position != node.pos():
+                node.setPos(snapped_position)
+                changed = True
+
+        self._dragging_node = False
+
+        if node is not None:
+            self.reroute_links_affected_by_node(node)
+            self.update_subcomp_attachments_for_node(node)
 
         self._drag_changed = False
         self._drag_start_positions = {}

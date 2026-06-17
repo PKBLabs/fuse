@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
 )
 
 from fuse.core.model.models import ComponentDefinition, MIME_COMPONENT
+from fuse.core.ui.graphics_items import ComponentNodeItem
 from fuse.core.ui.model_scene import ModelScene
 from fuse.core.ui.selection_helpers import update_selection_dependent_highlights
 
@@ -134,6 +135,16 @@ class FloatingModelToolbar(QFrame):
 
         layout.addWidget(self.make_separator())
 
+        self.snap_to_grid_button = self.make_button("Snap Grid", checkable=True)
+        self.snap_to_grid_button.setToolTip(
+            "Snap components to component-sized grid cells when dropped"
+        )
+        self.snap_to_grid_button.setChecked(view.snap_to_grid_enabled)
+        self.snap_to_grid_button.toggled.connect(view.set_snap_to_grid)
+        layout.addWidget(self.snap_to_grid_button)
+
+        layout.addWidget(self.make_separator())
+
         self.group_button = self.make_button("Group", icon_name="group")
         self.group_button.clicked.connect(view.group_selection)
         layout.addWidget(self.group_button)
@@ -188,6 +199,11 @@ class FloatingModelToolbar(QFrame):
             self.zoom_selector.setEditText(text)
         self.zoom_selector.blockSignals(False)
 
+    def set_snap_to_grid(self, enabled: bool) -> None:
+        self.snap_to_grid_button.blockSignals(True)
+        self.snap_to_grid_button.setChecked(bool(enabled))
+        self.snap_to_grid_button.blockSignals(False)
+
     def set_mode(self, mode: str) -> None:
         self.select_button.blockSignals(True)
         self.multiselect_button.blockSignals(True)
@@ -235,7 +251,9 @@ class FloatingModelToolbar(QFrame):
 
 class ModelView(QGraphicsView):
     ZOOM_LEVELS = [12.5, 25.0, 50.0, 100.0, 200.0]
-    GRID_SPACING = 200.0
+    GRID_CELL_WIDTH = float(ComponentNodeItem.WIDTH)
+    GRID_CELL_HEIGHT = float(ComponentNodeItem.HEIGHT)
+    GRID_SPACING = GRID_CELL_WIDTH
 
     def __init__(self, scene: ModelScene):
         super().__init__(scene)
@@ -255,6 +273,12 @@ class ModelView(QGraphicsView):
         self.pan_start_position = QPoint()
         self.pan_start_h_value = 0
         self.pan_start_v_value = 0
+        self.snap_to_grid_enabled = False
+
+        if hasattr(scene, "set_snap_grid_size"):
+            scene.set_snap_grid_size(self.GRID_CELL_WIDTH, self.GRID_CELL_HEIGHT)
+        if hasattr(scene, "set_snap_to_grid"):
+            scene.set_snap_to_grid(self.snap_to_grid_enabled)
 
         self.toolbar = FloatingModelToolbar(self)
         self.toolbar.move(12, 12)
@@ -297,9 +321,40 @@ class ModelView(QGraphicsView):
             getattr(scene, "properties_panel", None),
         )
 
+    @staticmethod
+    def parse_bool(value) -> bool:
+        if isinstance(value, str):
+            return value.strip().lower() in {"1", "true", "yes", "on"}
+        return bool(value)
+
     def notify_editor_state_changed(self) -> None:
         if self.editor_state_changed_callback is not None:
             self.editor_state_changed_callback(self.editor_state())
+
+    def set_snap_to_grid(self, enabled: bool) -> None:
+        enabled = bool(enabled)
+        self.snap_to_grid_enabled = enabled
+
+        scene = self.scene()
+        if scene is not None:
+            if hasattr(scene, "set_snap_grid_size"):
+                scene.set_snap_grid_size(self.GRID_CELL_WIDTH, self.GRID_CELL_HEIGHT)
+            if hasattr(scene, "set_snap_to_grid"):
+                scene.set_snap_to_grid(enabled)
+            else:
+                scene.snap_to_grid_enabled = enabled
+
+        if hasattr(self, "toolbar"):
+            self.toolbar.set_snap_to_grid(enabled)
+
+        self.viewport().update()
+        self.notify_editor_state_changed()
+
+    def snap_scene_position(self, position: QPointF) -> QPointF:
+        scene = self.scene()
+        if scene is not None and hasattr(scene, "snap_position_to_grid"):
+            return scene.snap_position_to_grid(position)
+        return QPointF(position)
 
     def editor_state(self) -> dict:
         center = self.mapToScene(self.viewport().rect().center())
@@ -310,6 +365,7 @@ class ModelView(QGraphicsView):
             "viewCenter": {"x": round(center.x()), "y": round(center.y())},
             "zoomPercent": self.zoom_percent,
             "mode": self.mode,
+            "snapToGrid": self.snap_to_grid_enabled,
             "toolbarPosition": {
                 "x": self.toolbar.pos().x(),
                 "y": self.toolbar.pos().y(),
@@ -332,6 +388,10 @@ class ModelView(QGraphicsView):
             self.enable_composite_port_exposure_mode()
         else:
             self.enable_select_move_mode()
+
+        self.set_snap_to_grid(
+            self.parse_bool(editor.get("snapToGrid", editor.get("snap_to_grid", False)))
+        )
 
         position = editor.get("toolbarPosition", editor.get("toolbar_position", {})) or {}
         try:
@@ -613,9 +673,10 @@ class ModelView(QGraphicsView):
 
     def drawBackground(self, painter: QPainter, rect):
         super().drawBackground(painter, rect)
-        grid_spacing = self.GRID_SPACING
-        left = int(rect.left() // grid_spacing) * grid_spacing
-        top = int(rect.top() // grid_spacing) * grid_spacing
+        grid_width = self.GRID_CELL_WIDTH
+        grid_height = self.GRID_CELL_HEIGHT
+        left = int(rect.left() // grid_width) * grid_width
+        top = int(rect.top() // grid_height) * grid_height
 
         pen = QPen(Qt.lightGray)
         pen.setWidthF(0.0)
@@ -624,12 +685,12 @@ class ModelView(QGraphicsView):
         x = left
         while x < rect.right():
             painter.drawLine(x, rect.top(), x, rect.bottom())
-            x += grid_spacing
+            x += grid_width
 
         y = top
         while y < rect.bottom():
             painter.drawLine(rect.left(), y, rect.right(), y)
-            y += grid_spacing
+            y += grid_height
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasFormat(MIME_COMPONENT):
@@ -652,6 +713,9 @@ class ModelView(QGraphicsView):
         component = ComponentDefinition.from_drag_text(raw)
 
         scene_pos = self.mapToScene(event.position().toPoint())
+        if self.snap_to_grid_enabled:
+            scene_pos = self.snap_scene_position(scene_pos)
+
         scene = self.scene()
 
         if hasattr(scene, "create_component_node"):
