@@ -1,0 +1,13 @@
+<map id="fuse.plugins.community.sst.external_validation.runner.run_generated_fixture_acceptance" name="fuse.plugins.community.sst.external_validation.runner.run_generated_fixture_acceptance">
+<area shape="rect" id="Node000001" title=" " alt="" coords="5,63,264,118"/>
+<area shape="rect" id="Node000002" href="$namespacefuse_1_1plugins_1_1community_1_1sst_1_1external__validation_1_1runner.html#a8b395040f704e323acd7b21a996bf5e2" title=" " alt="" coords="626,5,893,45"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="243,61,312,48,466,32,612,25,612,30,467,38,312,53,244,66"/>
+<area shape="rect" id="Node000003" href="$namespacefuse_1_1plugins_1_1community_1_1sst_1_1external__validation_1_1runner.html#a8ca730a61bd19f9cd4c31475c64b285f" title=" " alt="" coords="312,63,571,118"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="264,88,298,88,298,93,264,93"/>
+<area shape="rect" id="Node000005" href="$namespacefuse_1_1plugins_1_1community_1_1sst_1_1external__validation_1_1runner.html#ab9fb4a814f10b45135e0d4b9cabe4cf0" title=" " alt="" coords="630,134,889,189"/>
+<area shape="poly" id="edge6_Node000001_Node000005" title=" " alt="" coords="245,115,312,128,469,145,616,155,616,160,469,151,312,133,244,121"/>
+<area shape="poly" id="edge3_Node000003_Node000002" title=" " alt="" coords="570,61,648,46,649,51,571,67"/>
+<area shape="rect" id="Node000004" href="$namespacefuse_1_1plugins_1_1community_1_1sst_1_1external__validation_1_1runner.html#abbed9dedebbcfd65c530677b50f924fc" title=" " alt="" coords="619,69,900,109"/>
+<area shape="poly" id="edge4_Node000003_Node000004" title=" " alt="" coords="571,87,605,87,605,93,571,93"/>
+<area shape="poly" id="edge5_Node000003_Node000005" title=" " alt="" coords="566,115,623,128,622,134,564,121"/>
+</map>

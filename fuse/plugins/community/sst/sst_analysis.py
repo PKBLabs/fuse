@@ -11,6 +11,14 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+"""Ad-hoc analysis helpers for imported SST metadata.
+
+This module is intended for developer diagnostics rather than the production
+desktop UI. It turns SST metadata database queries and parsed ``sst-info``
+output into pandas data frames so maintainers can audit catalog quality,
+parameter coverage, and metadata drift between imports.
+"""
+
 import hashlib
 import json
 import pandas as pd
@@ -20,11 +28,13 @@ from fuse.plugins.community.sst.get_sstinfo import parse_sstinfo_output
 
 
 def read_sql_df(query: str, params=()):
+    """Execute a SQLite query against the SST metadata database as a data frame."""
     with get_connection() as conn:
         return pd.read_sql_query(query, conn, params=params)
 
 
 def get_components_df():
+    """Return component and subcomponent metadata as a pandas data frame."""
     return read_sql_df("""
         SELECT
             e.id AS element_id,
@@ -44,6 +54,7 @@ def get_components_df():
 
 
 def elements_with_most_components():
+    """Return SST elements ordered by number of imported components."""
     df = get_components_df()
 
     return (
@@ -55,6 +66,7 @@ def elements_with_most_components():
 
 
 def subcomponents_implementing_interface(interface_text: str):
+    """Return subcomponents whose interface text contains ``interface_text``."""
     df = get_components_df()
 
     return df[
@@ -64,6 +76,7 @@ def subcomponents_implementing_interface(interface_text: str):
 
 
 def required_parameters():
+    """Return required SST component parameters from imported metadata."""
     return read_sql_df("""
         SELECT
             e.name AS element,
@@ -85,6 +98,7 @@ def required_parameters():
 
 
 def component_parameter_summary():
+    """Summarize parameter counts for each imported SST component."""
     return read_sql_df("""
         SELECT
             e.name AS element,
@@ -102,6 +116,7 @@ def component_parameter_summary():
     """)
 
 def get_latest_sst_info_runs(limit=2):
+    """Return the latest successful raw ``sst-info`` imports."""
     return read_sql_df(
         """
         SELECT id, stdout, stderr, created_at
@@ -181,6 +196,7 @@ def component_signature(component):
 
 
 def parsed_components_to_df(stdout: str):
+    """Convert parsed ``sst-info`` output to a component-signature data frame."""
     _elements, components = parse_sstinfo_output(stdout)
 
     records = []
@@ -209,6 +225,7 @@ def parsed_components_to_df(stdout: str):
 
 
 def compare_latest_two_sstinfo_runs():
+    """Compare metadata fingerprints from the two latest successful imports."""
     runs = get_latest_sst_info_runs(limit=2)
 
     if len(runs) < 2:

@@ -1,0 +1,11 @@
+<map id="Graphical Class Hierarchy" name="Graphical Class Hierarchy">
+<area shape="rect" id="Node000000" title=" " alt="" coords="5,109,80,135"/>
+<area shape="rect" id="Node000001" href="$classabout_1_1AboutDialog.html" title=" " alt="" coords="198,5,341,31"/>
+<area shape="poly" id="edge3_Node000000_Node000001" title=" " alt="" coords="60,96,89,66,127,40,161,27,197,19,198,24,163,32,129,44,93,70,64,100"/>
+<area shape="rect" id="Node000002" href="$classcomposite__component__dialog_1_1CompositeComponentDialog.html" title=" " alt="" coords="160,55,379,109"/>
+<area shape="poly" id="edge4_Node000000_Node000002" title=" " alt="" coords="94,110,159,99,160,104,95,116"/>
+<area shape="rect" id="Node000003" href="$classcomposite__component__manager__dialog_1_1CompositeComponentManagerDialog.html" title=" " alt="" coords="128,133,411,188"/>
+<area shape="poly" id="edge5_Node000000_Node000003" title=" " alt="" coords="94,128,128,134,128,139,93,133"/>
+<area shape="rect" id="Node000004" href="$classproject__settings__dialog_1_1ProjectSettingsDialog.html" title=" " alt="" coords="181,213,358,253"/>
+<area shape="poly" id="edge6_Node000000_Node000004" title=" " alt="" coords="65,144,94,172,129,197,181,217,179,222,127,202,90,176,62,148"/>
+</map>

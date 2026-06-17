@@ -1,0 +1,9 @@
+<map id="fuse.core.ui.model_scene.ModelScene.delete_component_node" name="fuse.core.ui.model_scene.ModelScene.delete_component_node">
+<area shape="rect" id="Node000001" title=" " alt="" coords="265,57,460,112"/>
+<area shape="poly" id="edge2_Node000001_Node000001" title=" " alt="" coords="405,46,389,39,363,36,340,38,326,43,319,49,319,57,314,57,314,47,323,38,339,33,363,31,391,34,407,42"/>
+<area shape="rect" id="Node000002" href="$classfuse_1_1core_1_1ui_1_1model__scene_1_1ModelScene.html#a6d141d0106c1de6a3a33044a597abc29" title=" " alt="" coords="14,5,209,60"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="252,64,208,55,210,50,253,59"/>
+<area shape="rect" id="Node000003" href="$classfuse_1_1core_1_1ui_1_1model__scene_1_1ModelScene.html#abe6c85b90535f4b63b0ebef2cd710a25" title=" " alt="" coords="5,108,217,163"/>
+<area shape="poly" id="edge3_Node000001_Node000003" title=" " alt="" coords="252,110,218,117,217,111,251,104"/>
+<area shape="poly" id="edge4_Node000003_Node000003" title=" " alt="" coords="153,97,138,90,111,87,89,89,74,93,68,100,68,108,63,108,63,98,72,89,88,83,111,81,140,84,156,92"/>
+</map>

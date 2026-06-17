@@ -345,6 +345,7 @@ def _override_match_score(
 def load_icon_overrides(
     override_file: Path = DEFAULT_OVERRIDE_FILE,
 ) -> list[dict]:
+    """Load exact SST icon override rules from a CSV file."""
     if not override_file.exists():
         return []
 
@@ -360,6 +361,7 @@ def find_icon_override(
     object_kind: str = "",
     override_file: Path = DEFAULT_OVERRIDE_FILE,
 ) -> dict | None:
+    """Return the configured icon override for an SST object when present."""
     overrides = load_icon_overrides(override_file)
 
     best_row = None

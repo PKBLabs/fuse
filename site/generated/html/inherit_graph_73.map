@@ -1,0 +1,7 @@
+<map id="Graphical Class Hierarchy" name="Graphical Class Hierarchy">
+<area shape="rect" id="Node000000" title=" " alt="" coords="5,56,95,81"/>
+<area shape="rect" id="Node000001" href="$classfuse_1_1core_1_1persistence_1_1composite__component__files_1_1CompositeComponentFileError.html" title=" " alt="" coords="143,5,428,60"/>
+<area shape="poly" id="edge26_Node000000_Node000001" title=" " alt="" coords="108,57,142,52,143,57,109,62"/>
+<area shape="rect" id="Node000002" href="$classfuse_1_1core_1_1persistence_1_1model__serializer_1_1ProjectFileValidationError.html" title=" " alt="" coords="157,85,413,125"/>
+<area shape="poly" id="edge27_Node000000_Node000002" title=" " alt="" coords="109,75,157,82,157,88,108,80"/>
+</map>

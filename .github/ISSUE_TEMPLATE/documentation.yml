@@ -1,0 +1,41 @@
+name: Documentation issue
+description: Report missing, unclear, incorrect, or outdated documentation.
+title: "[Docs]: "
+labels: ["type: documentation", "needs-triage"]
+body:
+  - type: input
+    id: page
+    attributes:
+      label: Affected page or section
+      placeholder: docs/user/troubleshooting.md
+    validations:
+      required: true
+  - type: dropdown
+    id: problem-type
+    attributes:
+      label: Problem type
+      options:
+        - Missing information
+        - Unclear instructions
+        - Incorrect information
+        - Outdated information
+        - Broken link
+        - Screenshot/diagram needed
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Description
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested correction
+  - type: input
+    id: version
+    attributes:
+      label: FUSE/docs version
+      placeholder: v0.9.0, develop, stable-release-prep

@@ -1,0 +1,15 @@
+<map id="fuse.plugins.community.sst.compatibility.validate_scene_for_target" name="fuse.plugins.community.sst.compatibility.validate_scene_for_target">
+<area shape="rect" id="Node000001" title=" " alt="" coords="5,165,351,205"/>
+<area shape="rect" id="Node000002" href="$namespacefuse_1_1plugins_1_1community_1_1sst_1_1compatibility.html#aa57dd76f2377fa757cd732a671492434" title=" " alt="" coords="399,5,691,45"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="206,163,289,109,342,80,398,55,421,47,423,52,400,60,345,85,292,114,209,167"/>
+<area shape="rect" id="Node000003" href="$namespacefuse_1_1plugins_1_1community_1_1sst_1_1compatibility.html#ac4150a1475a1846840c6354476ecc779" title=" " alt="" coords="399,69,691,109"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="243,163,398,119,435,110,436,115,399,124,245,168"/>
+<area shape="rect" id="Node000004" href="$namespacefuse_1_1plugins_1_1community_1_1sst_1_1compatibility.html#a3bd57f7c13fe69792e849bf0a268728a" title=" " alt="" coords="399,133,691,173"/>
+<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="350,168,385,165,385,170,351,173"/>
+<area shape="rect" id="Node000005" href="$namespacefuse_1_1plugins_1_1community_1_1sst_1_1compatibility.html#aeb54337597bf767335e8c7b14d27c752" title=" " alt="" coords="399,197,691,237"/>
+<area shape="poly" id="edge4_Node000001_Node000005" title=" " alt="" coords="351,198,385,201,385,206,350,203"/>
+<area shape="rect" id="Node000006" href="$namespacefuse_1_1plugins_1_1community_1_1sst_1_1compatibility.html#ad02db188ef9ba9f45537fd9ea8435705" title=" " alt="" coords="399,261,691,301"/>
+<area shape="poly" id="edge5_Node000001_Node000006" title=" " alt="" coords="245,203,399,247,436,256,435,261,398,252,243,208"/>
+<area shape="rect" id="Node000007" href="$namespacefuse_1_1plugins_1_1community_1_1sst_1_1compatibility.html#af96b88f5f495078879f13a57a7ae9bce" title=" " alt="" coords="399,325,691,365"/>
+<area shape="poly" id="edge6_Node000001_Node000007" title=" " alt="" coords="209,203,292,257,345,286,400,311,423,319,421,324,398,316,342,291,289,262,206,208"/>
+</map>

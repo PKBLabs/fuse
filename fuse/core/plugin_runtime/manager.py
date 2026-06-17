@@ -11,6 +11,12 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+"""Runtime discovery and dispatch for FUSE plugins.
+
+The plugin runtime locates community plugin manifests, imports each plugin's
+registration function, and exposes small dispatch helpers used by the UI,
+validation, palette loading, and export flows."""
+
 from __future__ import annotations
 
 import importlib
@@ -26,6 +32,7 @@ PLUGIN_ROOT = FUSE_PACKAGE_ROOT / "plugins"
 
 @dataclass
 class LoadedPlugin:
+    """Loaded plugin instance and metadata parsed from its manifest."""
     plugin_id: str
     name: str
     root: Path
@@ -34,12 +41,14 @@ class LoadedPlugin:
 
 
 def _load_register_callable(register_path: str):
+    """Import and return a plugin registration callable from a manifest entry point."""
     module_name, function_name = register_path.split(":", 1)
     module = importlib.import_module(module_name)
     return getattr(module, function_name)
 
 
 def discover_plugin_manifests() -> list[Path]:
+    """Find plugin manifest files beneath a plugin root directory."""
     manifests: list[Path] = []
 
     if not PLUGIN_ROOT.exists():
@@ -52,6 +61,7 @@ def discover_plugin_manifests() -> list[Path]:
 
 
 def load_enabled_plugins() -> list[LoadedPlugin]:
+    """Load all enabled plugins from discovered manifests."""
     loaded: list[LoadedPlugin] = []
 
     for manifest_path in discover_plugin_manifests():
@@ -97,6 +107,7 @@ def load_enabled_plugins() -> list[LoadedPlugin]:
 
 
 def get_plugin_by_id(plugin_id: str):
+    """Return a loaded plugin instance by plugin identifier."""
     for plugin in load_enabled_plugins():
         instance_plugin_id = getattr(plugin.instance, "plugin_id", None)
 
@@ -115,6 +126,7 @@ def get_plugin_by_id(plugin_id: str):
 
 
 def list_all_targets():
+    """Return framework targets advertised by all loaded plugins."""
     targets = []
 
     for plugin in load_enabled_plugins():
@@ -127,6 +139,7 @@ def list_all_targets():
 
 
 def load_all_palette_items(plugin_id: str | None = None, target_id: str | None = None):
+    """Load palette items for all framework targets associated with a plugin."""
     items = []
 
     for plugin in load_enabled_plugins():
@@ -144,6 +157,7 @@ def load_all_palette_items(plugin_id: str | None = None, target_id: str | None =
 
 
 def load_item_details(plugin_id: str, item_id: str, target_id: str | None = None):
+    """Load detailed palette metadata for one component item."""
     plugin = get_plugin_by_id(plugin_id)
 
     if not hasattr(plugin, "load_item_details"):

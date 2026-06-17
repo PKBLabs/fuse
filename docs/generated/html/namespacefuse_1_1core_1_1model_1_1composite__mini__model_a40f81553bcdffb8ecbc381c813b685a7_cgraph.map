@@ -1,0 +1,14 @@
+<map id="fuse.core.model.composite_mini_model.normalize_mini_model_and_port_mappings" name="fuse.core.model.composite_mini_model.normalize_mini_model_and_port_mappings">
+<area shape="rect" id="Node000001" title=" " alt="" coords="5,163,216,217"/>
+<area shape="rect" id="Node000002" href="$namespacefuse_1_1core_1_1model_1_1composite__mini__model.html#a0337d5869916900c18d08b0601ab49f6" title=" " alt="" coords="286,5,493,60"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="139,160,194,114,263,69,275,63,277,68,265,74,197,118,142,164"/>
+<area shape="rect" id="Node000003" href="$namespacefuse_1_1core_1_1model_1_1composite__mini__model.html#ac8344bdd034063c258c296c18422963a" title=" " alt="" coords="264,84,515,139"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="207,160,278,140,280,145,209,165"/>
+<area shape="rect" id="Node000004" href="$namespacefuse_1_1core_1_1model_1_1composite__mini__model.html#ae26001e92f17bbfabbc5a66f8836d964" title=" " alt="" coords="285,163,493,217"/>
+<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="216,187,271,187,271,193,216,193"/>
+<area shape="rect" id="Node000005" href="$namespacefuse_1_1core_1_1model_1_1composite__mini__model.html#a32ae70923141bfa2b8d533186cd18f48" title=" " alt="" coords="563,261,761,316"/>
+<area shape="poly" id="edge4_Node000001_Node000005" title=" " alt="" coords="214,215,265,226,413,252,549,272,548,277,412,258,263,231,213,220"/>
+<area shape="rect" id="Node000006" href="$namespacefuse_1_1core_1_1model_1_1composite__mini__model.html#a99457f218a6bfdbf06824a8b4e1c8773" title=" " alt="" coords="280,293,499,348"/>
+<area shape="poly" id="edge5_Node000001_Node000006" title=" " alt="" coords="159,215,265,272,298,286,296,291,263,276,156,220"/>
+<area shape="poly" id="edge6_Node000006_Node000005" title=" " alt="" coords="499,305,548,299,549,305,499,310"/>
+</map>

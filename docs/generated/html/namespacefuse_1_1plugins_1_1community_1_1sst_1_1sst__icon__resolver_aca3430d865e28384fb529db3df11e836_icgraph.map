@@ -1,0 +1,10 @@
+<map id="fuse.plugins.community.sst.sst_icon_resolver.load_icon_overrides" name="fuse.plugins.community.sst.sst_icon_resolver.load_icon_overrides">
+<area shape="rect" id="Node000001" title=" " alt="" coords="863,46,1112,86"/>
+<area shape="rect" id="Node000002" href="$namespacefuse_1_1plugins_1_1community_1_1sst_1_1sst__icon__resolver.html#aae9dbd4ecad5417f9c3b4703bbf9d149" title=" " alt="" coords="576,46,815,86"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="849,69,815,69,815,63,849,63"/>
+<area shape="rect" id="Node000003" href="$namespacefuse_1_1plugins_1_1community_1_1sst_1_1sst__icon__resolver.html#a50e07281351e310fb2951aeac9e50628" title=" " alt="" coords="291,5,528,60"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="562,53,528,49,528,44,563,48"/>
+<area shape="rect" id="Node000004" href="$namespacefuse_1_1plugins_1_1community_1_1sst_1_1sst__icon__resolver.html#a5b766eace9a67cc39d80c4de965e3fed" title=" " alt="" coords="5,39,243,93"/>
+<area shape="poly" id="edge4_Node000002_Node000004" title=" " alt="" coords="562,73,528,74,291,74,243,73,243,68,291,69,528,69,562,68"/>
+<area shape="poly" id="edge3_Node000003_Node000004" title=" " alt="" coords="278,51,243,55,243,49,277,45"/>
+</map>

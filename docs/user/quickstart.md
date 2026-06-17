@@ -50,6 +50,15 @@ source ~/.bashrc
 
 ## Run the application
 
+<!-- FUSE-MEDIA-TODO id=quickstart-main-window type=screenshot path=../assets/screenshots/main-window-empty.png -->
+> **Media TODO (quickstart-main-window)**: Add a clean first-launch screenshot after the `fuse-mod` command or module launch succeeds.
+> Planned asset: `../assets/screenshots/main-window-empty.png`
+
+<!-- FUSE-MEDIA-TODO id=video-first-model type=video path=../assets/videos/first-model-workflow.mp4 -->
+> **Media TODO (video-first-model)**: Add a short video showing launch, create/open project, place component, connect, validate, and save.
+> Planned asset: `../assets/videos/first-model-workflow.mp4`
+
+
 ```bash
 fuse-mod
 ```
@@ -68,6 +77,11 @@ PYTHONPATH="$(pwd)/.." .venv/bin/python -m fuse.app.main
 
 
 ## Create your first project
+
+<!-- FUSE-MEDIA-TODO id=quickstart-example-open type=screenshot path=../assets/screenshots/example-project-open.png -->
+> **Media TODO (quickstart-example-open)**: Add a screenshot of an example project opened successfully in the editor.
+> Planned asset: `../assets/screenshots/example-project-open.png`
+
 
 After FUSE opens, use:
 

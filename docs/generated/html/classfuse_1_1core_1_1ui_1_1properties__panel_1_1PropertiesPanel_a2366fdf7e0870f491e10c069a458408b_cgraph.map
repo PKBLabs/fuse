@@ -1,0 +1,11 @@
+<map id="fuse.core.ui.properties_panel.PropertiesPanel.show_component" name="fuse.core.ui.properties_panel.PropertiesPanel.show_component">
+<area shape="rect" id="Node000001" title=" " alt="" coords="5,124,213,179"/>
+<area shape="rect" id="Node000002" href="$classfuse_1_1core_1_1ui_1_1properties__panel_1_1PropertiesPanel.html#aa6d8f923e63279613b10032911742247" title=" " alt="" coords="266,5,465,60"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="157,122,260,69,274,63,276,68,262,74,160,126"/>
+<area shape="rect" id="Node000003" href="$classfuse_1_1core_1_1ui_1_1properties__panel_1_1PropertiesPanel.html#ab75b21f97996c9b2a86817ffb2bb9ba5" title=" " alt="" coords="266,84,465,139"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="213,132,252,126,253,132,214,138"/>
+<area shape="rect" id="Node000004" href="$classfuse_1_1core_1_1ui_1_1properties__panel_1_1PropertiesPanel.html#aa1b9e7eeb06ee845348ac7c3afff3f1c" title=" " alt="" coords="264,163,467,217"/>
+<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="214,164,251,170,250,175,213,170"/>
+<area shape="rect" id="Node000005" href="$classfuse_1_1core_1_1ui_1_1properties__panel_1_1PropertiesPanel.html#a450c176fbb7a329ba6fb3242db6d9c02" title=" " alt="" coords="261,241,469,296"/>
+<area shape="poly" id="edge4_Node000001_Node000005" title=" " alt="" coords="162,176,262,226,279,234,277,238,260,231,160,181"/>
+</map>

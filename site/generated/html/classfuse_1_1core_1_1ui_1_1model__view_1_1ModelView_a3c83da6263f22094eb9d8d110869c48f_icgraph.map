@@ -1,0 +1,12 @@
+<map id="fuse.core.ui.model_view.ModelView.set_zoom_percent" name="fuse.core.ui.model_view.ModelView.set_zoom_percent">
+<area shape="rect" id="Node000001" title=" " alt="" coords="268,109,427,164"/>
+<area shape="poly" id="edge2_Node000001_Node000001" title=" " alt="" coords="386,98,372,91,347,88,326,90,313,95,307,101,307,109,302,109,302,99,310,90,325,85,347,83,374,86,389,94"/>
+<area shape="rect" id="Node000002" href="$classfuse_1_1core_1_1ui_1_1model__view_1_1ModelView.html#a6f193e3fa354e8cbb7dbc002426bf6cf" title=" " alt="" coords="25,5,200,60"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="282,105,219,75,189,63,191,58,221,70,284,101"/>
+<area shape="rect" id="Node000003" href="$classfuse_1_1core_1_1ui_1_1model__view_1_1ModelView.html#af75de2b871afadfa8219e4d3b26ef2e1" title=" " alt="" coords="5,85,220,125"/>
+<area shape="poly" id="edge3_Node000001_Node000003" title=" " alt="" coords="254,127,220,122,220,117,254,121"/>
+<area shape="rect" id="Node000004" href="$classfuse_1_1core_1_1ui_1_1model__view_1_1ModelView.html#ad2b92fff20a7528506d110b66a7aba90" title=" " alt="" coords="16,149,209,189"/>
+<area shape="poly" id="edge4_Node000001_Node000004" title=" " alt="" coords="254,152,210,158,209,153,254,147"/>
+<area shape="rect" id="Node000005" href="$classfuse_1_1core_1_1ui_1_1model__view_1_1ModelView.html#adac0b4d76258eaa38247eef497c1e31e" title=" " alt="" coords="11,213,214,253"/>
+<area shape="poly" id="edge5_Node000001_Node000005" title=" " alt="" coords="286,173,221,203,188,215,186,210,219,198,283,168"/>
+</map>

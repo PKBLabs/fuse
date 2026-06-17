@@ -107,3 +107,34 @@ rm -rf .venv
 rm -f app_data/app.db
 ./scripts/setup_dev.sh
 ```
+
+
+## Packaging and launch troubleshooting
+
+### PySide6 is not installed
+
+Symptom: running from source fails with `ModuleNotFoundError: No module named 'PySide6'`.
+
+Fix:
+
+```bash
+python -m pip install -e ".[dev]"
+```
+
+### Qt platform plugin error
+
+Symptom: launch fails with an error about the Qt platform plugin, often `xcb` on Linux.
+
+Fix: install the missing system Qt/X11/OpenGL libraries for your distribution, then retry from the same virtual environment.
+
+### SST or gem5 toolchain not found
+
+Symptom: validation, import, or export workflows cannot find `sst-info`, `sst`, or gem5.
+
+Fix: confirm the simulator is installed and available on `PATH`, or configure the appropriate local/remote toolchain path in FUSE.
+
+### Packaged app will not launch
+
+Symptom: a release artifact exits immediately or opens a blank window.
+
+Fix: try launching from a terminal so startup logs remain visible. If filing a bug, include the artifact name, platform, terminal output, and whether source installation works on the same machine.

@@ -11,6 +11,17 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+"""Qt graphics items used by the FUSE canvas.
+
+This module contains the visual primitives that appear in a ``ModelScene``:
+component nodes, ports, port-to-port links, subcomponent connectors,
+subcomponent attachments, and helper controls. These classes are responsible
+for rendering, hit testing, context menus, and local visual state. They should
+not perform project-level persistence or simulator-specific export logic.
+
+Most items keep a reference to the corresponding model dataclass so UI updates,
+validation highlights, and serializers can stay synchronized.
+"""
 from __future__ import annotations
 
 from typing import Optional
@@ -67,6 +78,13 @@ def _safe_int(value, default: int = 1) -> int:
 
 
 class PortItem(QGraphicsEllipseItem):
+    """Visual endpoint for a component port.
+
+    A port item renders the small connection handle on a component boundary,
+    tracks its side/position, and delegates click handling to ``ModelScene``.
+    Ports may represent fixed metadata-defined ports, expanded members of a
+    variable port group, or exposed composite boundary ports.
+    """
     RADIUS = 5.0
     HIT_RADIUS = 10.0
     EDGE_GAP = 4.0
@@ -842,6 +860,12 @@ class SubcompAttachmentItem(QGraphicsPathItem):
 
 
 class AddPortsButtonItem(QGraphicsTextItem):
+    """Small canvas control for increasing a variable port count.
+
+    The button is shown next to components that expose expandable port groups.
+    Clicking it delegates to the owning ``ComponentNodeItem`` so the node can
+    update its port list and notify connected links.
+    """
     def __init__(self, node: "ComponentNodeItem"):
         super().__init__("+", node)
         self.node = node
@@ -875,6 +899,14 @@ class AddPortsButtonItem(QGraphicsTextItem):
 
 
 class ComponentNodeItem(QGraphicsRectItem):
+    """Canvas representation of a placed model component.
+
+    A node item owns the visible component body, icon, port items,
+    subcomponent-connector items, validation styling, and drag behavior for one
+    component instance. It mirrors a ``ComponentDefinition`` plus instance state
+    such as node id, instance name, position, parameter values, composite
+    mappings, and variable port counts.
+    """
     WIDTH = 180
     HEIGHT = 170
 

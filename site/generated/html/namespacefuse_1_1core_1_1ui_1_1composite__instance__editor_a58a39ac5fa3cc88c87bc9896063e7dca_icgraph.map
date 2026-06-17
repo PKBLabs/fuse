@@ -1,0 +1,7 @@
+<map id="fuse.core.ui.composite_instance_editor.set_exposed_state_for_port_mapping" name="fuse.core.ui.composite_instance_editor.set_exposed_state_for_port_mapping">
+<area shape="rect" id="Node000001" title=" " alt="" coords="316,45,531,100"/>
+<area shape="rect" id="Node000002" href="$classfuse_1_1core_1_1ui_1_1composite__instance__editor_1_1CompositeInstanceEditorWidget.html#ac3c1e509de560d04a209b206b65388d0" title=" " alt="" coords="8,5,265,60"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="302,58,265,53,266,48,303,53"/>
+<area shape="rect" id="Node000003" href="$classfuse_1_1core_1_1ui_1_1composite__instance__editor_1_1CompositeTemplateEditorWidget.html#a37481b009b4cfac22968cb529548cc84" title=" " alt="" coords="5,84,268,139"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="303,92,268,96,268,91,302,86"/>
+</map>

@@ -1,0 +1,25 @@
+<map id="fuse.plugins.community.sst.get_sstinfo.sync_parsed_sstinfo_to_database" name="fuse.plugins.community.sst.get_sstinfo.sync_parsed_sstinfo_to_database">
+<area shape="rect" id="Node000001" title=" " alt="" coords="5,134,231,189"/>
+<area shape="rect" id="Node000002" href="$namespacefuse_1_1plugins_1_1community_1_1sst_1_1get__sstinfo.html#adf01d198c8b625e82234d39e85e3f821" title=" " alt="" coords="279,5,524,45"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="153,132,209,92,278,55,297,47,299,52,280,60,212,97,156,136"/>
+<area shape="rect" id="Node000003" href="$namespacefuse_1_1plugins_1_1community_1_1sst_1_1get__sstinfo.html#a31880509c80c82b9627f56188c88e803" title=" " alt="" coords="288,69,515,109"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="226,131,308,110,309,115,227,136"/>
+<area shape="rect" id="Node000004" href="$namespacefuse_1_1plugins_1_1community_1_1sst_1_1get__sstinfo.html#a33d3874d28fba6fe6b354fa6f7be7301" title=" " alt="" coords="289,134,514,189"/>
+<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="231,159,275,159,275,164,231,164"/>
+<area shape="rect" id="Node000006" href="$namespacefuse_1_1plugins_1_1community_1_1sst_1_1get__sstinfo.html#a735ecd0095a78812c08fa0cb9f9d7f4c" title=" " alt="" coords="289,213,514,267"/>
+<area shape="poly" id="edge5_Node000001_Node000006" title=" " alt="" coords="218,186,290,206,288,211,216,191"/>
+<area shape="rect" id="Node000011" href="$namespacefuse_1_1plugins_1_1community_1_1sst_1_1get__sstinfo.html#a3c6d9bf5983a65cfbb2d7f34f5fa59cc" title=" " alt="" coords="289,319,514,374"/>
+<area shape="poly" id="edge10_Node000001_Node000011" title=" " alt="" coords="155,187,212,231,280,278,336,310,333,315,277,282,209,235,152,191"/>
+<area shape="rect" id="Node000005" href="$namespacefuse_1_1plugins_1_1community_1_1sst_1_1get__sstinfo.html#a46256a610bae8cb47b8c5fb3f9791d8a" title=" " alt="" coords="581,84,806,124"/>
+<area shape="poly" id="edge4_Node000004_Node000005" title=" " alt="" coords="514,137,577,124,578,129,515,142"/>
+<area shape="rect" id="Node000007" href="$namespacefuse_1_1plugins_1_1community_1_1sst_1_1get__sstinfo.html#a523fe4df8c4e206177f73545334023e2" title=" " alt="" coords="581,148,806,188"/>
+<area shape="poly" id="edge6_Node000006_Node000007" title=" " alt="" coords="512,210,598,189,599,194,514,215"/>
+<area shape="rect" id="Node000008" href="$namespacefuse_1_1plugins_1_1community_1_1sst_1_1get__sstinfo.html#a5d01019346254d348ed86961d866c6ce" title=" " alt="" coords="581,213,806,267"/>
+<area shape="poly" id="edge7_Node000006_Node000008" title=" " alt="" coords="514,237,567,237,567,243,514,243"/>
+<area shape="rect" id="Node000010" href="$namespacefuse_1_1plugins_1_1community_1_1sst_1_1get__sstinfo.html#a4962d872bc33b8176328858d38a7bb10" title=" " alt="" coords="581,292,806,332"/>
+<area shape="poly" id="edge9_Node000006_Node000010" title=" " alt="" coords="514,265,599,286,598,291,512,270"/>
+<area shape="rect" id="Node000009" href="$namespacefuse_1_1plugins_1_1community_1_1sst_1_1get__sstinfo.html#a62ff812fc35e3ab50e8f8db9812a4285" title=" " alt="" coords="863,220,1088,260"/>
+<area shape="poly" id="edge8_Node000008_Node000009" title=" " alt="" coords="806,237,849,237,849,243,806,243"/>
+<area shape="rect" id="Node000012" href="$namespacefuse_1_1plugins_1_1community_1_1sst_1_1get__sstinfo.html#a1452d5334e7f64576812648ec100fc6c" title=" " alt="" coords="572,356,815,396"/>
+<area shape="poly" id="edge11_Node000011_Node000012" title=" " alt="" coords="514,355,559,360,558,365,514,361"/>
+</map>

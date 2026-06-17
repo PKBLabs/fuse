@@ -11,12 +11,17 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+"""Orthogonal routing helpers for canvas link graphics.
+
+The routing functions build simple Manhattan-style paths that avoid component bounding boxes while keeping links readable during editing."""
+
 from dataclasses import dataclass
 from PySide6.QtCore import QPointF, QRectF
 
 
 @dataclass(frozen=True)
 class RoutingConfig:
+    """Tunable routing parameters used when computing orthogonal link paths."""
     route_clearance: float = 24.0
     exit_margin: float = 12.0
     lane_spacing: float = 12.0
@@ -25,14 +30,17 @@ class RoutingConfig:
 
 
 def same_x(a: QPointF, b: QPointF, tolerance: float = 0.001) -> bool:
+    """Return whether two points share the same x coordinate within tolerance."""
     return abs(a.x() - b.x()) < tolerance
 
 
 def same_y(a: QPointF, b: QPointF, tolerance: float = 0.001) -> bool:
+    """Return whether two points share the same y coordinate within tolerance."""
     return abs(a.y() - b.y()) < tolerance
 
 
 def is_orthogonal_segment(a: QPointF, b: QPointF) -> bool:
+    """Return whether a segment is horizontal or vertical."""
     return same_x(a, b) or same_y(a, b)
 
 
@@ -67,6 +75,7 @@ def segment_intersects_rect(a: QPointF, b: QPointF, rect: QRectF) -> bool:
 
 
 def segment_is_clear(a: QPointF, b: QPointF, rects: list[QRectF]) -> bool:
+    """Return whether one orthogonal segment avoids all obstacle rectangles."""
     if not is_orthogonal_segment(a, b):
         return False
 
@@ -74,6 +83,7 @@ def segment_is_clear(a: QPointF, b: QPointF, rects: list[QRectF]) -> bool:
 
 
 def route_is_clear(points: list[QPointF], rects: list[QRectF]) -> bool:
+    """Return whether all segments in a route avoid all obstacle rectangles."""
     for a, b in zip(points, points[1:]):
         if not segment_is_clear(a, b, rects):
             return False
@@ -82,6 +92,7 @@ def route_is_clear(points: list[QPointF], rects: list[QRectF]) -> bool:
 
 
 def route_length(points: list[QPointF]) -> float:
+    """Return Manhattan length for a polyline route."""
     return sum(
         abs(a.x() - b.x()) + abs(a.y() - b.y())
         for a, b in zip(points, points[1:])
@@ -226,6 +237,7 @@ def find_grid_route(
     config: RoutingConfig,
     lane_distance: float = 0.0,
 ) -> list[QPointF] | None:
+    """Find a clear grid-based route between two points when possible."""
     import heapq
     from itertools import count
 

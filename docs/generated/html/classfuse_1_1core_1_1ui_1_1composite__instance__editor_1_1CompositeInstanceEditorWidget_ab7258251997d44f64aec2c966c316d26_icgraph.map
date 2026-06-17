@@ -1,0 +1,15 @@
+<map id="fuse.core.ui.composite_instance_editor.CompositeInstanceEditorWidget.apply_current_edit_to_node" name="fuse.core.ui.composite_instance_editor.CompositeInstanceEditorWidget.apply_current_edit_to_node">
+<area shape="rect" id="Node000001" title=" " alt="" coords="743,163,1033,217"/>
+<area shape="rect" id="Node000002" href="$classfuse_1_1core_1_1ui_1_1composite__instance__editor_1_1CompositeInstanceEditorWidget.html#aea446c1d9a26e285b5fc7bdad516cb47" title=" " alt="" coords="397,5,675,60"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="837,157,771,114,694,74,663,63,665,58,696,69,774,109,840,152"/>
+<area shape="rect" id="Node000003" href="$classfuse_1_1core_1_1ui_1_1composite__instance__editor_1_1CompositeTemplateEditorWidget.html#adc7c5b826256a69e1a1f0e1e4e211a67" title=" " alt="" coords="397,84,675,139"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="751,162,659,141,660,136,752,157"/>
+<area shape="rect" id="Node000004" href="$classfuse_1_1core_1_1ui_1_1composite__instance__editor_1_1CompositeInstanceEditorWidget.html#a718eb11643eb7fadca9fb760e1cda9d4" title=" " alt="" coords="377,163,695,217"/>
+<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="729,193,695,193,695,187,729,187"/>
+<area shape="rect" id="Node000005" href="$classfuse_1_1core_1_1ui_1_1composite__instance__editor_1_1CompositeTemplateEditorWidget.html#aa1565c567b3d02ad71ad43222de6c34b" title=" " alt="" coords="377,241,695,296"/>
+<area shape="poly" id="edge4_Node000001_Node000005" title=" " alt="" coords="752,223,660,244,659,239,751,218"/>
+<area shape="rect" id="Node000006" href="$classfuse_1_1core_1_1ui_1_1composite__instance__editor_1_1CompositeTemplateEditorWidget.html#a5439f5131887cbfc1511b68833706b82" title=" " alt="" coords="402,320,670,375"/>
+<area shape="poly" id="edge5_Node000001_Node000006" title=" " alt="" coords="840,227,773,270,696,310,661,322,659,317,694,305,771,265,837,223"/>
+<area shape="rect" id="Node000007" href="$classfuse_1_1core_1_1ui_1_1composite__instance__editor_1_1CompositeTemplateEditorWidget.html#a70ecbc49529f99769251ecdbe8df4d96" title=" " alt="" coords="5,320,329,375"/>
+<area shape="poly" id="edge6_Node000006_Node000007" title=" " alt="" coords="388,350,330,350,330,345,388,345"/>
+</map>

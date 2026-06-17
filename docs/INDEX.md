@@ -6,6 +6,7 @@ This documentation is organized by audience and topic.
 
 ## User documentation
 
+- [Installation](user/installation.md)
 - [Quickstart](user/quickstart.md)
 - [User guide](user/user-guide.md)
 - [Model editor workflow](user/model-editor-workflow.md)
@@ -13,14 +14,18 @@ This documentation is organized by audience and topic.
 - [Properties and validation](user/properties-and-validation.md)
 - [Project files and save/load](user/project-files.md)
 - [Troubleshooting](user/troubleshooting.md)
+- [Screenshot checklist](user/screenshot-checklist.md)
 
 ## Developer documentation
 
 - [v0.7.0 release notes draft](releases/v0.7.0.md)
 - [v0.6.0 release notes draft](releases/v0.6.0.md)
+- [Developer setup](developer/developer-setup.md)
 - [Development guide](developer/development-guide.md)
 - [Codebase tour](developer/codebase-tour.md)
 - [Resource and icon guide](developer/resources-and-icons.md)
+- [Packaging](developer/packaging.md)
+- [Generated API docs](developer/generated-docs.md)
 - [Release process](developer/release-process.md)
 - [Maintenance checklist](developer/maintenance-checklist.md)
 
@@ -70,3 +75,17 @@ This documentation is organized by audience and topic.
 - [Example: troubleshoot validation issues](examples/validation-walkthrough.md)
 
 - [SST JSON Export Guide](plugins/sst/sst-json-export-guide.md)
+
+## Architecture diagrams
+
+- [Architecture diagrams](architecture/diagrams.md)
+
+## Maintainer documentation
+
+- [v1.0 release readiness](maintainer/v1-release-readiness.md)
+- [GitHub/Jira workflow](maintainer/github-jira-workflow.md)
+- [GitHub Project roadmap](maintainer/github-project-roadmap.md)
+
+## Release notes
+
+- [v0.9.0 release notes draft](releases/v0.9.0.md)

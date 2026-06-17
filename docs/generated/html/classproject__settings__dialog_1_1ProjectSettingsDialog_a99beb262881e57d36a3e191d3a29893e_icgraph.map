@@ -1,0 +1,17 @@
+<map id="project_settings_dialog.ProjectSettingsDialog.build_shared_toolchain_settings" name="project_settings_dialog.ProjectSettingsDialog.build_shared_toolchain_settings">
+<area shape="rect" id="Node000001" title=" " alt="" coords="1123,85,1321,140"/>
+<area shape="rect" id="Node000002" href="$classproject__settings__dialog_1_1ProjectSettingsDialog.html#a52d12fc26cee3028f06626f9c2e1aff3" title=" " alt="" coords="864,45,1067,100"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="1109,98,1066,91,1067,86,1109,92"/>
+<area shape="rect" id="Node000008" href="$classproject__settings__dialog_1_1ProjectSettingsDialog.html#a2233dbfbf902bc9a036a071cfc3ae526" title=" " alt="" coords="856,124,1075,179"/>
+<area shape="poly" id="edge7_Node000001_Node000008" title=" " alt="" coords="1110,132,1075,138,1074,132,1109,127"/>
+<area shape="rect" id="Node000003" href="$classproject__settings__dialog_1_1ProjectSettingsDialog.html#abf1cf440ebfba34412e713af801b4bce" title=" " alt="" coords="589,53,808,93"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="850,75,808,75,808,70,850,70"/>
+<area shape="rect" id="Node000004" href="$classfuse_1_1core_1_1ui_1_1component__palette_1_1ComponentPalette.html#a9173b14924bfc1cc872210996ec36445" title=" " alt="" coords="309,5,539,60"/>
+<area shape="poly" id="edge3_Node000003_Node000004" title=" " alt="" coords="575,57,539,52,540,47,576,52"/>
+<area shape="rect" id="Node000005" href="$classfuse_1_1core_1_1ui_1_1component__palette_1_1ComponentPalette.html#aac74c2949655feb51cb46274626f7703" title=" " alt="" coords="307,84,541,139"/>
+<area shape="poly" id="edge4_Node000003_Node000005" title=" " alt="" coords="576,93,542,97,541,92,575,87"/>
+<area shape="rect" id="Node000006" href="$classfuse_1_1core_1_1ui_1_1component__palette_1_1ComponentPalette.html#a34a69d361def2c1a2347d0b6541bb270" title=" " alt="" coords="19,44,245,99"/>
+<area shape="poly" id="edge5_Node000005_Node000006" title=" " alt="" coords="293,96,245,89,246,84,294,91"/>
+<area shape="rect" id="Node000007" href="$classfuse_1_1core_1_1ui_1_1component__palette_1_1ComponentPalette.html#a88b8150233879f3ac8f639c92875a225" title=" " alt="" coords="5,123,259,177"/>
+<area shape="poly" id="edge6_Node000005_Node000007" title=" " alt="" coords="294,131,259,136,259,131,293,126"/>
+</map>

@@ -1,0 +1,5 @@
+<map id="fuse.core.ui.graphics_items.ComponentNodeItem.layout_subcomp_connector_side" name="fuse.core.ui.graphics_items.ComponentNodeItem.layout_subcomp_connector_side">
+<area shape="rect" id="Node000001" title=" " alt="" coords="308,5,563,60"/>
+<area shape="rect" id="Node000002" href="$classfuse_1_1core_1_1ui_1_1graphics__items_1_1ComponentNodeItem.html#a765a22cd8276ea3c4e467b48ced2cbfe" title=" " alt="" coords="5,5,260,60"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="294,35,260,35,260,30,294,30"/>
+</map>

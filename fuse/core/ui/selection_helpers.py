@@ -2,6 +2,8 @@
 # Copyright (c) 2026 PKB Research Labs, LLC.
 #
 # This file is part of FUSE.
+"""Selection helper functions shared by scene and composite UI code."""
+
 from __future__ import annotations
 
 from typing import Callable
@@ -14,6 +16,7 @@ from fuse.core.ui.graphics_items import (
 
 
 def ensure_scene_selection_state(scene) -> None:
+    """Ensure a scene exposes the selection attributes expected by helper functions."""
     if not hasattr(scene, "selected_component"):
         scene.selected_component = None
     if not hasattr(scene, "selected_connection"):
@@ -24,6 +27,7 @@ def ensure_scene_selection_state(scene) -> None:
 
 
 def selected_component_items(scene) -> list[ComponentNodeItem]:
+    """Return selected component graphics items in stable node-id order."""
     selected = [
         item
         for item in scene.selectedItems()
@@ -36,6 +40,7 @@ def internal_connection_items_for_components(
     scene,
     components: list[ComponentNodeItem],
 ) -> list[ConnectionItem]:
+    """Return links whose endpoints are both inside a component selection."""
     component_set = set(components)
     return [
         connection
@@ -49,6 +54,7 @@ def internal_subcomp_attachment_items_for_components(
     scene,
     components: list[ComponentNodeItem],
 ) -> list[SubcompAttachmentItem]:
+    """Return subcomponent attachments fully contained in a component selection."""
     component_set = set(components)
     return [
         attachment
@@ -59,22 +65,27 @@ def internal_subcomp_attachment_items_for_components(
 
 
 def selected_internal_connection_items(scene) -> list[ConnectionItem]:
+    """Return selected links that are internal to the selected components."""
     return internal_connection_items_for_components(scene, selected_component_items(scene))
 
 
 def selected_internal_subcomp_attachment_items(scene) -> list[SubcompAttachmentItem]:
+    """Return selected subcomponent attachments internal to the selected components."""
     return internal_subcomp_attachment_items_for_components(scene, selected_component_items(scene))
 
 
 def can_create_composite_from_selection(scene) -> bool:
+    """Return whether the current selection can form a composite component."""
     return len(selected_component_items(scene)) >= 2
 
 
 def is_internal_selected_connection(scene, connection: ConnectionItem) -> bool:
+    """Return whether a link is internal to the current component selection."""
     return connection in selected_internal_connection_items(scene)
 
 
 def request_composite_from_selection(scene, callback: Callable | None = None) -> None:
+    """Invoke the composite creation callback for the current valid selection."""
     if not can_create_composite_from_selection(scene):
         return
 
@@ -87,6 +98,7 @@ def request_composite_from_selection(scene, callback: Callable | None = None) ->
 
 
 def update_selection_dependent_highlights(scene, selection_callback=None, properties_panel=None) -> None:
+    """Refresh selection-dependent highlighting on links and attachments."""
     ensure_scene_selection_state(scene)
     components = selected_component_items(scene)
 

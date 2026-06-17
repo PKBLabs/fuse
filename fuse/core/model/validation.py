@@ -11,6 +11,12 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+"""Core model validation routines.
+
+This module performs simulator-neutral validation for FUSE models. It checks
+component names, required parameters, links, subcomponent attachments, and
+plugin-provided compatibility before save/export operations."""
+
 from dataclasses import dataclass
 from typing import Optional
 from fuse.core.persistence.db_access import get_component_details
@@ -18,6 +24,7 @@ from fuse.core.plugin_runtime.manager import get_plugin_by_id
 
 @dataclass
 class ValidationIssue:
+    """Validation warning or error associated with a model object."""
     issue_type: str
     object_name: str
     message: str
@@ -29,6 +36,7 @@ class ValidationIssue:
 
 
 def normalize_default_value(value) -> str:
+    """Normalize database default-value placeholders into editable FUSE values."""
     if value is None:
         return ""
 
@@ -41,6 +49,7 @@ def normalize_default_value(value) -> str:
 
 
 def effective_parameter_value(node, parameter: dict) -> str:
+    """Return the user value for a parameter, falling back to metadata defaults."""
     name = parameter.get("name", "")
     default_value = normalize_default_value(parameter.get("default_val", ""))
 
@@ -53,6 +62,7 @@ def effective_parameter_value(node, parameter: dict) -> str:
 
 
 def validate_unique_names(scene) -> list[ValidationIssue]:
+    """Report duplicate or missing component instance names."""
     issues: list[ValidationIssue] = []
     used: dict[str, list[tuple[str, int | None]]] = {}
 
@@ -116,6 +126,7 @@ def validate_unique_names(scene) -> list[ValidationIssue]:
 
 
 def validate_required_component_parameters(scene) -> list[ValidationIssue]:
+    """Validate required component parameters against plugin metadata."""
     issues: list[ValidationIssue] = []
 
     for node in scene.component_items():
@@ -160,6 +171,7 @@ def validate_required_component_parameters(scene) -> list[ValidationIssue]:
 
 
 def validate_links(scene) -> list[ValidationIssue]:
+    """Validate model links against component port metadata and variable-port rules."""
     issues: list[ValidationIssue] = []
 
     for link in scene.links:
@@ -188,6 +200,7 @@ def validate_links(scene) -> list[ValidationIssue]:
     return issues
 
 def validate_subcomp_attachments(scene) -> list[ValidationIssue]:
+    """Validate subcomponent attachments against component slot metadata."""
     issues: list[ValidationIssue] = []
     seen_slots: dict[tuple[int, str], str] = {}
     seen_children: dict[int, str] = {}
@@ -265,6 +278,7 @@ def validate_subcomp_attachments(scene) -> list[ValidationIssue]:
 
 
 def validate_plugin_links(scene) -> list[ValidationIssue]:
+    """Ask simulator plugins to validate framework-specific link compatibility."""
     plugin_ids = {getattr(scene, "active_plugin_id", "") or ""}
 
     try:
@@ -289,6 +303,7 @@ def validate_plugin_links(scene) -> list[ValidationIssue]:
     return issues
 
 def validate_model(scene) -> list[ValidationIssue]:
+    """Run the core validation suite for the provided model."""
     issues: list[ValidationIssue] = []
     issues.extend(validate_unique_names(scene))
     issues.extend(validate_required_component_parameters(scene))
@@ -298,6 +313,7 @@ def validate_model(scene) -> list[ValidationIssue]:
     return issues
 
 def model_plugin_ids(scene) -> set[str]:
+    """Return plugin identifiers used by components in the model."""
     return {
         (getattr(node.component, "plugin_id", "") or "core").strip()
         for node in scene.component_items()

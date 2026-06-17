@@ -1,0 +1,9 @@
+<map id="fuse.core.plugin_runtime.manager.load_all_palette_items" name="fuse.core.plugin_runtime.manager.load_all_palette_items">
+<area shape="rect" id="Node000001" title=" " alt="" coords="5,37,283,77"/>
+<area shape="rect" id="Node000002" href="$namespacefuse_1_1core_1_1plugin__runtime_1_1manager.html#a03658d7613cfa99c9a1953d109b7f1c5" title=" " alt="" coords="331,37,608,77"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="283,55,317,55,317,60,283,60"/>
+<area shape="rect" id="Node000003" href="$namespacefuse_1_1core_1_1plugin__runtime_1_1manager.html#af0bb917f026f08e34b41cebcf52b6aae" title=" " alt="" coords="683,5,933,45"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="608,42,669,36,670,41,609,47"/>
+<area shape="rect" id="Node000004" href="$namespacefuse_1_1core_1_1plugin__runtime_1_1manager.html#a4f66d038ac7c043a853057994cab791b" title=" " alt="" coords="656,69,960,109"/>
+<area shape="poly" id="edge3_Node000002_Node000004" title=" " alt="" coords="609,68,643,71,642,76,608,73"/>
+</map>

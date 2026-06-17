@@ -1,0 +1,11 @@
+<map id="fuse.core.ui.graphics_items.PortItem.is_connected" name="fuse.core.ui.graphics_items.PortItem.is_connected">
+<area shape="rect" id="Node000001" title=" " alt="" coords="559,102,773,142"/>
+<area shape="rect" id="Node000002" href="$classfuse_1_1core_1_1ui_1_1graphics__items_1_1PortItem.html#a469086f92e5770a0eb75e8de7d66876c" title=" " alt="" coords="296,29,511,84"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="571,101,510,86,512,81,572,96"/>
+<area shape="rect" id="Node000003" href="$classfuse_1_1core_1_1ui_1_1graphics__items_1_1PortItem.html#aa45ab3a02b5495e794926f27e8096baf" title=" " alt="" coords="5,128,248,183"/>
+<area shape="poly" id="edge3_Node000001_Node000003" title=" " alt="" coords="545,132,248,151,248,145,545,127"/>
+<area shape="rect" id="Node000004" href="$classfuse_1_1core_1_1ui_1_1graphics__items_1_1PortItem.html#aeb21c89f9996a1e43b58c08c1cbd6fee" title=" " alt="" coords="316,160,491,215"/>
+<area shape="poly" id="edge4_Node000001_Node000004" title=" " alt="" coords="572,148,492,168,490,163,571,143"/>
+<area shape="poly" id="edge2_Node000002_Node000002" title=" " alt="" coords="447,18,431,11,403,8,380,10,365,15,358,21,358,29,353,29,353,19,362,10,379,5,403,3,433,6,449,14"/>
+<area shape="poly" id="edge5_Node000004_Node000003" title=" " alt="" coords="302,178,248,172,249,167,302,173"/>
+</map>

@@ -2,6 +2,18 @@
 # Copyright (c) 2026 PKB Research Labs, LLC.
 #
 # This file is part of FUSE.
+"""Editors for composite component instances and templates.
+
+Composite editing uses a nested ``ModelScene``/``ModelView`` pair to present
+the mini-model stored inside a composite. Instance editors update a single
+placed node, while template editors update the reusable composite definition in
+the component database and may be applied to existing instances by the main
+window.
+
+The helper functions in this module translate between canvas nodes, serialized
+mini-model dictionaries, and ``CompositePortMapping`` objects that describe
+which internal ports are exposed on the composite boundary.
+"""
 from __future__ import annotations
 
 from copy import deepcopy
@@ -35,6 +47,7 @@ from fuse.core.model.models import SCHEMA_VERSION
 
 
 def composite_definition_for_node(node) -> CompositeComponentDefinition | None:
+    """Load the reusable composite definition referenced by a node, if any."""
     component = getattr(node, "component", None)
     composite_id = getattr(component, "composite_id", "") or getattr(component, "component_id", "") or ""
     if not composite_id:
@@ -43,10 +56,16 @@ def composite_definition_for_node(node) -> CompositeComponentDefinition | None:
 
 
 def mini_model_has_components(mini_model: dict[str, Any]) -> bool:
+    """Return whether a serialized mini-model contains component entries."""
     return isinstance(mini_model, dict) and bool(mini_model.get("components") or [])
 
 
 def composite_instance_mini_model(node) -> dict[str, Any]:
+    """Return the mini-model currently used by a composite node.
+
+    Instance-local edits take precedence over the reusable template. If the
+    instance has not diverged, the template definition is loaded and normalized.
+    """
     instance_model = getattr(node, "composite_instance_model", {}) or {}
     if mini_model_has_components(instance_model):
         normalized_model, ignored_mappings = normalize_mini_model_and_port_mappings(
@@ -66,6 +85,7 @@ def composite_instance_mini_model(node) -> dict[str, Any]:
 
 
 def composite_instance_port_mappings(node) -> list[CompositePortMapping]:
+    """Return normalized exposed-port mappings for a composite node."""
     mappings = getattr(node, "composite_port_mappings", None)
     instance_model = getattr(node, "composite_instance_model", {}) or {}
     if mappings and mini_model_has_components(instance_model):
@@ -86,6 +106,7 @@ def composite_instance_port_mappings(node) -> list[CompositePortMapping]:
 
 
 def port_mapping_matches_port(mapping: CompositePortMapping, port) -> bool:
+    """Return whether a mapping refers to the given internal node/port pair."""
     return (
         int(mapping.internal_node_id) == int(port.node.node_id)
         and str(mapping.internal_component_name) == str(port.node.instance_name)
@@ -98,6 +119,7 @@ def set_exposed_state_for_port_mapping(
     port,
     exposed: bool,
 ) -> bool:
+    """Set the exposed/hidden state for one internal port mapping."""
     for mapping in mappings:
         if port_mapping_matches_port(mapping, port):
             mapping.exposed = bool(exposed)
@@ -109,6 +131,7 @@ def port_is_exposed_in_mappings(
     mappings: list[CompositePortMapping],
     port,
 ) -> bool:
+    """Return whether a given internal port is currently exposed."""
     for mapping in mappings:
         if port_mapping_matches_port(mapping, port):
             return bool(getattr(mapping, "exposed", True))
@@ -119,6 +142,7 @@ def update_editor_port_exposure_visuals(
     scene: ModelScene,
     mappings: list[CompositePortMapping],
 ) -> None:
+    """Refresh port highlighting for a composite editor scene."""
     for node in scene.component_items():
         for port in getattr(node, "ports", []) or []:
             exposed = port_is_exposed_in_mappings(mappings, port)
@@ -127,6 +151,7 @@ def update_editor_port_exposure_visuals(
 
 
 def project_dict_for_mini_model(mini_model: dict[str, Any]) -> dict[str, Any]:
+    """Wrap a composite mini-model in the minimal project dictionary shape."""
     normalized_model, ignored_mappings = normalize_mini_model_and_port_mappings(mini_model, [])
     return {
         "schemaVersion": SCHEMA_VERSION,
@@ -142,6 +167,7 @@ def project_dict_for_mini_model(mini_model: dict[str, Any]) -> dict[str, Any]:
 
 
 def mini_model_from_scene(scene: ModelScene) -> dict[str, Any]:
+    """Serialize the contents of a composite editor scene into a mini-model."""
     return {
         "schemaVersion": "0.1.0",
         "kind": "fuse.composite-mini-model",
@@ -168,6 +194,7 @@ def preserve_exposed_state(
     new_mappings: list[CompositePortMapping],
     existing_mappings: list[CompositePortMapping],
 ) -> list[CompositePortMapping]:
+    """Carry existing exposed/hidden choices onto refreshed port mappings."""
     existing_by_internal_port = {
         (
             int(mapping.internal_node_id),
@@ -198,6 +225,7 @@ def port_mappings_from_scene(
     scene: ModelScene,
     existing_mappings: list[CompositePortMapping] | None = None,
 ) -> list[CompositePortMapping]:
+    """Recompute composite port mappings from the current editor scene."""
     mappings = composite_port_mappings_for_fragment(
         scene.component_items(),
         scene.connection_items(),
@@ -210,6 +238,7 @@ def apply_composite_instance_edit(
     mini_model: dict[str, Any],
     port_mappings: list[CompositePortMapping],
 ) -> None:
+    """Write a composite editor mini-model and mappings back to a node."""
     normalized_model, normalized_mappings = normalize_mini_model_and_port_mappings(
         mini_model,
         port_mappings,
@@ -221,6 +250,12 @@ def apply_composite_instance_edit(
 
 
 class CompositeInstanceEditorWidget(QWidget):
+    """Editor widget for a single placed composite component instance.
+
+    Changes made through this widget update the selected node's instance-local
+    mini-model and port mappings. The reusable composite template is not
+    modified by this editor.
+    """
     def __init__(
         self,
         node,
@@ -330,6 +365,12 @@ class CompositeInstanceEditorWidget(QWidget):
 
 
 class CompositeTemplateEditorWidget(QWidget):
+    """Editor widget for a reusable composite component template.
+
+    The template editor loads a composite definition from the database, allows
+    the user to edit its internal mini-model and exposed ports, and persists
+    the updated definition when the user saves template changes.
+    """
     def __init__(
         self,
         definition: CompositeComponentDefinition,

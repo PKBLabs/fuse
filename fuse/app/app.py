@@ -11,6 +11,21 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+"""Main Qt application shell for the FUSE desktop editor.
+
+This module owns the top-level application lifecycle: database initialization,
+plugin discovery, framework target selection, model tab management, document
+save/load/export actions, validation result presentation, and dock/widget
+composition. Most simulator-specific behavior is delegated to plugin-facing
+services or exporters so that the main window remains responsible for workflow
+coordination rather than simulator semantics.
+
+The central ``MainWindow`` class deliberately connects many UI subsystems
+because it is the point where project state, Qt widgets, and user actions meet.
+Lower-level modules such as ``ModelScene`` and ``ModelView`` implement canvas
+behavior, while this module decides when those behaviors become application
+commands.
+"""
 import copy
 import json
 import os
@@ -128,6 +143,12 @@ def prefer_xcb_platform_for_window_manager_shadows() -> None:
 
 
 class FloatingDockTitleBar(QWidget):
+    """Custom title bar used when a dock widget is floating.
+
+    Qt's default floating dock title bar does not expose the exact controls and
+    styling used by FUSE, so this lightweight widget provides explicit dock and
+    close buttons while preserving drag-to-move behavior for floating panels.
+    """
     def __init__(self, dock: QDockWidget, title: str):
         super().__init__(dock)
         self.dock = dock
@@ -243,6 +264,19 @@ class FloatingDockTitleBar(QWidget):
 
 
 class MainWindow(QMainWindow):
+    """Top-level window and command coordinator for the FUSE editor.
+
+    ``MainWindow`` wires together the component palette, model canvas,
+    properties panel, model outline, validation output, project settings, and
+    export actions. It also owns tab lifecycles for normal model documents,
+    composite instance editors, and composite template editors.
+
+    The class intentionally keeps long-lived project state such as the active
+    framework target, dirty flag, undo/redo snapshots, and current project path.
+    Canvas items and scene-level interaction are delegated to ``ModelScene`` and
+    ``ModelView``; simulator-specific validation/export work is delegated to the
+    active plugin and exporter modules.
+    """
     def __init__(self):
         super().__init__()
         self.setWindowTitle("FUSE")
@@ -2296,6 +2330,13 @@ class MainWindow(QMainWindow):
             event.ignore()
 
 def main():
+    """Run the FUSE desktop application event loop.
+
+    The function creates the Qt application, displays the splash screen,
+    initializes persistent storage and plugin data through ``MainWindow``, and
+    then enters the Qt event loop. It is the console/script entry point used by
+    development launches and packaged desktop artifacts.
+    """
     prefer_xcb_platform_for_window_manager_shadows()
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)

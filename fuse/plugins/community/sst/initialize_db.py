@@ -11,6 +11,12 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+"""SST plugin database schema initialization.
+
+The functions in this module create and migrate SQLite tables used to cache SST
+framework versions, imported components, ports, parameters, statistics, and
+subcomponent slots."""
+
 from fuse.core.persistence.database import (
     get_connection,
     initialize_core_database,
@@ -18,6 +24,7 @@ from fuse.core.persistence.database import (
 
 
 def ensure_column(conn, table_name: str, column_name: str, ddl: str) -> None:
+    """Add a column to an existing SQLite table when it is not already present."""
     columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table_name})")}
 
     if column_name not in columns:
@@ -25,6 +32,7 @@ def ensure_column(conn, table_name: str, column_name: str, ddl: str) -> None:
 
 
 def ensure_sst_port_variable_columns(conn) -> None:
+    """Ensure the SST port table contains variable-port metadata columns."""
     ensure_column(
         conn,
         "sst_ports",
@@ -52,6 +60,7 @@ def ensure_sst_port_variable_columns(conn) -> None:
 
 
 def initialize_sst_schema(conn) -> None:
+    """Create or migrate all SQLite tables required by the SST plugin."""
     conn.execute("""
         CREATE TABLE IF NOT EXISTS sst_framework_versions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -212,6 +221,7 @@ def initialize_sst_schema(conn) -> None:
 
 
 def initialize_database() -> None:
+    """Initialize the core database and then ensure SST-specific tables exist."""
     initialize_core_database()
 
     with get_connection() as conn:
@@ -228,6 +238,7 @@ def get_or_create_sst_framework_version(
     command: str = "",
     is_default: bool = False,
 ) -> int:
+    """Return an SST framework-version row, creating it when necessary."""
     row = conn.execute(
         """
         SELECT id
@@ -290,6 +301,7 @@ def get_or_create_sst_framework_version(
 
 
 def get_default_sst_framework_version_id(conn) -> int | None:
+    """Return the default SST framework-version database id."""
     row = conn.execute(
         """
         SELECT id
@@ -316,6 +328,7 @@ def get_default_sst_framework_version_id(conn) -> int | None:
 
 
 def save_sst_info_run(command, return_code, stdout, stderr, framework_version_id=None):
+    """Record an sst-info execution result for traceability and diagnostics."""
     with get_connection() as conn:
         cursor = conn.execute(
             """

@@ -11,6 +11,13 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+"""Community gem5 framework plugin.
+
+The gem5 plugin provides built-in and imported metadata for common gem5 objects,
+checks gem5 port compatibility, validates configured gem5 toolchains, and
+delegates Python configuration export to the gem5 exporter.
+"""
+
 from __future__ import annotations
 
 import json
@@ -146,10 +153,13 @@ BUILTIN_GEM5_COMPONENTS = {
 
 
 class Gem5Plugin:
+    """FUSE plugin implementation for gem5-based simulation models."""
+
     plugin_id = "gem5"
     name = "gem5"
 
     def initialize_database(self, conn) -> None:
+        """Create or migrate gem5-specific metadata tables."""
         conn.execute("""
             CREATE TABLE IF NOT EXISTS gem5_framework_versions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -252,9 +262,11 @@ class Gem5Plugin:
 
 
     def bootstrap_database(self) -> None:
+        """Ensure built-in gem5 targets and component metadata exist."""
         return
 
     def list_targets(self) -> list[FrameworkTarget]:
+        """Return available gem5 framework targets."""
         with get_connection() as conn:
             rows = conn.execute("""
                 SELECT id, version, label, is_default
@@ -279,6 +291,7 @@ class Gem5Plugin:
         return targets
 
     def load_palette_items(self, target_id: str | None = None) -> list[PaletteItem]:
+        """Return gem5 palette entries for the selected target."""
         targets = self.list_targets()
 
         if target_id is None and targets:
@@ -505,6 +518,7 @@ class Gem5Plugin:
 
 
     def compatible_gem5_interfaces(self, source_iface: str, target_iface: str) -> bool:
+        """Return whether two gem5 port interface strings are compatible."""
         pair = {source_iface, target_iface}
         if not source_iface or not target_iface:
             return True
@@ -521,6 +535,7 @@ class Gem5Plugin:
         source: LinkEndpoint,
         target: LinkEndpoint,
     ) -> LinkCompatibilityResult:
+        """Return interactive compatibility status for a proposed gem5 link."""
         source_iface = (source.port_metadata.get("iface") or source.port_metadata.get("interface") or "").strip()
         target_iface = (target.port_metadata.get("iface") or target.port_metadata.get("interface") or "").strip()
 
@@ -540,6 +555,7 @@ class Gem5Plugin:
         )
 
     def validate_links(self, scene) -> list:
+        """Return gem5 link validation issues for a scene."""
         from fuse.core.model.validation import ValidationIssue
 
         issues = []
@@ -888,6 +904,7 @@ class Gem5Plugin:
 
 
 def gem5_command_from_toolchain(toolchain: ToolchainSettings) -> list[str]:
+    """Build the command prefix used to invoke gem5 for metadata probing."""
     binary = (
         toolchain.tool_paths.get("gem5Binary")
         or toolchain.tool_paths.get("remoteGem5Binary")
@@ -897,6 +914,7 @@ def gem5_command_from_toolchain(toolchain: ToolchainSettings) -> list[str]:
 
 
 def gem5_item_id_for_type(type_name: str) -> str:
+    """Return a stable metadata id for a gem5 type name."""
     value = re.sub(r"(.)([A-Z][a-z]+)", r"\1_\2", type_name)
     value = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", value)
     return value.replace("_x_bar", "_xbar").lower()
@@ -920,6 +938,7 @@ def _category_for_gem5_type(type_name: str) -> str:
 
 
 def gem5_functionality_for_type(type_name: str, category: str = "") -> str:
+    """Classify a gem5 type into a palette functionality bucket."""
     text = str(type_name or "")
     category_text = str(category or _category_for_gem5_type(text) or "")
     lowered = text.lower()
@@ -939,6 +958,7 @@ def gem5_functionality_for_type(type_name: str, category: str = "") -> str:
 
 
 def gem5_component_role(type_name: str, category: str = "", functionality: str = "") -> str:
+    """Return the broad FUSE role for a gem5 class."""
     type_text = str(type_name or "")
     cat = str(category or _category_for_gem5_type(type_text) or "").lower()
     func = str(functionality or gem5_functionality_for_type(type_text, category) or "").lower()
@@ -1016,6 +1036,7 @@ def _query_gem5_version(
 
 
 def query_gem5_metadata(toolchain: ToolchainSettings, timeout_seconds: int = 120) -> dict[str, Any]:
+    """Run gem5 metadata helper code and parse its JSON result."""
     if (toolchain.backend or "local") != "local":
         raise RuntimeError(
             "gem5 live metadata import currently supports local toolchains only. "
@@ -1148,4 +1169,5 @@ def validate_gem5_toolchain(
 
 
 def register_plugin():
+    """Plugin discovery entry point used by the FUSE plugin manager."""
     return Gem5Plugin()

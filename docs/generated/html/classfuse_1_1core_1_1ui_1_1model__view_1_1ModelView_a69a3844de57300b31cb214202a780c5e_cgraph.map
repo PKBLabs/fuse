@@ -1,0 +1,8 @@
+<map id="fuse.core.ui.model_view.ModelView.mouseReleaseEvent" name="fuse.core.ui.model_view.ModelView.mouseReleaseEvent">
+<area shape="rect" id="Node000001" title=" " alt="" coords="5,29,240,84"/>
+<area shape="poly" id="edge1_Node000001_Node000001" title=" " alt="" coords="74,29,74,19,83,10,99,5,123,3,151,6,167,14,165,18,149,11,123,8,100,10,86,15,79,21,79,29"/>
+<area shape="rect" id="Node000002" href="$classfuse_1_1core_1_1ui_1_1model__view_1_1ModelView.html#a86a4598bb637aa71d09b77bed3b9f86f" title=" " alt="" coords="288,29,463,84"/>
+<area shape="poly" id="edge2_Node000001_Node000002" title=" " alt="" coords="240,54,274,54,274,59,240,59"/>
+<area shape="rect" id="Node000003" href="$classfuse_1_1core_1_1ui_1_1model__view_1_1ModelView.html#ac3665b4feeedab798cc4b073765ba4be" title=" " alt="" coords="511,37,727,77"/>
+<area shape="poly" id="edge3_Node000002_Node000003" title=" " alt="" coords="463,54,497,54,497,59,463,59"/>
+</map>

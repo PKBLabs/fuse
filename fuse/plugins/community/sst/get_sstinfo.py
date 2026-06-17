@@ -12,6 +12,12 @@
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
+"""SST metadata import and parsing utilities.
+
+This module runs sst-info locally or through a configured toolchain provider,
+parses the textual output into structured records, and synchronizes those
+records into FUSE's SST metadata tables."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -45,6 +51,7 @@ SST_STATISTIC_PARENT_TYPE = "sst_statistics"
 
 @dataclass
 class CommandResult:
+    """Backward-compatible command result record used by SST import helpers."""
     command: list[str]
     return_code: int
     stdout: str
@@ -53,12 +60,14 @@ class CommandResult:
 
 @dataclass
 class ParsedElement:
+    """Structured SST element record parsed from sst-info output."""
     name: str
     description: str = ""
 
 
 @dataclass
 class ParsedParameter:
+    """Structured parameter record parsed from a component, slot, or statistic block."""
     name: str
     description: str = ""
     default_val: str = ""
@@ -67,6 +76,7 @@ class ParsedParameter:
 
 @dataclass
 class ParsedPort:
+    """Structured component port record parsed from sst-info output."""
     name: str
     description: str = ""
     iface: str = ""
@@ -78,6 +88,7 @@ class ParsedPort:
 
 @dataclass(frozen=True)
 class VariablePortInfo:
+    """Parsed representation of an SST variable-port naming pattern."""
     is_variable: bool
     base_name: str
     count_parameter: str
@@ -91,6 +102,7 @@ _SIMPLE_PRINTF_PORT_RE = re.compile(r"^(?P<base>.+?)%d$")
 
 
 def parse_variable_port_name(name: str) -> VariablePortInfo:
+    """Detect SST variable-port syntax and normalize base/count metadata."""
     printf_count_match = _PRINTF_COUNT_PORT_RE.match(name)
 
     if printf_count_match:
@@ -122,6 +134,7 @@ def parse_variable_port_name(name: str) -> VariablePortInfo:
 
 @dataclass
 class ParsedSubcompSlot:
+    """Structured SST subcomponent-slot record parsed from sst-info output."""
     name: str
     description: str = ""
     iface: str = ""
@@ -129,6 +142,7 @@ class ParsedSubcompSlot:
 
 @dataclass
 class ParsedStatistic:
+    """Structured SST statistic record parsed from sst-info output."""
     name: str
     description: str = ""
     units: str = ""
@@ -138,6 +152,7 @@ class ParsedStatistic:
 
 @dataclass
 class ParsedComponent:
+    """Structured SST component or subcomponent record before database synchronization."""
     element_name: str
     name: str
     description: str = ""
@@ -157,6 +172,7 @@ COMPONENT_RE = re.compile(r"^(Component|SubComponent)\s+\d+:\s+(.+)$")
 
 
 def default_sst_version_label() -> str:
+    """Build the default display label for an imported SST framework version."""
     return os.environ.get("FUSE_SST_VERSION", "15.0.0")
 
 
@@ -169,6 +185,7 @@ def resolve_framework_version_id(
     command: str = "",
     is_default: bool = False,
 ) -> int:
+    """Resolve or create the SST framework-version row for an import operation."""
     resolved_version = version or default_sst_version_label()
 
     return get_or_create_sst_framework_version(
@@ -189,6 +206,7 @@ def get_sstinfo(
     sst_info_path: str = "sst-info",
     env: dict[str, str] | None = None,
 ) -> CommandResult:
+    """Run sst-info from a local executable path and capture its output."""
     if args is None:
         args = []
 
@@ -216,6 +234,7 @@ def get_sstinfo_for_toolchain(
     args=None,
     timeout_seconds=60,
 ) -> CommandResult:
+    """Run sst-info using the command provider configured for a toolchain."""
     provider = provider_from_toolchain(toolchain)
     sst_info_path = toolchain.tool_paths.get("sstInfo") or toolchain.tool_paths.get("sst_info") or "sst-info"
 
@@ -233,6 +252,7 @@ def validate_sst_toolchain(
     expected_version: str = "",
     timeout_seconds=60,
 ) -> tuple[bool, str, CommandResult | None]:
+    """Validate that configured SST toolchain settings can run and match a target version."""
     result = get_sstinfo_for_toolchain(
         toolchain=toolchain,
         args=["--version"],
@@ -289,6 +309,7 @@ def run_and_store_raw_sstinfo(
     is_default: bool = True,
     toolchain: ToolchainSettings | None = None,
 ) -> int:
+    """Run sst-info and persist the raw command result for diagnostics."""
     initialize_database()
 
     if toolchain is not None:
@@ -326,6 +347,7 @@ def run_and_store_raw_sstinfo(
     return run_id
 
 def split_name_and_rest(line: str) -> tuple[str, str]:
+    """Split an sst-info line into the leading name and remaining description text."""
     if ":" not in line:
         return line.strip(), ""
 
@@ -334,6 +356,7 @@ def split_name_and_rest(line: str) -> tuple[str, str]:
 
 
 def find_outer_final_bracket(text: str) -> int | None:
+    """Find the final top-level bracket pair used by default-value syntax."""
     if not text.endswith("]"):
         return None
 
@@ -354,6 +377,7 @@ def find_outer_final_bracket(text: str) -> int | None:
 
 
 def parse_name_description_default(line: str) -> tuple[str, str, str]:
+    """Parse a metadata line into name, description, and optional default value."""
     name, rest = split_name_and_rest(line)
 
     description = rest
@@ -369,6 +393,7 @@ def parse_name_description_default(line: str) -> tuple[str, str, str]:
 
 
 def parse_parameter_line(line: str) -> ParsedParameter:
+    """Parse a parameter line from sst-info text."""
     name, description, default_val = parse_name_description_default(line)
 
     return ParsedParameter(
@@ -380,6 +405,7 @@ def parse_parameter_line(line: str) -> ParsedParameter:
 
 
 def parse_statistic_line(line: str) -> ParsedStatistic:
+    """Parse a statistic line from sst-info text."""
     name, rest = split_name_and_rest(line)
 
     units_match = re.search(r'\(units\s*=\s*"([^"]*)"\)', rest)
@@ -400,6 +426,7 @@ def parse_statistic_line(line: str) -> ParsedStatistic:
 
 
 def append_continuation(item, text: str) -> None:
+    """Append a continuation line to the active parsed metadata field."""
     if item is None:
         return
 
@@ -418,6 +445,7 @@ def append_continuation(item, text: str) -> None:
 
 
 def parse_sstinfo_output(stdout: str) -> tuple[list[ParsedElement], list[ParsedComponent]]:
+    """Parse complete sst-info output into structured element/component records."""
     elements_by_name: dict[str, ParsedElement] = {}
     components: list[ParsedComponent] = []
 
@@ -619,6 +647,7 @@ def parse_sstinfo_output(stdout: str) -> tuple[list[ParsedElement], list[ParsedC
 
 
 def get_or_create_element(conn, framework_version_id: int, name: str, description: str = "") -> int:
+    """Return an SST element id, creating the row when absent."""
     row = conn.execute(
         """
         SELECT id
@@ -655,6 +684,7 @@ def get_or_create_element(conn, framework_version_id: int, name: str, descriptio
 
 
 def get_component_id(conn, framework_version_id: int, parent_id: int, name: str, is_subcomp: int) -> int | None:
+    """Return the SST component id for a parsed component identity."""
     row = conn.execute(
         """
         SELECT id
@@ -682,6 +712,7 @@ def insert_or_update_component(
     functionality: str,
     checkpointable: int,
 ) -> int:
+    """Insert or update one parsed SST component row."""
     existing_id = get_component_id(conn, framework_version_id, parent_id, name, is_subcomp)
 
     if existing_id is not None:
@@ -720,6 +751,7 @@ def insert_or_update_component(
 
 
 def backfill_component_icons(conn, framework_version_id: int | None = None) -> None:
+    """Populate missing icon paths for imported SST components."""
     params: list[int] = []
     where = "WHERE c.icon_path IS NULL OR c.icon_path = ''"
 
@@ -758,6 +790,7 @@ def backfill_component_icons(conn, framework_version_id: int | None = None) -> N
 
 
 def get_statistic_id(conn, framework_version_id: int, parent_id: int, name: str) -> int | None:
+    """Return the database id for an SST statistic row."""
     row = conn.execute(
         """
         SELECT id
@@ -779,6 +812,7 @@ def insert_or_update_statistic(
     units: str,
     iface: str,
 ) -> int:
+    """Insert or update one parsed SST statistic row."""
     existing_id = get_statistic_id(conn, framework_version_id, parent_id, name)
 
     if existing_id is not None:
@@ -804,6 +838,7 @@ def insert_or_update_statistic(
 
 
 def delete_parameters_for(conn, framework_version_id: int, parent_type: str, parent_id: int) -> None:
+    """Remove parameter rows associated with a component or statistic parent."""
     conn.execute(
         """
         DELETE FROM sst_parameters
@@ -814,6 +849,7 @@ def delete_parameters_for(conn, framework_version_id: int, parent_type: str, par
 
 
 def insert_parameter(conn, framework_version_id: int, parent_type: str, parent_id: int, parameter: ParsedParameter) -> int:
+    """Insert one parsed parameter row for a component, statistic, or slot."""
     if parent_type not in {SST_COMPONENT_PARENT_TYPE, SST_STATISTIC_PARENT_TYPE}:
         raise ValueError(f"Unsupported parameter parent_type: {parent_type}")
 
@@ -839,6 +875,7 @@ def insert_parameter(conn, framework_version_id: int, parent_type: str, parent_i
 
 
 def replace_component_children(conn, framework_version_id: int, component_id: int, component: ParsedComponent) -> None:
+    """Replace ports, slots, statistics, and child metadata for one SST component."""
     delete_parameters_for(conn, framework_version_id, SST_COMPONENT_PARENT_TYPE, component_id)
 
     conn.execute(
@@ -997,6 +1034,7 @@ def sync_sstinfo_to_database(
     is_default: bool = True,
     toolchain: ToolchainSettings | None = None,
 ) -> int:
+    """Run sst-info and synchronize the parsed metadata into the database."""
     initialize_database()
 
     if toolchain is not None:
@@ -1042,6 +1080,7 @@ def sync_sstinfo_file_to_database(
     label: str | None = None,
     is_default: bool = True,
 ) -> None:
+    """Import previously captured sst-info output from a file."""
     initialize_database()
 
     path_obj = Path(path)
@@ -1069,6 +1108,7 @@ def sync_sstinfo_file_to_database(
 
 
 def main():
+    """Command-line entry point for importing SST metadata outside the GUI."""
     parser = argparse.ArgumentParser(description="Import SST component metadata into the FUSE database.")
 
     parser.add_argument(

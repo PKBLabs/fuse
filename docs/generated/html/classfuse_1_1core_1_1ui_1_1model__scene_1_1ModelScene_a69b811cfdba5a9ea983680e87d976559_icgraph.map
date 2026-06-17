@@ -1,0 +1,7 @@
+<map id="fuse.core.ui.model_scene.ModelScene.update_subcomp_attachments_for_node" name="fuse.core.ui.model_scene.ModelScene.update_subcomp_attachments_for_node">
+<area shape="rect" id="Node000001" title=" " alt="" coords="255,45,496,100"/>
+<area shape="rect" id="Node000002" href="$classfuse_1_1core_1_1ui_1_1model__scene_1_1ModelScene.html#addfddd4ac3c6bd0ae25a1f7f16c892ce" title=" " alt="" coords="17,5,195,60"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="240,55,195,49,196,43,241,50"/>
+<area shape="rect" id="Node000003" href="$classfuse_1_1core_1_1ui_1_1model__scene_1_1ModelScene.html#ad52ee175b35e7e8f4416da3635d3b478" title=" " alt="" coords="5,84,207,139"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="241,95,207,100,206,94,240,89"/>
+</map>

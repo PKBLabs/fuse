@@ -11,6 +11,13 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+"""Selection properties and inline validation panel for the model editor.
+
+The properties panel displays editable fields for the currently selected
+component, link, or subcomponent attachment. It also overlays validation issues
+from the latest model validation pass so users can see which parameters or
+objects need attention without leaving the main editor.
+"""
 from typing import Optional
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QBrush
@@ -29,6 +36,13 @@ from fuse.core.ui.graphics_items import ComponentNodeItem, ConnectionItem, Subco
 
 
 class PropertiesPanel(QWidget):
+    """Dock widget content for inspecting and editing selected model objects.
+
+    The panel renders a two-column property tree and maps user edits back to the
+    selected canvas item. Component parameters are loaded from plugin metadata
+    when available, while common instance/link/attachment properties are handled
+    by the core editor.
+    """
     def __init__(self):
         super().__init__()
         self.validation_issues_by_node: dict[int, dict[str, list[str]]] = {}

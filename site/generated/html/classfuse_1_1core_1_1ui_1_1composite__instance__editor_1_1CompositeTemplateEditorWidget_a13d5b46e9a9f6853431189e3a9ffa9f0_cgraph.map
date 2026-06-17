@@ -1,0 +1,33 @@
+<map id="fuse.core.ui.composite_instance_editor.CompositeTemplateEditorWidget.load_template_model" name="fuse.core.ui.composite_instance_editor.CompositeTemplateEditorWidget.load_template_model">
+<area shape="rect" id="Node000001" title=" " alt="" coords="5,124,268,179"/>
+<area shape="rect" id="Node000002" href="$namespacefuse_1_1core_1_1ui_1_1composite__instance__editor.html#a76525a01e769dc9a6aa326f0e3e8cc02" title=" " alt="" coords="382,45,559,100"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="253,121,368,94,369,99,254,127"/>
+<area shape="rect" id="Node000003" href="$classfuse_1_1core_1_1ui_1_1composite__instance__editor_1_1CompositeInstanceEditorWidget.html#a1e400b6ce8abdf888122733472ce06d9" title=" " alt="" coords="316,203,625,257"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="254,176,341,197,340,202,253,181"/>
+<area shape="rect" id="Node000014" href="$classfuse_1_1core_1_1ui_1_1composite__instance__editor_1_1CompositeTemplateEditorWidget.html#a0192859f9b808604d00ebfcaf4c4bc7f" title=" " alt="" coords="316,124,625,179"/>
+<area shape="poly" id="edge14_Node000001_Node000014" title=" " alt="" coords="268,149,302,149,302,154,268,154"/>
+<area shape="rect" id="Node000004" href="$classfuse_1_1core_1_1ui_1_1composite__instance__editor_1_1CompositeInstanceEditorWidget.html#a5dbbd7358fed7540c399a3f3a1a22627" title=" " alt="" coords="676,84,933,139"/>
+<area shape="poly" id="edge3_Node000003_Node000004" title=" " alt="" coords="595,200,624,188,638,178,647,168,657,158,672,148,684,142,686,146,675,152,661,162,651,172,642,182,627,192,597,205"/>
+<area shape="rect" id="Node000010" href="$classfuse_1_1core_1_1ui_1_1composite__instance__editor_1_1CompositeTemplateEditorWidget.html#ab6464e3bd7f3bb0a81b4acd99b95293f" title=" " alt="" coords="673,163,936,217"/>
+<area shape="poly" id="edge9_Node000003_Node000010" title=" " alt="" coords="625,209,660,205,660,210,626,214"/>
+<area shape="rect" id="Node000011" href="$namespacefuse_1_1core_1_1ui_1_1composite__instance__editor.html#a1e14bb55cdb139d8c145181ff3d96474" title=" " alt="" coords="695,241,915,296"/>
+<area shape="poly" id="edge11_Node000003_Node000011" title=" " alt="" coords="626,245,681,252,680,257,625,251"/>
+<area shape="rect" id="Node000005" href="$namespacefuse_1_1core_1_1ui_1_1composite__instance__editor.html#a275a18007371d2e9f819d1522d0591ba" title=" " alt="" coords="984,84,1184,139"/>
+<area shape="poly" id="edge4_Node000004_Node000005" title=" " alt="" coords="933,109,970,109,970,114,933,114"/>
+<area shape="rect" id="Node000008" href="$namespacefuse_1_1core_1_1ui_1_1composite__instance__editor.html#a7d4c47b26123ae16c501a32e291d3639" title=" " alt="" coords="996,163,1172,217"/>
+<area shape="poly" id="edge7_Node000004_Node000008" title=" " alt="" coords="903,136,984,159,982,164,902,141"/>
+<area shape="rect" id="Node000006" href="$namespacefuse_1_1core_1_1ui_1_1composite__instance__editor.html#a4404f70529a8de8aea6ae08c12303bcb" title=" " alt="" coords="1232,5,1432,60"/>
+<area shape="poly" id="edge5_Node000005_Node000006" title=" " alt="" coords="1170,81,1231,62,1233,67,1172,86"/>
+<area shape="rect" id="Node000007" href="$namespacefuse_1_1core_1_1ui_1_1composite__instance__editor.html#af9b25b962b8e207c7799682c90e62d27" title=" " alt="" coords="1239,84,1425,139"/>
+<area shape="poly" id="edge6_Node000005_Node000007" title=" " alt="" coords="1184,109,1225,109,1225,114,1184,114"/>
+<area shape="rect" id="Node000009" href="$namespacefuse_1_1core_1_1ui_1_1composite__instance__editor.html#ac487540de07cef11549bec2dd7f04f1d" title=" " alt="" coords="1237,163,1427,217"/>
+<area shape="poly" id="edge8_Node000008_Node000009" title=" " alt="" coords="1172,187,1224,187,1224,193,1172,193"/>
+<area shape="poly" id="edge10_Node000010_Node000008" title=" " alt="" coords="936,187,982,187,982,193,936,193"/>
+<area shape="rect" id="Node000012" href="$namespacefuse_1_1core_1_1ui_1_1composite__instance__editor.html#aeb5bcb02fc5c1ec3b905f7033be4d191" title=" " alt="" coords="988,241,1180,296"/>
+<area shape="poly" id="edge12_Node000011_Node000012" title=" " alt="" coords="915,266,974,266,974,271,915,271"/>
+<area shape="rect" id="Node000013" href="$namespacefuse_1_1core_1_1ui_1_1composite__instance__editor.html#aa2a1cb23173589fc850deccd36f25836" title=" " alt="" coords="1241,241,1423,296"/>
+<area shape="poly" id="edge13_Node000012_Node000013" title=" " alt="" coords="1180,266,1227,266,1227,271,1180,271"/>
+<area shape="poly" id="edge15_Node000014_Node000004" title=" " alt="" coords="625,130,662,126,662,131,626,135"/>
+<area shape="poly" id="edge16_Node000014_Node000010" title=" " alt="" coords="626,167,660,171,660,176,625,172"/>
+<area shape="poly" id="edge17_Node000014_Node000011" title=" " alt="" coords="600,176,627,188,641,197,651,207,661,217,675,226,690,234,687,238,672,231,657,221,648,211,638,201,624,192,598,181"/>
+</map>

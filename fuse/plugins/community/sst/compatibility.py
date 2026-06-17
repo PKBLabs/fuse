@@ -8,6 +8,12 @@
 # Foundation, either version 3 of the License, or, at your option, any later
 # version.
 
+"""SST-specific compatibility checks for links, slots, and target migration.
+
+This module translates SST metadata stored in SQLite into simulator-specific
+validation reports used by the generic FUSE editor. It checks component
+availability, required parameters, port compatibility, and migration readiness."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -20,6 +26,7 @@ from fuse.plugins.community.sst.db_utils import get_component_details
 
 @dataclass(frozen=True)
 class TargetComponentMatch:
+    """Database match for a component in a destination SST target."""
     component_id: int
     framework_version_id: int
     element_name: str
@@ -33,6 +40,7 @@ class TargetComponentMatch:
 
 
 def _node_identity(node) -> tuple[str, str, int]:
+    """Return a stable display identity for a scene node."""
     component = node.component
     return (
         str(getattr(component, "element", "") or ""),
@@ -49,6 +57,7 @@ def _issue(
     fix_kind: str = "",
     fix_data: dict | None = None,
 ) -> CompatibilityIssue:
+    """Create a component-level compatibility issue."""
     return CompatibilityIssue(
         severity=severity,
         object_name=getattr(node, "instance_name", "<unknown>"),
@@ -61,6 +70,7 @@ def _issue(
 
 
 def _link_issue(severity: str, link, message: str) -> CompatibilityIssue:
+    """Create a link-level compatibility issue."""
     return CompatibilityIssue(
         severity=severity,
         object_name=getattr(link, "name", "<unknown link>"),
@@ -75,6 +85,7 @@ def find_target_component(
     component_name: str,
     is_subcomp: int,
 ) -> TargetComponentMatch | None:
+    """Find the matching component row in a destination SST framework target."""
     with get_connection() as conn:
         row = conn.execute(
             """
@@ -120,14 +131,17 @@ def find_target_component(
 
 
 def _parameters_by_name(details: dict[str, Any]) -> dict[str, dict]:
+    """Index parameter detail dictionaries by parameter name."""
     return {str(parameter.get("name", "")): parameter for parameter in details.get("parameters", [])}
 
 
 def _ports_by_name(details: dict[str, Any]) -> dict[str, dict]:
+    """Index port detail dictionaries by port name."""
     return {str(port.get("name", "")): port for port in details.get("ports", [])}
 
 
 def _component_items_for_plugin(scene, plugin_id: str):
+    """Yield scene component items that belong to the SST plugin."""
     return [
         node
         for node in scene.component_items()
@@ -284,6 +298,7 @@ def validate_scene_for_target(scene, target_id: str, plugin_id: str = "sst") -> 
 
 
 def format_compatibility_report(report: CompatibilityReport, limit: int = 50) -> str:
+    """Convert a compatibility report into user-facing text lines."""
     if not report.issues:
         return "The model is compatible with the selected target."
 

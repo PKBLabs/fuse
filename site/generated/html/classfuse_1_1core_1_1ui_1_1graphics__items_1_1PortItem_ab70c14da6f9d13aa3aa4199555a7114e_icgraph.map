@@ -1,0 +1,7 @@
+<map id="fuse.core.ui.graphics_items.PortItem.update_label_position" name="fuse.core.ui.graphics_items.PortItem.update_label_position">
+<area shape="rect" id="Node000001" title=" " alt="" coords="304,45,479,100"/>
+<area shape="rect" id="Node000002" href="$classfuse_1_1core_1_1ui_1_1graphics__items_1_1PortItem.html#a682e26c6e44b2f6697f5103051e1f152" title=" " alt="" coords="31,5,230,60"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="290,60,230,51,231,45,291,55"/>
+<area shape="rect" id="Node000003" href="$classfuse_1_1core_1_1ui_1_1graphics__items_1_1SubcompConnectorItem.html#a3397478f34b15ce0d3dd11309fd21373" title=" " alt="" coords="5,84,256,139"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="291,90,257,95,256,90,290,85"/>
+</map>

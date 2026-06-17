@@ -11,6 +11,8 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+"""Persistence helpers for reusable composite component definitions."""
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -20,12 +22,14 @@ from fuse.core.persistence.database import get_connection, initialize_core_datab
 
 
 def current_timestamp() -> str:
+    """Return an ISO-8601 UTC timestamp for database audit fields."""
     return datetime.now(timezone.utc).isoformat()
 
 
 def save_composite_component_definition(
     definition: CompositeComponentDefinition,
 ) -> CompositeComponentDefinition:
+    """Insert or update a reusable composite component definition."""
     initialize_core_database()
 
     stored = CompositeComponentDefinition.from_dict(definition.to_dict())
@@ -79,6 +83,7 @@ def save_composite_component_definition(
 
 
 def list_composite_component_definitions() -> list[CompositeComponentDefinition]:
+    """Return all stored composite component definitions ordered for display."""
     initialize_core_database()
 
     with get_connection() as conn:
@@ -105,6 +110,7 @@ def list_composite_component_definitions() -> list[CompositeComponentDefinition]
 def get_composite_component_definition(
     composite_id: str,
 ) -> CompositeComponentDefinition | None:
+    """Return one composite component definition by id."""
     initialize_core_database()
 
     with get_connection() as conn:
@@ -133,6 +139,7 @@ def get_composite_component_definition(
 
 
 def delete_composite_component_definition(composite_id: str) -> None:
+    """Delete one composite component definition by id."""
     initialize_core_database()
 
     with get_connection() as conn:

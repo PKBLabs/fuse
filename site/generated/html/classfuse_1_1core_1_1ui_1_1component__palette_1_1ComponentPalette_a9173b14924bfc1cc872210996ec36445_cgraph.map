@@ -1,0 +1,13 @@
+<map id="fuse.core.ui.component_palette.ComponentPalette.load_usage_settings" name="fuse.core.ui.component_palette.ComponentPalette.load_usage_settings">
+<area shape="rect" id="Node000001" title=" " alt="" coords="5,84,236,139"/>
+<area shape="rect" id="Node000002" href="$classproject__settings__dialog_1_1ProjectSettingsDialog.html#abf1cf440ebfba34412e713af801b4bce" title=" " alt="" coords="284,91,503,131"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="236,109,271,109,271,114,236,114"/>
+<area shape="rect" id="Node000003" href="$classproject__settings__dialog_1_1ProjectSettingsDialog.html#a52d12fc26cee3028f06626f9c2e1aff3" title=" " alt="" coords="551,84,753,139"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="503,109,537,109,537,114,503,114"/>
+<area shape="rect" id="Node000004" href="$classproject__settings__dialog_1_1ProjectSettingsDialog.html#a7224e9739c51c21681bd9701377e17a0" title=" " alt="" coords="812,5,989,60"/>
+<area shape="poly" id="edge3_Node000003_Node000004" title=" " alt="" coords="738,81,800,62,801,67,740,86"/>
+<area shape="rect" id="Node000005" href="$classproject__settings__dialog_1_1ProjectSettingsDialog.html#a747800496f33b9e3392f1f8f79bee454" title=" " alt="" coords="812,84,989,139"/>
+<area shape="poly" id="edge4_Node000003_Node000005" title=" " alt="" coords="753,109,798,109,798,114,753,114"/>
+<area shape="rect" id="Node000006" href="$classproject__settings__dialog_1_1ProjectSettingsDialog.html#a99beb262881e57d36a3e191d3a29893e" title=" " alt="" coords="801,163,1000,217"/>
+<area shape="poly" id="edge5_Node000003_Node000006" title=" " alt="" coords="740,136,801,156,800,161,738,141"/>
+</map>
