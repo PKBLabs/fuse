@@ -1033,11 +1033,7 @@ class MainWindow(QMainWindow):
         palette_layout.setContentsMargins(8, 8, 8, 8)
         palette_layout.addWidget(self.palette)
 
-        central_shell = QWidget(self)
-        central_layout = QVBoxLayout(central_shell)
-        central_layout.setContentsMargins(10, 10, 10, 10)
-
-        self.model_tabs = QTabWidget(central_shell)
+        self.model_tabs = QTabWidget(self)
         self.model_tabs.setObjectName("centralModelTabs")
         self.model_tabs.setDocumentMode(True)
         self.model_tabs.setTabsClosable(True)
@@ -1058,8 +1054,7 @@ class MainWindow(QMainWindow):
         self.model_tabs.tabCloseRequested.connect(self.close_model_tab)
         self.model_tabs.currentChanged.connect(self.on_model_tab_changed)
         self.model_tabs.addTab(self.model_view, self.project_model_tab_title())
-        central_layout.addWidget(self.model_tabs)
-        self.setCentralWidget(central_shell)
+        self.setCentralWidget(self.model_tabs)
         self.bind_global_panels_to_active_model_tab()
 
     def make_dock(self, title: str, widget: QWidget, object_name: str = "") -> QDockWidget:

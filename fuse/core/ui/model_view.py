@@ -305,6 +305,7 @@ class ModelView(QGraphicsView):
         self.toolbar = FloatingModelToolbar(self)
         self.toolbar.move(12, 12)
         self.toolbar.show()
+        self._port_exposure_tools_available = False
         self.editor_state_changed_callback = None
         scene.selectionChanged.connect(self.update_selection_highlights)
 
@@ -506,13 +507,11 @@ class ModelView(QGraphicsView):
             self.redo_callback()
 
     def set_port_exposure_tools_available(self, available: bool) -> None:
-        self.toolbar.set_port_exposure_tools_available(bool(available))
+        self._port_exposure_tools_available = bool(available)
+        self.toolbar.set_port_exposure_tools_available(self._port_exposure_tools_available)
 
     def port_exposure_tools_available(self) -> bool:
-        return bool(
-            self.toolbar.expose_ports_button.isEnabled()
-            and self.toolbar.expose_ports_button.isVisible()
-        )
+        return self._port_exposure_tools_available
 
     def set_scene_port_exposure_mode(self, enabled: bool) -> None:
         scene = self.scene()
