@@ -173,7 +173,16 @@ class FloatingModelToolbar(QFrame):
         self.ungroup_button.clicked.connect(view.ungroup_selection)
         layout.addWidget(self.ungroup_button)
 
-        self.adjustSize()
+        self.restore_preferred_size()
+
+    def restore_preferred_size(self) -> None:
+        """Keep the floating toolbar at its natural size after view resizes."""
+        layout = self.layout()
+        if layout is not None:
+            layout.activate()
+        self.setMaximumSize(16777215, 16777215)
+        self.setMinimumSize(self.sizeHint())
+        self.resize(self.sizeHint())
 
     def make_button(
         self,
@@ -241,7 +250,7 @@ class FloatingModelToolbar(QFrame):
         self.expose_ports_button.setVisible(available)
         if not available and self.expose_ports_button.isChecked():
             self.view.enable_select_move_mode()
-        self.adjustSize()
+        self.restore_preferred_size()
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -440,13 +449,7 @@ class ModelView(QGraphicsView):
 
     def set_toolbar_position(self, x: int, y: int) -> None:
         margin = 4
-        available_width = max(1, self.viewport().width() - (margin * 2))
-        available_height = max(1, self.viewport().height() - (margin * 2))
-
-        if self.toolbar.maximumWidth() != available_width:
-            self.toolbar.setMaximumWidth(available_width)
-        if self.toolbar.maximumHeight() != available_height:
-            self.toolbar.setMaximumHeight(available_height)
+        self.toolbar.restore_preferred_size()
 
         # Clamp the toolbar anchor point to the viewport rather than requiring
         # the full toolbar rectangle to fit. Composite-edit tools can make the

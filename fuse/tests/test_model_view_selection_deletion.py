@@ -82,13 +82,42 @@ def test_component_context_menu_remove_uses_current_selection(qtbot, monkeypatch
 
     from fuse.core.ui import graphics_items
 
-    def choose_remove_action(menu, *_args, **_kwargs):
-        for action in menu.actions():
-            if action.text().startswith("Remove"):
-                return action
-        return None
+    class FakeAction:
+        def __init__(self, text: str):
+            self._text = text
+            self._enabled = True
 
-    monkeypatch.setattr(graphics_items.QMenu, "exec", choose_remove_action)
+        def text(self) -> str:
+            return self._text
+
+        def setEnabled(self, enabled: bool) -> None:
+            self._enabled = bool(enabled)
+
+        def isEnabled(self) -> bool:
+            return self._enabled
+
+    class FakeMenu:
+        def __init__(self):
+            self._actions = []
+
+        def addAction(self, text: str):
+            action = FakeAction(text)
+            self._actions.append(action)
+            return action
+
+        def addSeparator(self) -> None:
+            return None
+
+        def actions(self):
+            return list(self._actions)
+
+        def exec(self, *_args, **_kwargs):
+            for action in self._actions:
+                if action.text().startswith("Remove"):
+                    return action
+            return None
+
+    monkeypatch.setattr(graphics_items, "QMenu", FakeMenu)
 
     class FakeContextEvent:
         accepted = False

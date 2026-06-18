@@ -292,3 +292,23 @@ def test_model_view_toolbar_position_is_clamped_to_viewport(qtbot):
     # fit.
     assert view.toolbar.pos().x() <= view.viewport().width() - 4
     assert view.toolbar.pos().y() <= view.viewport().height() - 4
+
+
+def test_model_view_toolbar_restores_natural_width_after_resize(qtbot):
+    scene = ModelScene()
+    view = ModelView(scene)
+    qtbot.addWidget(view)
+    view.resize(800, 600)
+    view.show()
+    qtbot.waitExposed(view)
+
+    natural_width = view.toolbar.sizeHint().width()
+    assert view.toolbar.width() >= natural_width
+
+    view.resize(90, 120)
+    qtbot.wait(20)
+    view.resize(800, 600)
+    qtbot.wait(20)
+    view.set_toolbar_position(12, 12)
+
+    assert view.toolbar.width() >= natural_width

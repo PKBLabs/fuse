@@ -373,19 +373,14 @@ class ComponentPalette(QWidget):
     def set_compatibility_context(self, node):
         self.compatibility_context_node = node
 
-        if node is not None:
-            self.view_selector.blockSignals(True)
-            self.view_selector.setCurrentText(self.VIEW_COMPATIBLE)
-            self.view_selector.blockSignals(False)
-
-        self.populate_tree()
+        # Selection changes should update the compatibility data only when the
+        # user is actively looking at the compatible-components view. They should
+        # not force the catalog out of the user's chosen grouping mode.
+        if self.view_selector.currentText() == self.VIEW_COMPATIBLE:
+            self.populate_tree()
 
     def clear_compatibility_context(self):
-        self.compatibility_context_node = None
-        self.view_selector.blockSignals(True)
-        self.view_selector.setCurrentText(self.preferred_grouping_mode)
-        self.view_selector.blockSignals(False)
-        self.populate_tree()
+        self.set_compatibility_context(None)
 
     def load_components(self):
         """Load the palette across simulator plugins.

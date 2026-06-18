@@ -63,6 +63,20 @@ class PropertiesPanel(QWidget):
         self.tree = QTreeWidget()
         self.tree.setColumnCount(2)
         self.tree.setHeaderLabels(["Property", "Value"])
+        self.tree.setAlternatingRowColors(True)
+        self.tree.setStyleSheet(
+            """
+            QTreeWidget {
+                background: #ffffff;
+                alternate-background-color: #eef4fb;
+            }
+            QTreeWidget::item {
+                min-height: 24px;
+                padding-top: 2px;
+                padding-bottom: 2px;
+            }
+            """
+        )
         self.tree.itemChanged.connect(self.on_item_changed)
         layout.addWidget(self.tree)
 
