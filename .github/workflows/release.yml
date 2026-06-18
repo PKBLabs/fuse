@@ -1,0 +1,65 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version label for manual pre-release builds"
+        required: true
+        default: "v0.9.0-dev"
+
+jobs:
+  source-archive:
+    name: Build source archive
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "value=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create source archives
+        run: |
+          mkdir -p release
+          git archive --format=tar.gz --prefix=fuse-${{ steps.version.outputs.value }}/ HEAD > release/fuse-${{ steps.version.outputs.value }}-source.tar.gz
+          git archive --format=zip --prefix=fuse-${{ steps.version.outputs.value }}/ HEAD > release/fuse-${{ steps.version.outputs.value }}-source.zip
+          cd release
+          sha256sum * > SHA256SUMS.txt
+
+      - name: Upload source release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: FUSE-source-${{ steps.version.outputs.value }}
+          path: release/**
+
+  package:
+    name: Build packaged app artifacts
+    uses: ./.github/workflows/package.yml
+
+  github-release:
+    name: Publish GitHub release
+    needs: [source-archive, package]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          prerelease: ${{ contains(github.ref_name, 'rc') || contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || startsWith(github.ref_name, 'v0.') }}
+          files: release-artifacts/**/*

@@ -1,0 +1,9 @@
+<map id="fuse.core.ui.component_palette.ComponentPalette.on_expand_all_toggled" name="fuse.core.ui.component_palette.ComponentPalette.on_expand_all_toggled">
+<area shape="rect" id="Node000001" title=" " alt="" coords="5,45,224,100"/>
+<area shape="rect" id="Node000002" href="$classfuse_1_1core_1_1ui_1_1component__palette_1_1ComponentPalette.html#a92d08eaeb0b237dc557499495900599e" title=" " alt="" coords="272,5,511,60"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="224,54,258,49,259,55,225,59"/>
+<area shape="rect" id="Node000003" href="$classfuse_1_1core_1_1ui_1_1component__palette_1_1ComponentPalette.html#ab4a80a8fb650be183d312c222db7c574" title=" " alt="" coords="275,84,508,139"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="225,85,261,90,261,96,224,91"/>
+<area shape="rect" id="Node000004" href="$classfuse_1_1core_1_1ui_1_1component__palette_1_1ComponentPalette.html#ac357599c23b6a91a1c1475461a0b78f8" title=" " alt="" coords="559,84,832,139"/>
+<area shape="poly" id="edge3_Node000003_Node000004" title=" " alt="" coords="508,109,545,109,545,114,508,114"/>
+</map>

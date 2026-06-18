@@ -1,0 +1,9 @@
+<map id="fuse.core.ui.composite_builder.build_composite_definition_from_selection" name="fuse.core.ui.composite_builder.build_composite_definition_from_selection">
+<area shape="rect" id="Node000001" title=" " alt="" coords="5,34,200,89"/>
+<area shape="rect" id="Node000002" href="$namespacefuse_1_1core_1_1ui_1_1composite__builder.html#ada94f7b20e31c2af454b523dbc687314" title=" " alt="" coords="248,34,432,89"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="200,59,235,59,235,64,200,64"/>
+<area shape="rect" id="Node000003" href="$namespacefuse_1_1core_1_1ui_1_1composite__builder.html#a68840bdbce8849c5d6ca7a3efdc19bbf" title=" " alt="" coords="480,5,741,45"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="432,47,466,42,466,47,432,52"/>
+<area shape="rect" id="Node000004" href="$namespacefuse_1_1core_1_1ui_1_1composite__builder.html#a496ba47d241f444dc0769ebdbcea0447" title=" " alt="" coords="511,70,710,125"/>
+<area shape="poly" id="edge3_Node000002_Node000004" title=" " alt="" coords="432,71,498,80,497,85,432,76"/>
+</map>

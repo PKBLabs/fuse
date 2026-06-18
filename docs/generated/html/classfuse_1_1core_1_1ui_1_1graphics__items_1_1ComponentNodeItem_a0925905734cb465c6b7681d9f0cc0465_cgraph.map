@@ -1,0 +1,9 @@
+<map id="fuse.core.ui.graphics_items.ComponentNodeItem.sync_ports_to_templates" name="fuse.core.ui.graphics_items.ComponentNodeItem.sync_ports_to_templates">
+<area shape="rect" id="Node000001" title=" " alt="" coords="5,45,248,100"/>
+<area shape="rect" id="Node000002" href="$classfuse_1_1core_1_1model_1_1composite__flattening_1_1FlattenedComponentNode.html#aa789d1c36dafe08b1313b858972d96cf" title=" " alt="" coords="319,5,551,60"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="248,54,304,47,305,52,249,60"/>
+<area shape="rect" id="Node000003" href="$classfuse_1_1core_1_1ui_1_1graphics__items_1_1ComponentNodeItem.html#a42aee494a481f8032abb1f71654c5dc4" title=" " alt="" coords="296,84,573,139"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="249,85,283,90,282,95,248,91"/>
+<area shape="rect" id="Node000004" href="$namespacefuse_1_1core_1_1ui_1_1graphics__items.html#a2b729f0f73a5e2ca6a0c556d42d9af5b" title=" " alt="" coords="621,91,779,131"/>
+<area shape="poly" id="edge3_Node000003_Node000004" title=" " alt="" coords="573,109,608,109,608,114,573,114"/>
+</map>

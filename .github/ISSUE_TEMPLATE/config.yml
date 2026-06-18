@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: FUSE documentation
+    url: https://github.com/PKBLabs/fuse/tree/develop/docs
+    about: Check the current user and developer documentation before opening an issue.
+  - name: Security or private disclosure
+    url: mailto:security@pkbresearchlabs.com
+    about: Do not open public issues for security-sensitive reports.

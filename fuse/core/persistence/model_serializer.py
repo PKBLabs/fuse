@@ -11,6 +11,14 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+"""Project-file schema normalization and validation helpers.
+
+The Qt-specific persistence code converts scenes into dictionaries, then this
+module finalizes metadata and validates that the resulting document conforms to
+the FUSE project-file contract. Keeping these checks separate makes the schema
+usable by tests, future command-line tools, and non-Qt import/export paths.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -26,6 +34,7 @@ SERIALIZER_VERSION = 1
 
 @dataclass(frozen=True)
 class ProjectFileValidationIssue:
+    """Single schema validation problem with a project-file path."""
     path: str
     message: str
 
@@ -34,6 +43,7 @@ class ProjectFileValidationIssue:
 
 
 class ProjectFileValidationError(ValueError):
+    """Raised when a serialized project contains schema validation errors."""
     def __init__(self, issues: list[ProjectFileValidationIssue]):
         self.issues = issues
         preview = "; ".join(str(issue) for issue in issues[:5])
@@ -43,10 +53,12 @@ class ProjectFileValidationError(ValueError):
 
 
 def now_iso() -> str:
+    """Return the current UTC timestamp in ISO 8601 format."""
     return datetime.now(timezone.utc).isoformat()
 
 
 def build_serialization_metadata(project: dict[str, Any]) -> dict[str, Any]:
+    """Build derived metadata describing project contents and serializer state."""
     components = project.get("components", []) if isinstance(project, dict) else []
     links = project.get("links", []) if isinstance(project, dict) else []
     attachments = project.get("subcompAttachments", []) if isinstance(project, dict) else []

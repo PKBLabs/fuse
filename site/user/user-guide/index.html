@@ -1,0 +1,3282 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="User, developer, maintainer, and generated API documentation for FUSE.">
+      
+      
+      
+        <link rel="canonical" href="https://pkblabs.github.io/fuse/user/user-guide/">
+      
+      
+        <link rel="prev" href="../quickstart/">
+      
+      
+        <link rel="next" href="../model-editor-workflow/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/diagrams/fuse-logo-placeholder.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>User Guide - FUSE Community Edition Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#user-guide" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="FUSE Community Edition Documentation" class="md-header__button md-logo" aria-label="FUSE Community Edition Documentation" data-md-component="logo">
+      
+  <img src="../../assets/diagrams/fuse-logo-placeholder.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            FUSE Community Edition Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              User Guide
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/PKBLabs/fuse" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    PKBLabs/fuse
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="FUSE Community Edition Documentation" class="md-nav__button md-logo" aria-label="FUSE Community Edition Documentation" data-md-component="logo">
+      
+  <img src="../../assets/diagrams/fuse-logo-placeholder.svg" alt="logo">
+
+    </a>
+    FUSE Community Edition Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/PKBLabs/fuse" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    PKBLabs/fuse
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quickstart
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#main-window" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Main window
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#projects-and-project-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Projects and Project Settings
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#component-palette" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Component palette
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Component palette">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#palette-organization-and-sorting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Palette organization and sorting
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#frequently-used-and-recent-components" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Frequently used and recent components
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#composite-component-entries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Composite component entries
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#adding-a-component-to-the-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding a component to the model
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#navigating-the-canvas" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Navigating the canvas
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#selecting-a-component" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Selecting a component
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#editing-a-component" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Editing a component
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#creating-links" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Creating links
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#selecting-links" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Selecting links
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#creating-composite-components" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Creating composite components
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#highlighting-related-links" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Highlighting related links
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deleting-components-subcomponents-and-links" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deleting components, subcomponents, and links
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#undo-redo-and-unsaved-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Undo, redo, and unsaved changes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#validating-a-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validating a model
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#saving-a-project" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Saving a project
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#opening-a-project" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Opening a project
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exporting-simulator-specific-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exporting simulator-specific output
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#about-dialog" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        About dialog
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#more-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        More documentation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#unsaved-changes-and-project-lifecycle-actions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unsaved changes and project lifecycle actions
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../model-editor-workflow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Model Editor Workflow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../composite-components/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Composite Components
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../properties-and-validation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Properties and Validation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../project-files/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Files
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../screenshot-checklist/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Screenshot Checklist
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Examples
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/simple-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Simple Model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/validation-walkthrough/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Validation Walkthrough
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/import-sst-metadata/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Import SST Metadata
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/write-a-plugin/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Write a Plugin
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/component-definitions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Component Definitions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugins
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Plugins
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugins/plugin-system/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugin System
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugins/plugin-development-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugin Development Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugins/sst/sst-plugin/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SST Plugin
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugins/sst/sst-import-workflow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SST Import Workflow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugins/sst/sst-json-export-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SST JSON Export
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugins/sst/sst-database-schema/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SST Database Schema
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugins/sst/sst-external-validation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SST External Validation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugins/gem5/gem5-plugin/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    gem5 Plugin
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Architecture
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/architecture-overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/application-startup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Application Startup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/data-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Data Model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/persistence-and-database/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Persistence and Database
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/routing-and-canvas/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Routing and Canvas
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Developer
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/developer-setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/development-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/codebase-tour/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Codebase Tour
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/resources-and-icons/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Resources and Icons
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/generated-docs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Generated API Docs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/maintenance-checklist/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Maintenance Checklist
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/release-process/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Process
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/generated-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Generated API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/plugin-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugin API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/plugin-manifest/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugin Manifest
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/fse-format/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FSE Format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/component-metadata/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Component Metadata
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/database-tables/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Database Tables
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/environment-variables/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Environment Variables
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Glossary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ci/github-actions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitHub Actions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ci/sst-ci-container/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SST CI Container
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ci/gem5-ci-container/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    gem5 CI Container
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/common-maintenance-tasks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Common Maintenance Tasks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/known-limitations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Known Limitations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/licensing-and-policy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Licensing and Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/media-capture-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Media Capture Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testing
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Testing
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../testing/testing-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testing Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../testing/test-matrix/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test Matrix
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Releases
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Releases
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.7.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.7.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.6.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.6.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#main-window" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Main window
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#projects-and-project-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Projects and Project Settings
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#component-palette" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Component palette
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Component palette">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#palette-organization-and-sorting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Palette organization and sorting
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#frequently-used-and-recent-components" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Frequently used and recent components
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#composite-component-entries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Composite component entries
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#adding-a-component-to-the-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding a component to the model
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#navigating-the-canvas" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Navigating the canvas
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#selecting-a-component" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Selecting a component
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#editing-a-component" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Editing a component
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#creating-links" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Creating links
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#selecting-links" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Selecting links
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#creating-composite-components" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Creating composite components
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#highlighting-related-links" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Highlighting related links
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deleting-components-subcomponents-and-links" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deleting components, subcomponents, and links
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#undo-redo-and-unsaved-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Undo, redo, and unsaved changes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#validating-a-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validating a model
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#saving-a-project" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Saving a project
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#opening-a-project" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Opening a project
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exporting-simulator-specific-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exporting simulator-specific output
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#about-dialog" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        About dialog
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#more-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        More documentation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#unsaved-changes-and-project-lifecycle-actions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unsaved changes and project lifecycle actions
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="user-guide">User Guide<a class="headerlink" href="#user-guide" title="Permanent link">&para;</a></h1>
+<p>FUSE provides an IDE-style model-building workspace for architecture and systems simulation workflows.</p>
+<h2 id="main-window">Main window<a class="headerlink" href="#main-window" title="Permanent link">&para;</a></h2>
+<!-- FUSE-MEDIA-TODO id=user-main-window type=screenshot path=../assets/screenshots/main-window-annotated.png -->
+<blockquote>
+<p><strong>Media TODO (user-main-window)</strong>: Add an annotated screenshot of the main window showing menu bar, palette, canvas, properties panel, and status/validation areas.
+Planned asset: <code>../assets/screenshots/main-window-annotated.png</code></p>
+</blockquote>
+<p>The main window contains:</p>
+<ul>
+<li>A menu bar.</li>
+<li>A left component palette.</li>
+<li>A central drawing/model canvas.</li>
+<li>A dockable properties panel.</li>
+<li>A status bar.</li>
+</ul>
+<h2 id="projects-and-project-settings">Projects and Project Settings<a class="headerlink" href="#projects-and-project-settings" title="Permanent link">&para;</a></h2>
+<!-- FUSE-MEDIA-TODO id=user-project-settings type=screenshot path=../assets/screenshots/project-settings.png -->
+<blockquote>
+<p><strong>Media TODO (user-project-settings)</strong>: Add a screenshot of Project Settings with plugin/framework target controls visible.
+Planned asset: <code>../assets/screenshots/project-settings.png</code></p>
+</blockquote>
+<p>FUSE projects are configured through:</p>
+<div class="highlight"><pre><span></span><code>File -&gt; New Project
+File -&gt; Open Project
+File -&gt; Project Settings
+</code></pre></div>
+<p>Project Settings define:</p>
+<ul>
+<li>Project name.</li>
+<li>Active framework/plugin.</li>
+<li>Enabled plugins.</li>
+<li>Target version/catalog for each enabled plugin.</li>
+<li>Local or remote SSH execution environment.</li>
+<li>Tool paths for enabled simulator/framework toolchains.</li>
+<li>Preferred component catalog sorting and grouping behavior.</li>
+<li>Whether the component catalog should auto-expand by default.</li>
+</ul>
+<p>Project-specific settings are saved in the <code>.fse</code> file. This lets one project target SST 15.1.2 while another targets SST 16.0.0 or gem5 25.1.0.1.</p>
+<h2 id="component-palette">Component palette<a class="headerlink" href="#component-palette" title="Permanent link">&para;</a></h2>
+<!-- FUSE-MEDIA-TODO id=user-component-palette type=screenshot path=../assets/screenshots/component-palette-sst.png -->
+<blockquote>
+<p><strong>Media TODO (user-component-palette)</strong>: Add a screenshot of the component palette populated with SST or gem5 items.
+Planned asset: <code>../assets/screenshots/component-palette-sst.png</code></p>
+</blockquote>
+<p>The component palette lists components provided by the active plugin and selected target/catalog. It also lists locally stored composite components under <strong>Composite Components</strong> when reusable mini-model templates are available.</p>
+<p>The Community Edition includes community plugin directories for:</p>
+<ul>
+<li><code>plugins/community/sst/</code></li>
+<li><code>plugins/community/gem5/</code></li>
+</ul>
+<p>The SST plugin populates palette items by reading SST metadata from <code>sst-info</code>, parsing it, storing it in <code>sst_*</code> database tables, and translating records into generic FUSE palette items.</p>
+<p>The gem5 plugin can import live SimObject metadata from a configured local gem5 executable. When no live metadata has been imported for the selected target, it falls back to built-in metadata for supported objects such as <code>System</code>, <code>TimingSimpleCPU</code>, <code>SystemXBar</code>, and <code>DDR3_1600_8x8</code>.</p>
+<h3 id="palette-organization-and-sorting">Palette organization and sorting<a class="headerlink" href="#palette-organization-and-sorting" title="Permanent link">&para;</a></h3>
+<p>The palette can show the active catalog in several views:</p>
+<ul>
+<li><strong>Element</strong> groups components by simulator/framework element and then separates normal components from subcomponents.</li>
+<li><strong>Function</strong> groups components by inferred function, such as CPU, Memory, Network, Bus / Interconnect, I/O, Generator, and Statistics / Debug.</li>
+<li><strong>Flat</strong> shows all available entries in one list.</li>
+<li><strong>Recent</strong> shows recently used components and subcomponents.</li>
+<li><strong>Compatible SubComponents</strong> narrows the list to subcomponents that match the selected component's available subcomponent slots when that compatibility context is available.</li>
+</ul>
+<p>The <strong>A-Z</strong> checkbox controls catalog sorting. When it is enabled, groups and entries are sorted alphabetically. Component sorting uses the component element, whether the entry is a component or subcomponent, and the component name. When it is disabled, entries keep the order returned by the active plugin/catalog.</p>
+<p>The search field above the catalog filters the tree as you type. Search terms are matched against known metadata including component name, display name, element/library, category, function, description, interface, plugin ID, target label, and framework version. Multiple search terms must all match the component metadata.</p>
+<p>The <strong>Expand/Collapse All</strong> checkbox expands or collapses the current catalog tree. The checkbox state is stored in the project so a project can reopen with the user's preferred catalog expansion state. <strong>Auto Expand All Component Tree</strong> in Project Settings can force the catalog to expand whenever it is rebuilt.</p>
+<p>Project Settings also stores preferred grouping and sorting modes. When a model component is actively selected, FUSE may temporarily switch the catalog to compatible-component mode. When the selection is cleared, the catalog returns to the preferred grouping and sorting behavior.</p>
+<p>Palette entries show tooltips when you hover over them. A component tooltip includes the display name, description, function, interface, and category when that metadata is available. Gem5 entries use imported or inferred functionality such as System, Processor, Interconnect, Memory, Memory Hierarchy, Device, or SimObject to keep live catalogs navigable.</p>
+<h3 id="frequently-used-and-recent-components">Frequently used and recent components<a class="headerlink" href="#frequently-used-and-recent-components" title="Permanent link">&para;</a></h3>
+<p>The palette tracks component usage locally so frequently used and recently used items can be reached quickly.</p>
+<ul>
+<li>Dragging/dropping a component records it as recently used and increments its usage count.</li>
+<li>The <strong>Frequently Used</strong> quick section shows the highest-count entries first, with alphabetical ordering as a tie-breaker.</li>
+<li>Right-click a component instance on the canvas or in the model outline and choose <strong>Add to Frequently Used</strong> to pin that component into the quick section.</li>
+<li>Frequently used entries can also be hidden/removed from the quick section through the palette's component tile context menu.</li>
+</ul>
+<p>Usage state is stored in local user settings. It is a convenience feature and is not written to the <code>.fse</code> project file.</p>
+<h3 id="composite-component-entries">Composite component entries<a class="headerlink" href="#composite-component-entries" title="Permanent link">&para;</a></h3>
+<p>Composite components are reusable FUSE mini-model templates. They appear in the palette under <strong>Composite Components</strong> and can be dragged onto the model canvas like plugin-provided components. A composite palette entry is owned by FUSE core, not by SST or gem5. During simulator validation/export, FUSE expands composite instances into their internal simulator-specific components and links before handing the model to the active plugin.</p>
+<h2 id="adding-a-component-to-the-model">Adding a component to the model<a class="headerlink" href="#adding-a-component-to-the-model" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Select a component in the palette.</li>
+<li>Drag it into the model canvas.</li>
+<li>Drop it where you want the component instance to appear.</li>
+</ol>
+<p>When the component is dropped, FUSE converts the drop location into model coordinates, creates a component instance, assigns a unique default instance name, adds the node to the model, and marks the project dirty.</p>
+<p>A component instance appears as an architecture icon with ports. The exact ports come from plugin-provided item details. If no ports are available, FUSE may use fallback ports so the component remains usable. For composite instances, visible ports correspond to the unlinked ports inside the composite mini-model.</p>
+<h2 id="navigating-the-canvas">Navigating the canvas<a class="headerlink" href="#navigating-the-canvas" title="Permanent link">&para;</a></h2>
+<p>The model canvas is a zoomable and pannable workspace. The light grid behind the model is a visual organization aid only; it is not exported to simulators.</p>
+<p>The floating model-view toolbar provides:</p>
+<ul>
+<li><strong>Select/Move</strong> for normal component, port, link, and background interactions.</li>
+<li><strong>Multiselect</strong> for rectangular marquee selection.</li>
+<li><strong>Undo</strong> and <strong>Redo</strong> shortcuts.</li>
+<li>A zoom percentage selector and <strong>Zoom In</strong> / <strong>Zoom Out</strong> buttons.</li>
+</ul>
+<p>In <strong>Select/Move</strong> mode, dragging empty canvas background pans the view. Dragging a component or subcomponent moves only that item. The mouse wheel zooms the view, and keyboard zoom shortcuts mirror common desktop zoom behavior.</p>
+<p>FUSE saves editor viewport state in <code>.fse</code> files, including zoom percentage, interaction mode, toolbar position, and the current view center. This state restores the editing workspace when the project is reopened, but it is not simulator topology and does not affect simulator export.</p>
+<h2 id="selecting-a-component">Selecting a component<a class="headerlink" href="#selecting-a-component" title="Permanent link">&para;</a></h2>
+<p>Click a component instance on the canvas.</p>
+<p>Hovering over a component shows a tooltip with the instance name, component type, plugin/target metadata, and warning text when validation has marked the component. Hovering over a port shows the port name and whether the port is available or already occupied.</p>
+<p>Right-click a component instance to open its context menu. The component context menu currently includes:</p>
+<ul>
+<li><strong>Add to Frequently Used</strong>: pins or promotes that component type in the palette's Frequently Used section.</li>
+<li><strong>Remove Component</strong>: deletes the component instance from the model.</li>
+<li><strong>Remove SubComponent</strong>: shown instead of Remove Component for subcomponent instances.</li>
+</ul>
+<p>The properties panel updates to show:</p>
+<ul>
+<li>Instance name.</li>
+<li>Component kind.</li>
+<li>Element/category/type metadata.</li>
+<li>Target/catalog metadata.</li>
+<li>Framework version.</li>
+<li>Icon path.</li>
+<li>Parameters.</li>
+</ul>
+<p>Required parameters are marked with <code>*</code>.</p>
+<h2 id="editing-a-component">Editing a component<a class="headerlink" href="#editing-a-component" title="Permanent link">&para;</a></h2>
+<p>In the properties panel, edit the value column for editable rows.</p>
+<p>Common editable fields include:</p>
+<ul>
+<li><code>Name</code></li>
+<li><code>Icon Path</code></li>
+<li>Parameter values</li>
+</ul>
+<p>The component instance name must be unique within the model. Parameter edits are written back to the component instance and saved in the <code>.fse</code> project file.</p>
+<h2 id="creating-links">Creating links<a class="headerlink" href="#creating-links" title="Permanent link">&para;</a></h2>
+<p>FUSE currently supports point-to-point links.</p>
+<p>To create a link:</p>
+<ol>
+<li>Click an unconnected source port.</li>
+<li>Click an unconnected target port.</li>
+<li>Enter a latency when prompted.</li>
+</ol>
+<p>Each point-to-point port can participate in at most one link. If a port is already connected, FUSE rejects attempts to connect it again.</p>
+<h2 id="selecting-links">Selecting links<a class="headerlink" href="#selecting-links" title="Permanent link">&para;</a></h2>
+<p>Click a link line to select it.</p>
+<p>Hovering over a link shows a tooltip with the link name, source endpoint, target endpoint, source latency, and target latency. Right-click a link and choose <strong>Remove Link</strong> to delete it.</p>
+<p>The properties panel updates to show:</p>
+<ul>
+<li>Link name.</li>
+<li>Link type.</li>
+<li>Source component and source port.</li>
+<li>Target component and target port.</li>
+<li>Latency.</li>
+</ul>
+<p>The selected link is highlighted.</p>
+<h2 id="creating-composite-components">Creating composite components<a class="headerlink" href="#creating-composite-components" title="Permanent link">&para;</a></h2>
+<p>Use composite components when you want to reuse a configured portion of the model. Select multiple components with <strong>Multiselect</strong> or <strong>Ctrl+click</strong>, then choose <strong>Edit -&gt; Create Composite Component from Selection</strong> or the same action from the selected component context menu.</p>
+<p>FUSE stores the selected components, internal links, parameters, and relative positions as a local composite definition. It replaces the selected fragment with one composite instance. Only links whose endpoints are both selected become internal composite links.</p>
+<p>Composite ports are explicit. New composites expose no ports by default. Open a composite template or instance edit tab, enable <strong>Expose Ports</strong> in the floating toolbar, or right-click an internal port to choose <strong>Expose Port on Composite</strong> / <strong>Hide Port from Composite</strong>. Only exposed ports appear on the composite box and can be linked from the parent model.</p>
+<p>Double-click a composite instance to open an editable model-view tab for that instance. Edits in an instance tab affect only that placed instance, not the global composite template. Composite tabs can be nested; for example, opening a composite inside another composite creates a hierarchy-labeled tab such as <code>Outer_1:Inner_1</code>.</p>
+<p>Manage reusable templates with <strong>Edit -&gt; Manage Composite Components...</strong>. The manager can import <code>.fcc</code> files, export selected definitions, delete obsolete definitions from the local database, and open global template edit tabs. Template edit tabs have a <strong>Save Template Changes</strong> button and prompt before closing with unsaved changes.</p>
+<p>For the full workflow, see <a href="../composite-components/">Composite Components</a>.</p>
+<h2 id="highlighting-related-links">Highlighting related links<a class="headerlink" href="#highlighting-related-links" title="Permanent link">&para;</a></h2>
+<p>Click a component instance to highlight links attached to that component. This helps identify link ownership in dense models. When several components are selected, FUSE highlights only links whose endpoints are both inside the selected set.</p>
+<h2 id="deleting-components-subcomponents-and-links">Deleting components, subcomponents, and links<a class="headerlink" href="#deleting-components-subcomponents-and-links" title="Permanent link">&para;</a></h2>
+<p>FUSE provides several equivalent deletion paths:</p>
+<ul>
+<li>Select a component, subcomponent, link, or subcomponent attachment on the canvas and press <strong>Delete</strong> or <strong>Backspace</strong>.</li>
+<li>Right-click a component on the canvas and choose <strong>Remove Component</strong> or <strong>Remove SubComponent</strong>.</li>
+<li>Right-click a link on the canvas and choose <strong>Remove Link</strong>.</li>
+<li>Select a link or attachment and use the delete button shown in the properties panel.</li>
+<li>Right-click an item in the model outline and choose the remove action.</li>
+<li>Select a component or link in the model outline and press <strong>Delete</strong> or <strong>Backspace</strong>.</li>
+</ul>
+<p>Deleting a component also deletes normal links attached to that component, subcomponent attachment edges involving that component, and recursively attached child subcomponents. Deleting a link removes it from both endpoint ports and makes those ports available again. All deletion operations mark the project dirty.</p>
+<h2 id="undo-redo-and-unsaved-changes">Undo, redo, and unsaved changes<a class="headerlink" href="#undo-redo-and-unsaved-changes" title="Permanent link">&para;</a></h2>
+<p>Use <strong>Edit -&gt; Undo</strong> or <strong>Ctrl+Z</strong> to undo the most recent model edit. Use <strong>Edit -&gt; Redo</strong> or <strong>Ctrl+Shift+Z</strong> to restore an edit that was undone. Undo/redo covers the current editing session and is intended for normal model-editing actions such as component creation, deletion, property changes, link changes, subcomponent attachment changes, and layout moves. Interactive drag movement is recorded as one undoable layout change instead of a separate history entry for every intermediate mouse position.</p>
+<p>Creating a new edit after undoing clears the redo stack, matching common editor behavior. The edit history is bounded so very long editing sessions do not grow without limit.</p>
+<p>When the model has unsaved changes, FUSE shows an asterisk in the window title and an <strong>Unsaved</strong> indicator in the status bar. Saving the project clears the indicator. New/Open/Exit prompts still protect unsaved changes.</p>
+<h2 id="validating-a-model">Validating a model<a class="headerlink" href="#validating-a-model" title="Permanent link">&para;</a></h2>
+<p>FUSE validates generic model rules before save/export workflows.</p>
+<p>Current validation checks include:</p>
+<ul>
+<li>Empty component names.</li>
+<li>Duplicate component names.</li>
+<li>Empty link names.</li>
+<li>Duplicate link names.</li>
+<li>Missing required component parameters.</li>
+<li>Missing link latency.</li>
+</ul>
+<p>Project Settings also validates configured toolchains for enabled plugins.</p>
+<h2 id="saving-a-project">Saving a project<a class="headerlink" href="#saving-a-project" title="Permanent link">&para;</a></h2>
+<p>Use:</p>
+<div class="highlight"><pre><span></span><code>File -&gt; Save
+</code></pre></div>
+<p>or:</p>
+<div class="highlight"><pre><span></span><code>File -&gt; Save As...
+</code></pre></div>
+<p>FUSE project files use the <code>.fse</code> extension.</p>
+<p>Before saving, FUSE validates the model. If required values are missing or names are duplicated, save is blocked and the affected components/rows are marked.</p>
+<h2 id="opening-a-project">Opening a project<a class="headerlink" href="#opening-a-project" title="Permanent link">&para;</a></h2>
+<p>Use:</p>
+<div class="highlight"><pre><span></span><code>File -&gt; Open...
+</code></pre></div>
+<p>The project loader restores:</p>
+<ul>
+<li>Project settings.</li>
+<li>Active plugin/target selection.</li>
+<li>Component instances, including composite instance identity and instance-local composite edit state.</li>
+<li>Instance names.</li>
+<li>Component plugin IDs.</li>
+<li>Framework target metadata.</li>
+<li>Instance parameters.</li>
+<li>Positions.</li>
+<li>Links.</li>
+<li>Link latency.</li>
+<li>Icon paths.</li>
+</ul>
+<h2 id="exporting-simulator-specific-output">Exporting simulator-specific output<a class="headerlink" href="#exporting-simulator-specific-output" title="Permanent link">&para;</a></h2>
+<p>A <code>.fse</code> file is FUSE's native project format. Simulator-specific exports are generated separately.</p>
+<p>For SST, FUSE can export the current model to SST JSON configuration format. The generated SST JSON file is intended for SST, while the <code>.fse</code> file remains the editable FUSE project. Composite instances are expanded before plugin validation/export so the simulator-specific output contains ordinary SST or gem5 objects, not FUSE composite nodes.</p>
+<h2 id="about-dialog">About dialog<a class="headerlink" href="#about-dialog" title="Permanent link">&para;</a></h2>
+<p>Use:</p>
+<div class="highlight"><pre><span></span><code>Help -&gt; About FUSE
+</code></pre></div>
+<p>The About dialog shows version, edition, licensing, copyright, and plugin policy summary information.</p>
+<h2 id="more-documentation">More documentation<a class="headerlink" href="#more-documentation" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../model-editor-workflow/">Model Editor Workflow</a></li>
+<li><a href="../composite-components/">Composite Components</a></li>
+<li><a href="../properties-and-validation/">Properties and Validation</a></li>
+<li><a href="../project-files/">Project Files</a></li>
+<li><a href="../../reference/component-metadata/">Component Metadata Reference</a></li>
+</ul>
+<h2 id="unsaved-changes-and-project-lifecycle-actions">Unsaved changes and project lifecycle actions<a class="headerlink" href="#unsaved-changes-and-project-lifecycle-actions" title="Permanent link">&para;</a></h2>
+<p>The model title and status bar indicate when the current project has unsaved changes. FUSE clears this dirty state after a successful save or after opening/creating a clean project.</p>
+<p>When a dirty model is open, New, Open, and Exit actions present a save prompt. Failed saves do not discard work, and cancelling the prompt leaves the current model unchanged.</p>
+
+
+
+
+
+
+
+  
+    
+  
+  
+    
+  
+
+
+  <aside class="md-source-file">
+    
+      
+  <span class="md-source-file__fact">
+    <span class="md-icon" title="Last update">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
+    </span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="June 8, 2026 02:55:09 UTC">June 8, 2026</span>
+  </span>
+
+    
+    
+      
+  <span class="md-source-file__fact">
+    <span class="md-icon" title="Created">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
+    </span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 23, 2026 03:17:10 UTC">May 23, 2026</span>
+  </span>
+
+    
+    
+    
+  </aside>
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../quickstart/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Quickstart">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Quickstart
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../model-editor-workflow/" class="md-footer__link md-footer__link--next" aria-label="Next: Model Editor Workflow">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Model Editor Workflow
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.sections", "navigation.expand", "navigation.top", "navigation.footer", "toc.follow", "search.highlight", "search.suggest", "content.code.copy"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,59 @@
+name: Feature request
+description: Suggest an improvement or new capability for FUSE.
+title: "[Feature]: "
+labels: ["type: enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for user-visible features, workflow improvements, simulator support, or roadmap suggestions.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What problem does this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposed
+    attributes:
+      label: Proposed behavior
+      description: Describe the desired behavior or workflow.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Core app
+        - Canvas/UI
+        - Composite components
+        - SST plugin
+        - gem5 plugin
+        - Plugin API
+        - Packaging/installers
+        - Documentation
+        - CI/release
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: release
+    attributes:
+      label: Suggested release target
+      options:
+        - v0.9.x / v1.0 readiness
+        - v1.x
+        - v2.0 component authoring
+        - Future / unsure
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context, examples, or screenshots

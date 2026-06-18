@@ -11,6 +11,14 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+"""Project settings dialog for framework targets and toolchain execution.
+
+This module owns the Qt dialog that edits project-wide FUSE settings, including
+the active simulator plugin, selected framework/catalog target, and local or
+SSH-based toolchain configuration. The dialog keeps sensitive SSH material out
+of project files and relies on the user's system SSH configuration instead.
+"""
+
 from __future__ import annotations
 
 from copy import deepcopy

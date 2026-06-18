@@ -1,0 +1,17 @@
+<map id="fuse.plugins.community.sst.sst_analysis.read_sql_df" name="fuse.plugins.community.sst.sst_analysis.read_sql_df">
+<area shape="rect" id="Node000001" title=" " alt="" coords="693,123,916,163"/>
+<area shape="rect" id="Node000002" href="$namespacefuse_1_1plugins_1_1community_1_1sst_1_1sst__analysis.html#acd4fb93365e8d8243ce4e573a7235e38" title=" " alt="" coords="341,27,645,67"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="747,120,645,82,600,70,601,65,646,77,748,115"/>
+<area shape="rect" id="Node000003" href="$namespacefuse_1_1plugins_1_1community_1_1sst_1_1sst__analysis.html#a83364968f4a22f604715a65d66d70d95" title=" " alt="" coords="382,91,605,131"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="680,133,604,125,605,120,680,128"/>
+<area shape="rect" id="Node000006" href="$namespacefuse_1_1plugins_1_1community_1_1sst_1_1sst__analysis.html#a1082f9111488da8e3cd53aa6cc9a095b" title=" " alt="" coords="371,155,616,195"/>
+<area shape="poly" id="edge5_Node000001_Node000006" title=" " alt="" coords="680,159,617,165,616,160,679,154"/>
+<area shape="rect" id="Node000008" href="$namespacefuse_1_1plugins_1_1community_1_1sst_1_1sst__analysis.html#ad24a555cfa3a8165ed4cca9e5083cc5d" title=" " alt="" coords="382,219,605,259"/>
+<area shape="poly" id="edge7_Node000001_Node000008" title=" " alt="" coords="748,171,646,210,601,222,600,217,645,205,747,166"/>
+<area shape="rect" id="Node000004" href="$namespacefuse_1_1plugins_1_1community_1_1sst_1_1sst__analysis.html#a9a5729b176c461d0b949b4d52a1fb334" title=" " alt="" coords="38,5,261,60"/>
+<area shape="poly" id="edge3_Node000003_Node000004" title=" " alt="" coords="382,91,341,82,259,63,261,57,342,77,383,86"/>
+<area shape="rect" id="Node000005" href="$namespacefuse_1_1plugins_1_1community_1_1sst_1_1sst__analysis.html#ac71a358fb0dea57619bc156a6f2d4b10" title=" " alt="" coords="5,84,293,139"/>
+<area shape="poly" id="edge4_Node000003_Node000005" title=" " alt="" coords="368,114,294,114,294,109,368,109"/>
+<area shape="rect" id="Node000007" href="$namespacefuse_1_1plugins_1_1community_1_1sst_1_1sst__analysis.html#a6afa2f5e57473d5c8930b6d14982ead2" title=" " alt="" coords="38,163,261,217"/>
+<area shape="poly" id="edge6_Node000006_Node000007" title=" " alt="" coords="357,184,261,188,261,183,357,178"/>
+</map>

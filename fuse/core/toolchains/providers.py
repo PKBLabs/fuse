@@ -11,6 +11,12 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+"""Command providers used by simulator toolchains.
+
+FUSE can execute simulator helper commands locally or through SSH. Provider
+classes present a common command execution interface so SST/gem5 import and
+validation code does not need to know where a command is executed."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -24,6 +30,7 @@ from fuse.core.model.project_settings import ToolchainSettings
 
 @dataclass
 class CommandExecutionResult:
+    """Captured result of running a simulator/toolchain command."""
     command: list[str]
     return_code: int
     stdout: str
@@ -33,6 +40,7 @@ class CommandExecutionResult:
 
 
 class CommandProvider(Protocol):
+    """Protocol implemented by objects that execute commands for a toolchain."""
     provider_id: str
 
     def run(
@@ -46,6 +54,7 @@ class CommandProvider(Protocol):
 
 
 def _command_text(command: list[str]) -> str:
+    """Format a command argument vector for diagnostics and logging."""
     try:
         return shlex.join(command)
     except Exception:
@@ -54,6 +63,7 @@ def _command_text(command: list[str]) -> str:
 
 @dataclass
 class LocalCommandProvider:
+    """Command provider that executes commands on the local machine."""
     provider_id: str = "local"
 
     def run(
@@ -158,6 +168,7 @@ class LocalCommandProvider:
 
 @dataclass
 class SSHCommandProvider:
+    """Command provider that executes commands through ssh/scp on a remote host."""
     host: str
     username: str = ""
     port: int = 22
@@ -317,6 +328,7 @@ class SSHCommandProvider:
 
 
 def provider_from_toolchain(settings: ToolchainSettings) -> CommandProvider:
+    """Create a command provider appropriate for a toolchain configuration."""
     if settings.backend == "ssh":
         return SSHCommandProvider(
             host=settings.host,

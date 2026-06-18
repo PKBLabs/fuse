@@ -1,0 +1,15 @@
+<map id="fuse.core.ui.selection_helpers.request_composite_from_selection" name="fuse.core.ui.selection_helpers.request_composite_from_selection">
+<area shape="rect" id="Node000001" title=" " alt="" coords="5,77,211,132"/>
+<area shape="rect" id="Node000002" href="$namespacefuse_1_1core_1_1ui_1_1selection__helpers.html#af00d175b5c8614321c591a49d294d756" title=" " alt="" coords="521,85,781,125"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="211,102,507,102,507,107,211,107"/>
+<area shape="rect" id="Node000003" href="$namespacefuse_1_1core_1_1ui_1_1selection__helpers.html#ab61bc2f51d6009c3a9f0dba3f5d5958d" title=" " alt="" coords="269,12,463,67"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="210,76,255,65,257,70,212,81"/>
+<area shape="rect" id="Node000005" href="$namespacefuse_1_1core_1_1ui_1_1selection__helpers.html#ad001b02c50d257ae52464fdc2d62cf50" title=" " alt="" coords="259,143,473,197"/>
+<area shape="poly" id="edge5_Node000001_Node000005" title=" " alt="" coords="212,128,246,137,245,142,210,133"/>
+<area shape="poly" id="edge4_Node000003_Node000002" title=" " alt="" coords="464,59,551,79,550,84,462,64"/>
+<area shape="rect" id="Node000004" href="$namespacefuse_1_1core_1_1ui_1_1selection__helpers.html#af6c698216b4da914f54d480a9ca990d1" title=" " alt="" coords="547,5,756,60"/>
+<area shape="poly" id="edge3_Node000003_Node000004" title=" " alt="" coords="463,34,533,33,533,38,463,40"/>
+<area shape="poly" id="edge7_Node000005_Node000002" title=" " alt="" coords="473,143,549,125,551,130,474,148"/>
+<area shape="rect" id="Node000006" href="$namespacefuse_1_1core_1_1ui_1_1selection__helpers.html#a8da60bbd5e9ed3c8a5b9d2e75c529483" title=" " alt="" coords="521,149,781,204"/>
+<area shape="poly" id="edge6_Node000005_Node000006" title=" " alt="" coords="473,170,508,171,507,176,473,175"/>
+</map>

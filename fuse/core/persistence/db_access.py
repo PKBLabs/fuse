@@ -11,6 +11,10 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+"""Read-side access helpers for framework and component metadata.
+
+This module provides compatibility functions used by legacy UI paths while newer code increasingly routes simulator-specific data through plugin APIs."""
+
 from fuse.core.persistence.database import initialize_core_database, get_connection
 from fuse.core.plugin_runtime.manager import (
     list_all_targets,
@@ -32,6 +36,7 @@ from fuse.core.persistence.composite_components import (
 
 
 def ensure_database_ready(run_plugin_bootstrap: bool = False) -> None:
+    """Initialize core and known plugin metadata schemas before reads."""
     initialize_core_database()
 
     plugins = load_enabled_plugins()
@@ -69,6 +74,7 @@ def ensure_database_ready(run_plugin_bootstrap: bool = False) -> None:
 
 
 def load_framework_targets():
+    """Return available framework targets for the component palette and project settings UI."""
     return list_all_targets()
 
 
@@ -76,6 +82,7 @@ def load_component_definitions(
     plugin_id: str | None = None,
     target_id: str | None = None,
 ) -> list[ComponentDefinition]:
+    """Load component definitions for the default/selected framework target."""
     definitions = []
 
     for item in load_all_palette_items(plugin_id=plugin_id, target_id=target_id):
@@ -104,6 +111,7 @@ def load_component_definitions(
 
 
 def load_composite_component_definitions() -> list[ComponentDefinition]:
+    """Load reusable composite component definitions as palette-ready component definitions."""
     definitions = []
 
     for composite in list_composite_component_definitions():
@@ -135,6 +143,7 @@ def load_port_metadata_for_component(
     component_id: str,
     target_id: str | None = None,
 ) -> list[dict]:
+    """Return port metadata for a component definition."""
     if is_composite_component_request(plugin_id, component_id, target_id):
         composite = get_composite_component_definition(str(component_id or ""))
 
@@ -175,6 +184,7 @@ def load_port_names_for_component(
     component_id: str,
     target_id: str | None = None,
 ) -> list[str]:
+    """Return only port names for a component definition."""
     return [port["name"] for port in load_port_metadata_for_component(plugin_id, component_id, target_id)]
 
 def load_subcomp_connector_metadata_for_component(
@@ -182,6 +192,7 @@ def load_subcomp_connector_metadata_for_component(
     component_id: str,
     target_id: str | None = None,
 ) -> list[dict]:
+    """Return subcomponent connector metadata for a component definition."""
     if is_composite_component_request(plugin_id, component_id, target_id):
         return []
 
@@ -205,6 +216,7 @@ def is_composite_component_request(
     component_id: str | int | None,
     target_id: str | None = None,
 ) -> bool:
+    """Return whether a framework/component request targets a stored composite definition."""
     return (
         (plugin_id or "") == COMPOSITE_PLUGIN_ID
         and (target_id or COMPOSITE_TARGET_ID) == COMPOSITE_TARGET_ID
@@ -217,6 +229,7 @@ def get_component_details(
     component_id: str,
     target_id: str | None = None,
 ):
+    """Return detailed metadata for a component or composite definition."""
     if is_composite_component_request(plugin_id, component_id, target_id):
         composite = get_composite_component_definition(str(component_id or ""))
 

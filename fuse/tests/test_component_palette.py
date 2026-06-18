@@ -101,7 +101,7 @@ def test_component_palette_search_filters_known_component_fields(qtbot, monkeypa
     assert simulator_item.text(0) == "Gem5"
 
 
-def test_component_palette_returns_to_preferred_grouping_after_selection_clears(qtbot, monkeypatch):
+def test_component_palette_keeps_user_view_when_selection_changes(qtbot, monkeypatch):
     from fuse.core.model.models import ComponentDefinition
     from fuse.core.ui.component_palette import ComponentPalette
 
@@ -132,11 +132,16 @@ def test_component_palette_returns_to_preferred_grouping_after_selection_clears(
     class Node:
         component = definitions[0]
 
+    assert palette.view_selector.currentText() == palette.VIEW_FLAT
+
     palette.set_compatibility_context(Node())
+    assert palette.view_selector.currentText() == palette.VIEW_FLAT
+
+    palette.view_selector.setCurrentText(palette.VIEW_COMPATIBLE)
     assert palette.view_selector.currentText() == palette.VIEW_COMPATIBLE
 
     palette.clear_compatibility_context()
-    assert palette.view_selector.currentText() == palette.VIEW_FLAT
+    assert palette.view_selector.currentText() == palette.VIEW_COMPATIBLE
 
 
 def test_component_palette_expand_collapse_preference_persists_through_callback(qtbot):

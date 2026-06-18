@@ -1,0 +1,20 @@
+<map id="app.MainWindow.update_model_outline" name="app.MainWindow.update_model_outline">
+<area shape="rect" id="Node000001" title=" " alt="" coords="5,144,188,184"/>
+<area shape="rect" id="Node000002" href="$classapp_1_1MainWindow.html#a484f07fe9298fb9460e26498176fba18" title=" " alt="" coords="520,208,697,248"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="161,141,226,126,304,115,388,115,430,120,470,129,501,142,531,159,579,197,575,201,528,164,499,147,469,135,429,125,388,120,305,121,227,132,162,147"/>
+<area shape="rect" id="Node000004" href="$classapp_1_1MainWindow.html#a540c50b331cd5b6676e01d5971ff4171" title=" " alt="" coords="272,29,433,69"/>
+<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="129,142,178,114,235,86,271,71,273,76,237,90,181,118,132,146"/>
+<area shape="rect" id="Node000006" href="$classapp_1_1MainWindow.html#aa74a96f059f2380881eafb8b9a2fdb7c" title=" " alt="" coords="261,144,444,184"/>
+<area shape="poly" id="edge6_Node000001_Node000006" title=" " alt="" coords="188,161,248,161,248,167,188,167"/>
+<area shape="rect" id="Node000007" href="$classapp_1_1MainWindow.html#a725686798ef6221f1e32c04c51a07502" title=" " alt="" coords="268,208,437,248"/>
+<area shape="poly" id="edge7_Node000001_Node000007" title=" " alt="" coords="178,181,260,202,259,207,177,187"/>
+<area shape="rect" id="Node000008" href="$classapp_1_1MainWindow.html#a223fd97ffe88e1c7f4ef7a16ae6dbbaf" title=" " alt="" coords="236,272,469,312"/>
+<area shape="poly" id="edge9_Node000001_Node000008" title=" " alt="" coords="123,182,174,220,237,258,255,265,253,270,235,262,171,225,120,186"/>
+<area shape="rect" id="Node000003" href="$classapp_1_1MainWindow.html#a85fab24fdc5fa950e46c5f92a7bf50be" title=" " alt="" coords="748,208,925,248"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="698,225,734,225,734,231,698,231"/>
+<area shape="poly" id="edge4_Node000004_Node000004" title=" " alt="" coords="305,30,302,20,310,10,327,5,353,3,382,6,399,13,396,18,381,11,353,8,328,10,313,15,307,21,310,28"/>
+<area shape="rect" id="Node000005" href="$classapp_1_1MainWindow.html#a81a2f9806ab8e227f6c896c452d290a8" title=" " alt="" coords="517,29,700,69"/>
+<area shape="poly" id="edge5_Node000004_Node000005" title=" " alt="" coords="433,47,503,47,503,52,433,52"/>
+<area shape="poly" id="edge8_Node000007_Node000002" title=" " alt="" coords="438,225,506,225,506,231,438,231"/>
+<area shape="poly" id="edge10_Node000008_Node000002" title=" " alt="" coords="433,269,515,249,516,254,434,275"/>
+</map>

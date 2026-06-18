@@ -12,6 +12,11 @@ The panel changes based on the current selection:
 
 ## Component properties
 
+<!-- FUSE-MEDIA-TODO id=properties-selected-component type=screenshot path=../assets/screenshots/properties-editor-component.png -->
+> **Media TODO (properties-selected-component)**: Add a screenshot showing the properties panel for a selected component with Object and Parameters sections visible.
+> Planned asset: `../assets/screenshots/properties-editor-component.png`
+
+
 When a component instance is selected, the panel shows an **Object** section and a **Parameters** section.
 
 The Object section includes:
@@ -135,7 +140,7 @@ If a plugin marks a parameter as required, it must have a non-empty value.
 Invalid:
 
 ```text
-clock *    
+clock *
 ```
 
 Valid:
@@ -193,6 +198,15 @@ invalid: high
 ```
 
 ## Full model validation
+
+<!-- FUSE-MEDIA-TODO id=validation-error type=screenshot path=../assets/screenshots/validation-panel-error.png -->
+> **Media TODO (validation-error)**: Add a screenshot of the validation panel showing at least one actionable error or warning.
+> Planned asset: `../assets/screenshots/validation-panel-error.png`
+
+<!-- FUSE-MEDIA-TODO id=validation-success type=screenshot path=../assets/screenshots/validation-panel-success.png -->
+> **Media TODO (validation-success)**: Add a screenshot of the validation panel after a model passes validation.
+> Planned asset: `../assets/screenshots/validation-panel-success.png`
+
 
 FUSE also validates the model during save/export-oriented workflows.
 

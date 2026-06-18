@@ -11,6 +11,14 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+"""Component palette widgets for browsing and dragging model elements.
+
+The palette presents framework/plugin-provided ``ComponentDefinition`` objects
+as tree entries and quick-access tiles. It supports grouping, filtering,
+recent/frequent usage tracking, compatibility-context filtering, and context
+menu actions for composite templates. Drag operations serialize component data
+using the shared component MIME type consumed by ``ModelView``.
+"""
 from __future__ import annotations
 import json
 from collections import defaultdict
@@ -52,6 +60,12 @@ MAX_FREQUENT_COMPONENTS = 9
 
 
 class ComponentTree(QTreeWidget):
+    """Tree widget that starts component drag operations.
+
+    Each draggable tree item stores a ``ComponentDefinition`` in Qt item data.
+    When the user drags an item, the tree encodes the component definition into
+    the FUSE component MIME payload used by the canvas drop handler.
+    """
     def __init__(self, palette: "ComponentPalette"):
         super().__init__()
         self.palette = palette
@@ -121,6 +135,12 @@ class ComponentTree(QTreeWidget):
 
 
 class ComponentTileButton(QToolButton):
+    """Quick-access tile used for recent and frequently used components.
+
+    Tiles provide a compact drag source outside the main tree and share the
+    same MIME payload format as ``ComponentTree`` so drops are handled
+    identically by the canvas.
+    """
     def __init__(self, palette: "ComponentPalette", component: ComponentDefinition):
         super().__init__()
         self.palette = palette
@@ -128,7 +148,7 @@ class ComponentTileButton(QToolButton):
 
         self.setText(component.name)
         self.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
-        self.setIconSize(QSize(42, 42))
+        self.setIconSize(QSize(60, 60))
         self.setFixedSize(QSize(92, 76))
         self.setToolTip(palette.tooltip_for_component(component))
 
@@ -174,6 +194,13 @@ class ComponentTileButton(QToolButton):
 
 
 class ComponentPalette(QWidget):
+    """Dockable palette for plugin, simulator, and composite components.
+
+    ``ComponentPalette`` loads component definitions for the active framework
+    target, organizes them into user-selectable views, persists display and
+    usage preferences through ``QSettings``, and emits requests for component
+    editing or preference changes back to the main window.
+    """
     VIEW_ELEMENT = "Element"
     VIEW_FUNCTION = "Function"
     VIEW_FLAT = "Flat"
@@ -346,19 +373,14 @@ class ComponentPalette(QWidget):
     def set_compatibility_context(self, node):
         self.compatibility_context_node = node
 
-        if node is not None:
-            self.view_selector.blockSignals(True)
-            self.view_selector.setCurrentText(self.VIEW_COMPATIBLE)
-            self.view_selector.blockSignals(False)
-
-        self.populate_tree()
+        # Selection changes should update the compatibility data only when the
+        # user is actively looking at the compatible-components view. They should
+        # not force the catalog out of the user's chosen grouping mode.
+        if self.view_selector.currentText() == self.VIEW_COMPATIBLE:
+            self.populate_tree()
 
     def clear_compatibility_context(self):
-        self.compatibility_context_node = None
-        self.view_selector.blockSignals(True)
-        self.view_selector.setCurrentText(self.preferred_grouping_mode)
-        self.view_selector.blockSignals(False)
-        self.populate_tree()
+        self.set_compatibility_context(None)
 
     def load_components(self):
         """Load the palette across simulator plugins.
@@ -589,6 +611,12 @@ class ComponentPalette(QWidget):
 
         for simulator_name in self.sorted_group_names(by_simulator):
             simulator_item = self.make_group_item(simulator_name)
+
+            if simulator_name == "Composite Components":
+                for component in self.sorted_components(by_simulator[simulator_name]):
+                    self.make_component_item(component, simulator_item)
+                continue
+
             by_element: dict[str, list[ComponentDefinition]] = defaultdict(list)
 
             for component in by_simulator[simulator_name]:
@@ -642,6 +670,12 @@ class ComponentPalette(QWidget):
 
         for simulator_name in self.sorted_group_names(by_simulator):
             simulator_item = self.make_group_item(simulator_name)
+
+            if simulator_name == "Composite Components":
+                for component in self.sorted_components(by_simulator[simulator_name]):
+                    self.make_component_item(component, simulator_item)
+                continue
+
             by_function: dict[str, list[ComponentDefinition]] = defaultdict(list)
 
             for component in by_simulator[simulator_name]:

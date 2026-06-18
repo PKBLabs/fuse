@@ -11,6 +11,14 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+"""Core model dataclasses shared by the FUSE editor and persistence layer.
+
+The classes in this module are deliberately UI-light. They describe component
+catalog entries and persisted relationships that can be serialized into a
+``.fse`` project file, transferred through drag/drop payloads, or consumed by
+plugin exporters after scene flattening.
+"""
+
 from dataclasses import dataclass
 import json
 
@@ -23,6 +31,13 @@ SCHEMA_VERSION = "0.1.0"
 
 @dataclass
 class ComponentDefinition:
+    """Definition of a component type or placed component catalog entry.
+
+    Component definitions are produced by plugins, carried in palette drag/drop
+    payloads, and stored on scene nodes. The same dataclass also represents
+    core-owned composite component definitions by setting ``is_composite`` and
+    ``composite_id``.
+    """
     element: str
     name: str
     component_id: str | int | None = None
@@ -42,6 +57,7 @@ class ComponentDefinition:
 
     @property
     def display_name(self) -> str:
+        """Return the label shown in the palette, outline, and node headers."""
         if self.display_name_override:
             return self.display_name_override
 
@@ -56,6 +72,7 @@ class ComponentDefinition:
         return f"{self.name} ({kind})"
 
     def to_drag_text(self) -> str:
+        """Serialize this definition for Qt drag/drop between palette and scene."""
         return json.dumps(
             {
                 "component_id": str(self.component_id or ""),
@@ -79,6 +96,7 @@ class ComponentDefinition:
 
     @staticmethod
     def from_drag_text(text: str) -> "ComponentDefinition":
+        """Deserialize a drag/drop payload into a component definition."""
         stripped = text.strip()
 
         if stripped.startswith("{"):

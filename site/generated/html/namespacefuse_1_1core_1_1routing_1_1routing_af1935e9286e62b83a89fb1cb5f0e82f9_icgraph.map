@@ -1,0 +1,14 @@
+<map id="fuse.core.routing.routing.segment_is_clear" name="fuse.core.routing.routing.segment_is_clear">
+<area shape="rect" id="Node000001" title=" " alt="" coords="828,37,1071,77"/>
+<area shape="rect" id="Node000002" href="$namespacefuse_1_1core_1_1routing_1_1routing.html#a59153d0b0458a1f4122d1404df65bf9b" title=" " alt="" coords="561,5,779,45"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="814,45,779,41,780,35,815,39"/>
+<area shape="rect" id="Node000005" href="$namespacefuse_1_1core_1_1routing_1_1routing.html#a4467b15cfd80beac12be8fda138d7ad3" title=" " alt="" coords="560,69,780,109"/>
+<area shape="poly" id="edge4_Node000001_Node000005" title=" " alt="" coords="815,75,780,79,780,74,814,70"/>
+<area shape="rect" id="Node000003" href="$namespacefuse_1_1core_1_1routing_1_1routing.html#ab73cfc67023725a75f4cb4b75ec5394c" title=" " alt="" coords="287,5,498,45"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="547,28,498,28,498,23,547,23"/>
+<area shape="rect" id="Node000004" href="$namespacefuse_1_1core_1_1routing_1_1routing.html#ac90141964a8babfcc84114e5b70af5eb" title=" " alt="" coords="5,37,225,77"/>
+<area shape="poly" id="edge3_Node000003_Node000004" title=" " alt="" coords="274,42,226,47,225,42,273,36"/>
+<area shape="rect" id="Node000006" href="$namespacefuse_1_1core_1_1routing_1_1routing.html#a568911900be6617d121466ac9c6c63f2" title=" " alt="" coords="273,69,512,109"/>
+<area shape="poly" id="edge5_Node000005_Node000006" title=" " alt="" coords="546,92,512,92,512,87,546,87"/>
+<area shape="poly" id="edge6_Node000006_Node000004" title=" " alt="" coords="260,77,225,73,226,67,260,71"/>
+</map>

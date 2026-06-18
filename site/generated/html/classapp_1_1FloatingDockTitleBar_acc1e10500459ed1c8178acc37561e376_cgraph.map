@@ -1,0 +1,8 @@
+<map id="app.FloatingDockTitleBar.mousePressEvent" name="app.FloatingDockTitleBar.mousePressEvent">
+<area shape="rect" id="Node000001" title=" " alt="" coords="5,37,240,77"/>
+<area shape="poly" id="edge2_Node000001_Node000001" title=" " alt="" coords="71,38,68,28,77,18,95,13,123,11,155,13,172,21,170,26,153,19,123,16,96,18,79,23,73,29,76,36"/>
+<area shape="rect" id="Node000002" href="$classapp_1_1FloatingDockTitleBar.html#a0b2f22f8ede109f129fbd20f156772f0" title=" " alt="" coords="288,5,515,45"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="240,41,274,37,275,43,241,47"/>
+<area shape="rect" id="Node000003" href="$classapp_1_1FloatingDockTitleBar.html#a6bb38603baf7d7dbc3bfd7f80b78899a" title=" " alt="" coords="291,69,511,109"/>
+<area shape="poly" id="edge3_Node000001_Node000003" title=" " alt="" coords="241,68,278,72,277,78,240,73"/>
+</map>

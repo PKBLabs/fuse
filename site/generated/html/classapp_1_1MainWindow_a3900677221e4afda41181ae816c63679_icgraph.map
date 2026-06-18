@@ -1,0 +1,15 @@
+<map id="app.MainWindow.confirm_close_composite_template_editor" name="app.MainWindow.confirm_close_composite_template_editor">
+<area shape="rect" id="Node000001" title=" " alt="" coords="923,30,1127,85"/>
+<area shape="rect" id="Node000002" href="$classapp_1_1MainWindow.html#ad38c96490299c8da7699b2f63ffa167a" title=" " alt="" coords="704,37,875,77"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="909,60,875,60,875,55,909,55"/>
+<area shape="rect" id="Node000003" href="$classapp_1_1MainWindow.html#ac4fea46b54df50cc29db322e43e94257" title=" " alt="" coords="453,37,656,77"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="690,60,656,60,656,55,690,55"/>
+<area shape="rect" id="Node000004" href="$classapp_1_1MainWindow.html#a541d125424aa6809bbfce8c4d6eeaf65" title=" " alt="" coords="229,5,399,45"/>
+<area shape="poly" id="edge3_Node000003_Node000004" title=" " alt="" coords="439,45,399,39,399,34,440,39"/>
+<area shape="rect" id="Node000005" href="$classapp_1_1MainWindow.html#a0e822f858fd845c40b345fc951a75bb3" title=" " alt="" coords="223,69,405,109"/>
+<area shape="poly" id="edge4_Node000003_Node000005" title=" " alt="" coords="440,75,406,80,405,75,439,70"/>
+<area shape="rect" id="Node000006" href="$classapp_1_1MainWindow.html#a50b8cc9592e2c7911a2a76ae7b68e0ea" title=" " alt="" coords="7,51,173,77"/>
+<area shape="poly" id="edge5_Node000005_Node000006" title=" " alt="" coords="209,80,173,76,174,71,209,75"/>
+<area shape="rect" id="Node000007" href="$classapp_1_1MainWindow.html#aa39d06a7f9d5871cd4e44aa3b3a0ded1" title=" " alt="" coords="5,101,175,126"/>
+<area shape="poly" id="edge6_Node000005_Node000007" title=" " alt="" coords="209,103,175,107,175,102,209,98"/>
+</map>

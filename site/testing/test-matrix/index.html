@@ -1,0 +1,3332 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="User, developer, maintainer, and generated API documentation for FUSE.">
+      
+      
+      
+        <link rel="canonical" href="https://pkblabs.github.io/fuse/testing/test-matrix/">
+      
+      
+        <link rel="prev" href="../testing-guide/">
+      
+      
+        <link rel="next" href="../../releases/v0.7.0/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/diagrams/fuse-logo-placeholder.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Test Matrix - FUSE Community Edition Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#test-matrix" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="FUSE Community Edition Documentation" class="md-header__button md-logo" aria-label="FUSE Community Edition Documentation" data-md-component="logo">
+      
+  <img src="../../assets/diagrams/fuse-logo-placeholder.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            FUSE Community Edition Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Test Matrix
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/PKBLabs/fuse" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    PKBLabs/fuse
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="FUSE Community Edition Documentation" class="md-nav__button md-logo" aria-label="FUSE Community Edition Documentation" data-md-component="logo">
+      
+  <img src="../../assets/diagrams/fuse-logo-placeholder.svg" alt="logo">
+
+    </a>
+    FUSE Community Edition Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/PKBLabs/fuse" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    PKBLabs/fuse
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user/quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quickstart
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user/user-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user/model-editor-workflow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Model Editor Workflow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user/composite-components/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Composite Components
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user/properties-and-validation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Properties and Validation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user/project-files/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Files
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user/troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user/screenshot-checklist/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Screenshot Checklist
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Examples
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/simple-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Simple Model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/validation-walkthrough/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Validation Walkthrough
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/import-sst-metadata/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Import SST Metadata
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/write-a-plugin/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Write a Plugin
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/component-definitions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Component Definitions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugins
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Plugins
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugins/plugin-system/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugin System
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugins/plugin-development-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugin Development Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugins/sst/sst-plugin/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SST Plugin
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugins/sst/sst-import-workflow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SST Import Workflow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugins/sst/sst-json-export-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SST JSON Export
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugins/sst/sst-database-schema/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SST Database Schema
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugins/sst/sst-external-validation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SST External Validation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugins/gem5/gem5-plugin/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    gem5 Plugin
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Architecture
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/architecture-overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/application-startup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Application Startup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/data-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Data Model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/persistence-and-database/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Persistence and Database
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/routing-and-canvas/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Routing and Canvas
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Developer
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/developer-setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/development-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/codebase-tour/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Codebase Tour
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/resources-and-icons/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Resources and Icons
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/generated-docs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Generated API Docs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/maintenance-checklist/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Maintenance Checklist
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/release-process/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Process
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/generated-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Generated API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/plugin-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugin API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/plugin-manifest/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugin Manifest
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/fse-format/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FSE Format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/component-metadata/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Component Metadata
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/database-tables/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Database Tables
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/environment-variables/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Environment Variables
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Glossary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ci/github-actions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitHub Actions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ci/sst-ci-container/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SST CI Container
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ci/gem5-ci-container/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    gem5 CI Container
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/common-maintenance-tasks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Common Maintenance Tasks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/known-limitations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Known Limitations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/licensing-and-policy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Licensing and Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/media-capture-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Media Capture Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testing
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Testing
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../testing-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testing Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test Matrix
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test Matrix
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#coreapp-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core/app tests
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#requested-behavior-coverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Requested behavior coverage
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sst-plugin-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SST plugin tests
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gem5-plugin-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        gem5 plugin tests
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ci-mapping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CI mapping
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#release-readiness-recommendation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Release-readiness recommendation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#project-lifecycle-prompt-coverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Project lifecycle prompt coverage
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v060-catalog-and-model-view-ux-coverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.6.0 catalog and model-view UX coverage
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v050-sst-export-dispatch-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.5.0 SST export dispatch tests
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="v0.5.0 SST export dispatch tests">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#sst-json-export-golden-contract-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SST JSON export golden-contract tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v050-sst-json-export-documentation-and-verification-coverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.5.0 SST JSON export documentation and verification coverage
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v070-composite-component-coverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.7.0 composite component coverage
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Releases
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Releases
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.7.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.7.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releases/v0.6.0/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.6.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#coreapp-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core/app tests
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#requested-behavior-coverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Requested behavior coverage
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sst-plugin-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SST plugin tests
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gem5-plugin-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        gem5 plugin tests
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ci-mapping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CI mapping
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#release-readiness-recommendation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Release-readiness recommendation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#project-lifecycle-prompt-coverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Project lifecycle prompt coverage
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v060-catalog-and-model-view-ux-coverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.6.0 catalog and model-view UX coverage
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v050-sst-export-dispatch-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.5.0 SST export dispatch tests
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="v0.5.0 SST export dispatch tests">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#sst-json-export-golden-contract-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SST JSON export golden-contract tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v050-sst-json-export-documentation-and-verification-coverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.5.0 SST JSON export documentation and verification coverage
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v070-composite-component-coverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v0.7.0 composite component coverage
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="test-matrix">Test Matrix<a class="headerlink" href="#test-matrix" title="Permanent link">&para;</a></h1>
+<h2 id="coreapp-tests">Core/app tests<a class="headerlink" href="#coreapp-tests" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Area</th>
+<th>Tests</th>
+<th>Location</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>App launch</td>
+<td>launch/shutdown subprocess</td>
+<td><code>fuse/tests/test_app_launch.py</code></td>
+</tr>
+<tr>
+<td>Main window</td>
+<td>construct, show, close</td>
+<td><code>fuse/tests/test_main_window.py</code></td>
+</tr>
+<tr>
+<td>Plugin discovery/manager</td>
+<td>SST/gem5 discovery, broken plugin handling, manifest loading, plugin filtering, item detail dispatch</td>
+<td><code>fuse/tests/test_plugin_discovery.py</code>, <code>fuse/tests/test_discovery_and_plugin_manager_extended.py</code></td>
+</tr>
+<tr>
+<td>Plugin metadata validation</td>
+<td>invalid manifests/metadata handling</td>
+<td><code>fuse/tests/test_plugin_metadata_validation.py</code></td>
+</tr>
+<tr>
+<td>Database</td>
+<td>core and plugin table initialization</td>
+<td><code>fuse/tests/test_database_initialization.py</code></td>
+</tr>
+<tr>
+<td>Component palette</td>
+<td>component catalog/list, palette population, preferred sorting/grouping, search filtering, expand/collapse behavior, compatibility-context return behavior</td>
+<td><code>fuse/tests/test_component_palette.py</code></td>
+</tr>
+<tr>
+<td>Component drag metadata</td>
+<td>drag payload serialization/deserialization</td>
+<td><code>fuse/tests/test_component_definition_drag.py</code></td>
+</tr>
+<tr>
+<td>Model-view drop</td>
+<td>drag/drop creation and drop coordinate conversion</td>
+<td><code>fuse/tests/test_model_view_component_drop.py</code></td>
+</tr>
+<tr>
+<td>Model-view navigation</td>
+<td>floating toolbar, select/multiselect modes, zoom controls, panning, grid support, zoomed hit testing, and editor-state persistence</td>
+<td><code>fuse/tests/test_model_view_navigation.py</code>, <code>fuse/tests/test_model_view_editor_state_persistence.py</code></td>
+</tr>
+<tr>
+<td>Component instances</td>
+<td>unique default names, outline/callbacks, dirty state</td>
+<td><code>fuse/tests/test_component_instance_naming_outline_dirty.py</code></td>
+</tr>
+<tr>
+<td>Undo/redo and unsaved indicator</td>
+<td>component/link/subcomponent attachment creation and deletion, property edit history, canvas movement, drag coalescing, redo clearing, history bounds, action enabled state, dirty indicator</td>
+<td><code>fuse/tests/test_undo_redo_history.py</code></td>
+</tr>
+<tr>
+<td>Properties panel</td>
+<td>parameter display, input validation, write-back, dirty state</td>
+<td><code>fuse/tests/test_properties_panel_parameter_editing.py</code></td>
+</tr>
+<tr>
+<td>Project I/O</td>
+<td><code>.fse</code> save/load, validation, endpoint latencies, plugin metadata, subcomponent attachments, legacy compatibility</td>
+<td><code>fuse/tests/test_project_io.py</code></td>
+</tr>
+<tr>
+<td>Model roundtrip</td>
+<td>save/load components and links</td>
+<td><code>fuse/tests/test_fuse_model_roundtrip.py</code></td>
+</tr>
+<tr>
+<td>Resources</td>
+<td>logo and icon path resolution</td>
+<td><code>fuse/tests/test_resource_paths.py</code></td>
+</tr>
+<tr>
+<td>Routing</td>
+<td>path simplification and route validity</td>
+<td><code>fuse/tests/test_routing.py</code></td>
+</tr>
+<tr>
+<td>Validation</td>
+<td>duplicate names, required params, link endpoint latencies, plugin validation delegation, subcomponent attachments, structured results panel, severity filtering, result navigation</td>
+<td><code>fuse/tests/test_validation.py</code>, <code>fuse/tests/test_validation_core_extended.py</code>, <code>fuse/tests/test_validation_results_panel.py</code></td>
+</tr>
+<tr>
+<td>UI</td>
+<td>splash/about/palette, variable ports, model outline, dirty state, validation result navigation/highlighting</td>
+<td><code>fuse/tests/</code></td>
+</tr>
+<tr>
+<td>Project/plugin settings</td>
+<td>project settings, plugin settings, toolchain settings, catalog preferences, legacy field compatibility</td>
+<td><code>fuse/tests/test_project_settings.py</code></td>
+</tr>
+<tr>
+<td>Toolchains</td>
+<td>local/SSH command providers, executable discovery, version parsing and match policies</td>
+<td><code>fuse/tests/test_toolchain_utilities.py</code>, <code>fuse/tests/test_discovery_and_plugin_manager_extended.py</code></td>
+</tr>
+<tr>
+<td>Plugin API models</td>
+<td>compatibility result/report and migration plan helpers</td>
+<td><code>fuse/tests/test_plugin_api_models.py</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="requested-behavior-coverage">Requested behavior coverage<a class="headerlink" href="#requested-behavior-coverage" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Behavior</th>
+<th>Test location</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Component catalog/list</td>
+<td><code>test_component_palette.py</code></td>
+</tr>
+<tr>
+<td>Component catalog search, preferred grouping/sorting, and expand/collapse persistence</td>
+<td><code>test_component_palette.py</code>, <code>test_project_settings.py</code></td>
+</tr>
+<tr>
+<td>Population of component list from database/plugin metadata</td>
+<td><code>test_component_palette.py</code>, <code>test_database_initialization.py</code></td>
+</tr>
+<tr>
+<td>Handling invalid metadata files/manifests</td>
+<td><code>test_plugin_metadata_validation.py</code>, <code>test_plugin_discovery.py</code></td>
+</tr>
+<tr>
+<td>Drag/drop behavior for new component creation</td>
+<td><code>test_component_definition_drag.py</code>, <code>test_model_view_component_drop.py</code></td>
+</tr>
+<tr>
+<td>Creation of component instance upon drop</td>
+<td><code>test_model_view_component_drop.py</code></td>
+</tr>
+<tr>
+<td>Conversion of drop position into model coordinates</td>
+<td><code>test_model_view_component_drop.py</code></td>
+</tr>
+<tr>
+<td>Component addition to model outline/callbacks</td>
+<td><code>test_component_instance_naming_outline_dirty.py</code></td>
+</tr>
+<tr>
+<td>Unique default component names</td>
+<td><code>test_component_instance_naming_outline_dirty.py</code></td>
+</tr>
+<tr>
+<td>Parameter editor/properties panel from metadata</td>
+<td><code>test_properties_panel_parameter_editing.py</code></td>
+</tr>
+<tr>
+<td>Correct parameter information for selected component</td>
+<td><code>test_properties_panel_parameter_editing.py</code></td>
+</tr>
+<tr>
+<td>Parameter input type validation</td>
+<td><code>test_properties_panel_parameter_editing.py</code></td>
+</tr>
+<tr>
+<td>Required parameter validation</td>
+<td><code>test_validation.py</code>, <code>test_properties_panel_parameter_editing.py</code></td>
+</tr>
+<tr>
+<td>Writing component parameter updates back to model</td>
+<td><code>test_properties_panel_parameter_editing.py</code></td>
+</tr>
+<tr>
+<td>Dirty state after edits</td>
+<td><code>test_component_instance_naming_outline_dirty.py</code>, <code>test_properties_panel_parameter_editing.py</code>, <code>test_undo_redo_history.py</code></td>
+</tr>
+<tr>
+<td>Undo/redo for component, link, subcomponent attachment, property, and layout edits</td>
+<td><code>test_undo_redo_history.py</code></td>
+</tr>
+<tr>
+<td>Unsaved status-bar indicator</td>
+<td><code>test_undo_redo_history.py</code></td>
+</tr>
+<tr>
+<td>Validation results panel filters and object navigation</td>
+<td><code>test_validation_results_panel.py</code></td>
+</tr>
+<tr>
+<td>Universal validation highlighting hooks for components, links, and subcomponent attachments</td>
+<td><code>test_validation_results_panel.py</code>, <code>test_validation_core_extended.py</code></td>
+</tr>
+<tr>
+<td>Composite component selection, creation, storage, instance editing, flattening, import/export, and manager behavior</td>
+<td><code>test_composite_*.py</code>, <code>test_main_window.py</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="sst-plugin-tests">SST plugin tests<a class="headerlink" href="#sst-plugin-tests" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Area</th>
+<th>Tests</th>
+<th>Location</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Schema</td>
+<td><code>sst_*</code> tables created</td>
+<td><code>fuse/plugins/community/sst/tests/test_sst_schema.py</code></td>
+</tr>
+<tr>
+<td>Parser</td>
+<td>sample <code>sst-info</code> parsing, variable ports, slot interfaces, multiline metadata</td>
+<td><code>fuse/plugins/community/sst/tests/test_sst_parser.py</code></td>
+</tr>
+<tr>
+<td>Parser edge cases</td>
+<td>brackets, colons, missing units</td>
+<td><code>test_sst_parser_edge_cases.py</code></td>
+</tr>
+<tr>
+<td>Import</td>
+<td>sync parsed metadata to database</td>
+<td><code>test_sst_import.py</code></td>
+</tr>
+<tr>
+<td>DB utils</td>
+<td>plugin query helpers</td>
+<td><code>test_sst_db_utils.py</code></td>
+</tr>
+<tr>
+<td>Negative DB cases</td>
+<td>missing records</td>
+<td><code>test_sst_db_utils_negative.py</code></td>
+</tr>
+<tr>
+<td>File import</td>
+<td><code>--from-file</code> behavior</td>
+<td><code>test_sst_file_import.py</code></td>
+</tr>
+<tr>
+<td>Command sync</td>
+<td>monkeypatched <code>sst-info</code></td>
+<td><code>test_sst_sync_command.py</code></td>
+</tr>
+<tr>
+<td>SST JSON export</td>
+<td>SST JSON structure, endpoint latencies, nested subcomponents, validation errors, live execution where applicable</td>
+<td><code>test_sst_json*.py</code></td>
+</tr>
+<tr>
+<td>Compatibility/migration</td>
+<td>target compatibility reports, migration plans, scene mutation/rerouting</td>
+<td><code>test_sst_compatibility_and_migration.py</code></td>
+</tr>
+<tr>
+<td>Plugin API behavior</td>
+<td>target filtering, variable connector metadata, subcomponent connector metadata</td>
+<td><code>test_sst_plugin.py</code></td>
+</tr>
+<tr>
+<td>Live SST</td>
+<td>real <code>sst-info</code>/<code>sst</code> integration</td>
+<td><code>test_sst_live_integration.py</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="gem5-plugin-tests">gem5 plugin tests<a class="headerlink" href="#gem5-plugin-tests" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Area</th>
+<th>Tests</th>
+<th>Location</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Catalog metadata</td>
+<td>built-in fallback metadata, imported live metadata persistence, functionality/category mapping, connector/property mapping</td>
+<td><code>fuse/plugins/community/gem5/tests/</code></td>
+</tr>
+<tr>
+<td>Toolchain validation</td>
+<td>command selection, version checks, non-gem5 output, command failures</td>
+<td><code>test_gem5_plugin_unit.py</code></td>
+</tr>
+<tr>
+<td>Export readiness</td>
+<td>gem5 topology validation, target consistency, required CPU/xbar/memory connections</td>
+<td><code>test_gem5_plugin_unit.py</code></td>
+</tr>
+<tr>
+<td>Python export</td>
+<td>generated gem5 Python configuration content and file writing</td>
+<td><code>test_gem5_plugin_unit.py</code></td>
+</tr>
+<tr>
+<td>Live gem5</td>
+<td>real gem5 binary smoke test, live <code>m5.objects</code> metadata probing, imported catalog validation</td>
+<td><code>fuse/plugins/community/gem5/tests/test_gem5_live_integration.py</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="ci-mapping">CI mapping<a class="headerlink" href="#ci-mapping" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Workflow</th>
+<th>Command</th>
+<th>Trigger summary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Core Tests</td>
+<td><code>pytest -q -m "not sst_live and not gem5_live and not sst_ext"</code></td>
+<td>Pull requests and pushes to <code>main</code>/<code>develop</code></td>
+</tr>
+<tr>
+<td>SST Integration</td>
+<td><code>pytest -q -m "sst_live"</code></td>
+<td>Manual, weekly, relevant SST/plugin/core path pushes, and relevant PRs targeting <code>develop</code></td>
+</tr>
+<tr>
+<td>gem5 Integration</td>
+<td><code>pytest -q -m "gem5_live"</code></td>
+<td>Manual, weekly, relevant gem5/plugin/core path pushes, and relevant PRs targeting <code>develop</code></td>
+</tr>
+</tbody>
+</table>
+<p>Adding dependency-light unit tests under <code>fuse/tests/</code>, <code>fuse/plugins/community/sst/tests/</code>, or <code>fuse/plugins/community/gem5/tests/</code> does not require changing the workflow triggers. Only add or edit workflow path filters when the CI execution policy itself changes.</p>
+<h2 id="release-readiness-recommendation">Release-readiness recommendation<a class="headerlink" href="#release-readiness-recommendation" title="Permanent link">&para;</a></h2>
+<p>Before tagging a release:</p>
+<ol>
+<li>Run dependency-light tests locally.</li>
+<li>Confirm Core Tests pass on GitHub Actions.</li>
+<li>Rebuild simulator CI images only if Dockerfiles or simulator versions changed.</li>
+<li>Confirm SST Integration Tests pass on the release-prep PR or run them manually on <code>develop</code>.</li>
+<li>Confirm gem5 Integration Tests pass on the release-prep PR or run them manually on <code>develop</code>.</li>
+<li>Confirm README testing badges are green for the intended branch/event.</li>
+</ol>
+<h2 id="project-lifecycle-prompt-coverage">Project lifecycle prompt coverage<a class="headerlink" href="#project-lifecycle-prompt-coverage" title="Permanent link">&para;</a></h2>
+<p>The Qt test suite includes non-modal tests for project lifecycle behavior so headless/offscreen runs do not hang on real message boxes. These tests cover Save As extension handling, Save As failure recovery, dirty New/Open/Exit prompt choices, cancelled prompts, failed save-before-open/new behavior, and close-event accept/ignore behavior.</p>
+<h2 id="v060-catalog-and-model-view-ux-coverage">v0.6.0 catalog and model-view UX coverage<a class="headerlink" href="#v060-catalog-and-model-view-ux-coverage" title="Permanent link">&para;</a></h2>
+<p>The v0.6.0 UI tests cover the user-facing catalog and canvas workflow improvements:</p>
+<ul>
+<li>project settings persist preferred component sorting and grouping modes</li>
+<li>project settings persist automatic component-tree expansion</li>
+<li>the component catalog returns to preferred grouping after compatible-component context clears</li>
+<li>catalog search filters names, elements, categories, functions, descriptions, interfaces, plugins, targets, and framework versions</li>
+<li>Expand/Collapse All applies to the full component tree and persists through project settings</li>
+<li>the floating model-view toolbar switches between Select/Move and Multiselect, calls undo/redo, and drives zoom controls</li>
+<li>model-view zoom works through explicit percentages, zoom in/out actions, wheel events, and keyboard actions</li>
+<li>component, port, and link hit testing still works while zoomed in or out</li>
+<li>empty-background dragging pans the model view while component dragging still moves only the selected component</li>
+<li>model-view editor state is saved/restored without affecting the model dirty signature</li>
+</ul>
+<h2 id="v050-sst-export-dispatch-tests">v0.5.0 SST export dispatch tests<a class="headerlink" href="#v050-sst-export-dispatch-tests" title="Permanent link">&para;</a></h2>
+<p>The SST export tests also verify that simulator-specific export behavior remains plugin-owned:</p>
+<ul>
+<li>the SST plugin advertises the <code>sst.json</code> export format</li>
+<li>the SST plugin performs SST JSON export through <code>export_model()</code></li>
+<li>warning-only exports can write a sidecar export report</li>
+<li>unsupported SST export format IDs are rejected by the plugin</li>
+<li>core UI code dispatches to the SST plugin instead of importing SST JSON schema code directly</li>
+</ul>
+<p>These checks help keep the FUSE core plugin-agnostic while allowing simulator plugins to own their export formats.</p>
+<h3 id="sst-json-export-golden-contract-tests">SST JSON export golden-contract tests<a class="headerlink" href="#sst-json-export-golden-contract-tests" title="Permanent link">&para;</a></h3>
+<p>The v0.5.0 SST exporter tests include golden-style coverage for a full SST model containing multiple components, user parameters, generated/stable names, links with endpoint latencies, and a nested subcomponent. Additional tests verify duplicate/blank link-name rejection and warnings when endpoint latencies are defaulted.</p>
+<h2 id="v050-sst-json-export-documentation-and-verification-coverage">v0.5.0 SST JSON export documentation and verification coverage<a class="headerlink" href="#v050-sst-json-export-documentation-and-verification-coverage" title="Permanent link">&para;</a></h2>
+<p>The SST export documentation now defines the expected JSON contract, validation requirements, manual SST verification workflow, warning/export-report behavior, and known unsupported SST features. Release verification should include both deterministic non-live exporter tests and live SST checks using <code>sst --run-mode=init</code> against generated JSON.</p>
+<table>
+<thead>
+<tr>
+<th>Requirement</th>
+<th>Coverage</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Expected SST JSON shape documented</td>
+<td><code>docs/plugins/sst/sst-json-export-guide.md</code></td>
+</tr>
+<tr>
+<td>Manual <code>sst --run-mode=init</code> workflow documented</td>
+<td><code>docs/plugins/sst/sst-json-export-guide.md</code>, <code>docs/reference/commands.md</code></td>
+</tr>
+<tr>
+<td>Export warnings and sidecar report documented</td>
+<td><code>docs/plugins/sst/sst-json-export-guide.md</code></td>
+</tr>
+<tr>
+<td>Unsupported SST features captured</td>
+<td><code>docs/plugins/sst/sst-json-export-guide.md</code></td>
+</tr>
+<tr>
+<td>Golden-style export tests</td>
+<td><code>fuse/plugins/community/sst/tests/test_sst_export_json.py</code></td>
+</tr>
+<tr>
+<td>Live SST acceptance tests</td>
+<td><code>fuse/plugins/community/sst/tests/test_sst_live_integration.py</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="v070-composite-component-coverage">v0.7.0 composite component coverage<a class="headerlink" href="#v070-composite-component-coverage" title="Permanent link">&para;</a></h2>
+<p>v0.7.0 adds hierarchical composite components as core editor/model functionality. The tests are dependency-light and live primarily under <code>fuse/tests/</code> because composites are plugin-agnostic FUSE behavior.</p>
+<table>
+<thead>
+<tr>
+<th>Requirement</th>
+<th>Coverage</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Multiselect highlights only internally selected links</td>
+<td><code>test_composite_selection_foundation.py</code></td>
+</tr>
+<tr>
+<td>Component selection uses explicit highlight styling</td>
+<td><code>test_composite_selection_foundation.py</code></td>
+</tr>
+<tr>
+<td>Composite creation action follows multiselection state</td>
+<td><code>test_main_window.py</code></td>
+</tr>
+<tr>
+<td>Selected fragments preserve components, links, parameters, positions, and candidate port mappings</td>
+<td><code>test_composite_component_creation.py</code></td>
+</tr>
+<tr>
+<td>New composites default candidate ports to hidden/unexposed</td>
+<td><code>test_composite_component_creation.py</code></td>
+</tr>
+<tr>
+<td>Boundary links to unselected components are blocked conservatively</td>
+<td><code>test_composite_component_creation.py</code></td>
+</tr>
+<tr>
+<td>Local composite definitions are stored in <code>core_composite_components</code></td>
+<td><code>test_composite_component_storage.py</code>, <code>test_database_initialization.py</code></td>
+</tr>
+<tr>
+<td>Composite definitions appear in palette/catalog data</td>
+<td><code>test_composite_component_storage.py</code>, <code>test_component_palette.py</code></td>
+</tr>
+<tr>
+<td>Composite instance names, icons, and template identity persist</td>
+<td><code>test_composite_component_instances.py</code></td>
+</tr>
+<tr>
+<td>Properties panel distinguishes instance metadata from template metadata</td>
+<td><code>test_composite_component_instances.py</code></td>
+</tr>
+<tr>
+<td>Composite flattening expands instances before SST/gem5 export</td>
+<td><code>test_composite_flattening.py</code></td>
+</tr>
+<tr>
+<td>External links to exposed composite ports remap to internal component ports</td>
+<td><code>test_composite_flattening.py</code></td>
+</tr>
+<tr>
+<td>Links to hidden composite ports fail clearly during flattening</td>
+<td><code>test_composite_flattening.py</code></td>
+</tr>
+<tr>
+<td>Multiple composite instances receive unique internal names</td>
+<td><code>test_composite_flattening.py</code></td>
+</tr>
+<tr>
+<td>Instance-local edit state, including exposed/hidden port state, is saved, loaded, and used for flattening</td>
+<td><code>test_composite_instance_editor.py</code></td>
+</tr>
+<tr>
+<td>Composite edit tabs support Expose Ports toolbar mode and right-click expose/hide actions</td>
+<td><code>test_composite_instance_editor.py</code></td>
+</tr>
+<tr>
+<td>Template edit tabs save exposed-port state and track dirty state</td>
+<td><code>test_composite_instance_editor.py</code>, <code>test_main_window.py</code></td>
+</tr>
+<tr>
+<td>Nested composite mini-model IDs are normalized</td>
+<td><code>test_composite_instance_editor.py</code></td>
+</tr>
+<tr>
+<td>Tabbed composite instance editing opens and tracks nested contexts</td>
+<td><code>test_main_window.py</code></td>
+</tr>
+<tr>
+<td>Active-tab Model Outline and Properties panels rebind correctly</td>
+<td><code>test_main_window.py</code></td>
+</tr>
+<tr>
+<td><code>.fcc</code> composite definition files round trip and preserve exposed/hidden port state</td>
+<td><code>test_composite_component_files.py</code></td>
+</tr>
+<tr>
+<td>Composite manager lists, imports, exports, and deletes definitions</td>
+<td><code>test_composite_component_manager.py</code></td>
+</tr>
+</tbody>
+</table>
+<p>Default v0.7.0 release verification should run the full dependency-light suite with <code>sst_live</code>, <code>gem5_live</code>, and <code>sst_ext</code> excluded. Live simulator suites remain optional release-confidence checks.</p>
+
+
+
+
+
+
+
+  
+    
+  
+  
+    
+  
+
+
+  <aside class="md-source-file">
+    
+      
+  <span class="md-source-file__fact">
+    <span class="md-icon" title="Last update">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
+    </span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="June 6, 2026 22:39:09 UTC">June 6, 2026</span>
+  </span>
+
+    
+    
+      
+  <span class="md-source-file__fact">
+    <span class="md-icon" title="Created">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
+    </span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 23, 2026 03:17:10 UTC">May 23, 2026</span>
+  </span>
+
+    
+    
+    
+  </aside>
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../testing-guide/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Testing Guide">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Testing Guide
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../../releases/v0.7.0/" class="md-footer__link md-footer__link--next" aria-label="Next: v0.7.0">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                v0.7.0
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.sections", "navigation.expand", "navigation.top", "navigation.footer", "toc.follow", "search.highlight", "search.suggest", "content.code.copy"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

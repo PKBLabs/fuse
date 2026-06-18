@@ -1,0 +1,14 @@
+<map id="fuse.core.ui.model_view.ModelView.zoom_out" name="fuse.core.ui.model_view.ModelView.zoom_out">
+<area shape="rect" id="Node000001" title=" " alt="" coords="5,91,208,131"/>
+<area shape="rect" id="Node000002" href="$classfuse_1_1core_1_1ui_1_1model__view_1_1ModelView.html#a82324b1e57ce1c61010714b01a10f964" title=" " alt="" coords="276,5,463,60"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="174,89,264,61,265,67,175,94"/>
+<area shape="rect" id="Node000003" href="$classfuse_1_1core_1_1ui_1_1model__view_1_1FloatingModelToolbar.html#aa41022ded3b47eeec067e25906e40ad1" title=" " alt="" coords="256,84,483,139"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="208,109,242,109,242,114,208,114"/>
+<area shape="rect" id="Node000004" href="$classfuse_1_1core_1_1ui_1_1model__view_1_1ModelView.html#a3c83da6263f22094eb9d8d110869c48f" title=" " alt="" coords="290,187,449,241"/>
+<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="160,129,287,179,285,184,158,134"/>
+<area shape="poly" id="edge6_Node000004_Node000004" title=" " alt="" coords="321,187,321,176,330,168,346,162,369,160,397,163,413,171,411,176,396,168,369,165,347,167,333,172,326,178,326,187"/>
+<area shape="rect" id="Node000005" href="$classfuse_1_1core_1_1ui_1_1model__view_1_1ModelView.html#a86a4598bb637aa71d09b77bed3b9f86f" title=" " alt="" coords="531,187,705,241"/>
+<area shape="poly" id="edge4_Node000004_Node000005" title=" " alt="" coords="449,211,517,211,517,217,449,217"/>
+<area shape="rect" id="Node000006" href="$classfuse_1_1core_1_1ui_1_1model__view_1_1ModelView.html#ac3665b4feeedab798cc4b073765ba4be" title=" " alt="" coords="753,194,969,234"/>
+<area shape="poly" id="edge5_Node000005_Node000006" title=" " alt="" coords="706,211,740,211,740,217,706,217"/>
+</map>

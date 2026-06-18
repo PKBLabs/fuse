@@ -2,6 +2,8 @@
 # Copyright (c) 2026 PKB Research Labs, LLC.
 #
 # This file is part of FUSE.
+"""Dialog used to collect metadata for a new composite component."""
+
 from __future__ import annotations
 
 from PySide6.QtWidgets import (
@@ -18,6 +20,7 @@ from PySide6.QtWidgets import (
 
 
 class CompositeComponentDialog(QDialog):
+    """Qt dialog that prompts for a composite component name, description, and optional icon."""
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Create Composite Component")

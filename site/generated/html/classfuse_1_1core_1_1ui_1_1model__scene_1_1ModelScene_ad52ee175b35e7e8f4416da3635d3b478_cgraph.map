@@ -1,0 +1,9 @@
+<map id="fuse.core.ui.model_scene.ModelScene.reroute_links_for_node" name="fuse.core.ui.model_scene.ModelScene.reroute_links_for_node">
+<area shape="rect" id="Node000001" title=" " alt="" coords="5,45,207,100"/>
+<area shape="rect" id="Node000002" href="$classfuse_1_1core_1_1ui_1_1model__scene_1_1ModelScene.html#a7e3e31fcaf911c7b6dc1474237b50a2b" title=" " alt="" coords="283,5,468,60"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="207,55,269,46,269,51,207,60"/>
+<area shape="rect" id="Node000003" href="$classfuse_1_1core_1_1ui_1_1model__scene_1_1ModelScene.html#a69b811cfdba5a9ea983680e87d976559" title=" " alt="" coords="255,84,496,139"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="207,84,242,89,241,95,207,90"/>
+<area shape="rect" id="Node000004" href="$classfuse_1_1core_1_1ui_1_1model__scene_1_1ModelScene.html#ada66a7ab17afa9dfde525bc60429aeac" title=" " alt="" coords="544,84,757,139"/>
+<area shape="poly" id="edge3_Node000003_Node000004" title=" " alt="" coords="496,109,530,109,530,114,496,114"/>
+</map>

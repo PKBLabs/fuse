@@ -1,0 +1,15 @@
+<map id="fuse.core.ui.model_scene.ModelScene.cancel_pending_subcomp_attachment" name="fuse.core.ui.model_scene.ModelScene.cancel_pending_subcomp_attachment">
+<area shape="rect" id="Node000001" title=" " alt="" coords="5,55,235,110"/>
+<area shape="rect" id="Node000002" href="$classfuse_1_1core_1_1ui_1_1model__scene_1_1ModelScene.html#a190440722bafd0fd259ebcedce6fb1a8" title=" " alt="" coords="311,11,507,66"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="234,63,297,53,298,58,235,68"/>
+<area shape="rect" id="Node000003" href="$classfuse_1_1core_1_1ui_1_1model__scene_1_1ModelScene.html#af7c5a6eca7ed14750eaaaece5da06a2b" title=" " alt="" coords="283,91,535,160"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="235,97,269,102,268,107,234,102"/>
+<area shape="rect" id="Node000004" href="$classfuse_1_1core_1_1model_1_1composite__flattening_1_1FlattenedScene.html#adafd82e063db893d7978e3f46c633c28" title=" " alt="" coords="583,5,900,45"/>
+<area shape="poly" id="edge3_Node000003_Node000004" title=" " alt="" coords="500,88,534,75,582,55,614,46,615,51,584,60,536,80,502,93"/>
+<area shape="rect" id="Node000005" href="$classfuse_1_1core_1_1ui_1_1model__scene_1_1ModelScene.html#afe1202d65f4678c1893739c38b42dd01" title=" " alt="" coords="606,69,877,109"/>
+<area shape="poly" id="edge4_Node000003_Node000005" title=" " alt="" coords="534,109,592,103,593,108,535,114"/>
+<area shape="rect" id="Node000006" href="$classfuse_1_1plugins_1_1community_1_1sst_1_1external__validation_1_1fixtures_1_1SSTExternalValidationScene.html#a4689f4250a8d0755e053ec4b746ba53e" title=" " alt="" coords="594,134,889,189"/>
+<area shape="poly" id="edge5_Node000003_Node000006" title=" " alt="" coords="535,136,580,141,580,147,534,142"/>
+<area shape="rect" id="Node000007" href="$classfuse_1_1core_1_1ui_1_1model__scene_1_1ModelScene.html#a2e4b960fa7b5c3b6de837ec9c2b085d4" title=" " alt="" coords="635,213,848,267"/>
+<area shape="poly" id="edge6_Node000003_Node000007" title=" " alt="" coords="484,158,584,197,622,209,620,215,582,203,482,163"/>
+</map>

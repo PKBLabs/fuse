@@ -1,0 +1,15 @@
+<map id="fuse.core.ui.graphics_items.ComponentNodeItem.set_variable_port_count" name="fuse.core.ui.graphics_items.ComponentNodeItem.set_variable_port_count">
+<area shape="rect" id="Node000001" title=" " alt="" coords="5,84,239,139"/>
+<area shape="rect" id="Node000002" href="$classfuse_1_1core_1_1ui_1_1graphics__items_1_1ComponentNodeItem.html#a048d176b06dc84bc667176d97bdba06c" title=" " alt="" coords="287,5,567,60"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="228,81,306,61,308,66,229,87"/>
+<area shape="rect" id="Node000003" href="$classfuse_1_1core_1_1ui_1_1graphics__items_1_1ComponentNodeItem.html#a0925905734cb465c6b7681d9f0cc0465" title=" " alt="" coords="305,84,548,139"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="239,109,292,109,292,114,239,114"/>
+<area shape="rect" id="Node000007" href="$classfuse_1_1core_1_1ui_1_1graphics__items_1_1ComponentNodeItem.html#a83c74607791dcc2976d30b6dc1fd44a8" title=" " alt="" coords="293,163,560,217"/>
+<area shape="poly" id="edge6_Node000001_Node000007" title=" " alt="" coords="229,136,308,157,306,162,228,141"/>
+<area shape="rect" id="Node000004" href="$classfuse_1_1core_1_1model_1_1composite__flattening_1_1FlattenedComponentNode.html#aa789d1c36dafe08b1313b858972d96cf" title=" " alt="" coords="637,45,869,100"/>
+<area shape="poly" id="edge3_Node000003_Node000004" title=" " alt="" coords="548,94,623,85,624,91,549,100"/>
+<area shape="rect" id="Node000005" href="$classfuse_1_1core_1_1ui_1_1graphics__items_1_1ComponentNodeItem.html#a42aee494a481f8032abb1f71654c5dc4" title=" " alt="" coords="615,124,892,179"/>
+<area shape="poly" id="edge4_Node000003_Node000005" title=" " alt="" coords="549,124,601,130,601,135,548,129"/>
+<area shape="rect" id="Node000006" href="$namespacefuse_1_1core_1_1ui_1_1graphics__items.html#a2b729f0f73a5e2ca6a0c556d42d9af5b" title=" " alt="" coords="940,131,1097,171"/>
+<area shape="poly" id="edge5_Node000005_Node000006" title=" " alt="" coords="892,149,927,149,927,154,892,154"/>
+</map>

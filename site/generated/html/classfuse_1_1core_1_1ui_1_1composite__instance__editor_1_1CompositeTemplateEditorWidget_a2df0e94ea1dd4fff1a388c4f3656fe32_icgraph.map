@@ -1,0 +1,13 @@
+<map id="fuse.core.ui.composite_instance_editor.CompositeTemplateEditorWidget.update_save_button_state" name="fuse.core.ui.composite_instance_editor.CompositeTemplateEditorWidget.update_save_button_state">
+<area shape="rect" id="Node000001" title=" " alt="" coords="1015,84,1297,139"/>
+<area shape="rect" id="Node000002" href="$classfuse_1_1core_1_1ui_1_1composite__instance__editor_1_1CompositeTemplateEditorWidget.html#a20bc566e469116a3542108370370674e" title=" " alt="" coords="704,84,967,139"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="1001,114,967,114,967,109,1001,109"/>
+<area shape="rect" id="Node000003" href="$classfuse_1_1core_1_1ui_1_1composite__instance__editor_1_1CompositeTemplateEditorWidget.html#adc7c5b826256a69e1a1f0e1e4e211a67" title=" " alt="" coords="377,5,656,60"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="710,83,628,63,629,58,711,78"/>
+<area shape="rect" id="Node000004" href="$classfuse_1_1core_1_1ui_1_1composite__instance__editor_1_1CompositeTemplateEditorWidget.html#a5439f5131887cbfc1511b68833706b82" title=" " alt="" coords="383,84,651,139"/>
+<area shape="poly" id="edge3_Node000002_Node000004" title=" " alt="" coords="690,114,651,114,651,109,690,109"/>
+<area shape="rect" id="Node000006" href="$classfuse_1_1core_1_1ui_1_1composite__instance__editor_1_1CompositeTemplateEditorWidget.html#a37481b009b4cfac22968cb529548cc84" title=" " alt="" coords="385,163,648,217"/>
+<area shape="poly" id="edge5_Node000002_Node000006" title=" " alt="" coords="711,145,629,165,628,160,710,139"/>
+<area shape="rect" id="Node000005" href="$classfuse_1_1core_1_1ui_1_1composite__instance__editor_1_1CompositeTemplateEditorWidget.html#a70ecbc49529f99769251ecdbe8df4d96" title=" " alt="" coords="5,84,329,139"/>
+<area shape="poly" id="edge4_Node000004_Node000005" title=" " alt="" coords="369,114,330,114,330,109,369,109"/>
+</map>

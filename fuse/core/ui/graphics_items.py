@@ -11,6 +11,17 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+"""Qt graphics items used by the FUSE canvas.
+
+This module contains the visual primitives that appear in a ``ModelScene``:
+component nodes, ports, port-to-port links, subcomponent connectors,
+subcomponent attachments, and helper controls. These classes are responsible
+for rendering, hit testing, context menus, and local visual state. They should
+not perform project-level persistence or simulator-specific export logic.
+
+Most items keep a reference to the corresponding model dataclass so UI updates,
+validation highlights, and serializers can stay synchronized.
+"""
 from __future__ import annotations
 
 from typing import Optional
@@ -67,6 +78,13 @@ def _safe_int(value, default: int = 1) -> int:
 
 
 class PortItem(QGraphicsEllipseItem):
+    """Visual endpoint for a component port.
+
+    A port item renders the small connection handle on a component boundary,
+    tracks its side/position, and delegates click handling to ``ModelScene``.
+    Ports may represent fixed metadata-defined ports, expanded members of a
+    variable port group, or exposed composite boundary ports.
+    """
     RADIUS = 5.0
     HIT_RADIUS = 10.0
     EDGE_GAP = 4.0
@@ -842,6 +860,12 @@ class SubcompAttachmentItem(QGraphicsPathItem):
 
 
 class AddPortsButtonItem(QGraphicsTextItem):
+    """Small canvas control for increasing a variable port count.
+
+    The button is shown next to components that expose expandable port groups.
+    Clicking it delegates to the owning ``ComponentNodeItem`` so the node can
+    update its port list and notify connected links.
+    """
     def __init__(self, node: "ComponentNodeItem"):
         super().__init__("+", node)
         self.node = node
@@ -875,6 +899,14 @@ class AddPortsButtonItem(QGraphicsTextItem):
 
 
 class ComponentNodeItem(QGraphicsRectItem):
+    """Canvas representation of a placed model component.
+
+    A node item owns the visible component body, icon, port items,
+    subcomponent-connector items, validation styling, and drag behavior for one
+    component instance. It mirrors a ``ComponentDefinition`` plus instance state
+    such as node id, instance name, position, parameter values, composite
+    mappings, and variable port counts.
+    """
     WIDTH = 180
     HEIGHT = 170
 
@@ -1036,14 +1068,38 @@ class ComponentNodeItem(QGraphicsRectItem):
     def contextMenuEvent(self, event):
         scene = self.scene()
 
+        if scene is not None and not self.isSelected():
+            scene.clearSelection()
+            self.setSelected(True)
+
         menu = QMenu()
         add_action = menu.addAction("Add to Frequently Used")
+
+        copy_action = None
+        paste_action = None
+        group_action = None
+        ungroup_action = None
         composite_action = None
+
         if scene is not None:
+            menu.addSeparator()
+            copy_action = menu.addAction("Copy")
+            paste_action = menu.addAction("Paste")
+            paste_action.setEnabled(bool(getattr(scene.__class__, "_entity_clipboard", None)))
+            group_action = menu.addAction("Group")
+            group_action.setEnabled(len(scene.selected_component_nodes(expand_groups=False)) >= 2)
+            ungroup_action = menu.addAction("Ungroup")
+            ungroup_action.setEnabled(any(
+                node.node_id in getattr(scene, "node_group_ids", {})
+                for node in scene.selected_component_nodes(expand_groups=True)
+            ))
+
             from fuse.core.ui.selection_helpers import can_create_composite_from_selection
 
             if can_create_composite_from_selection(scene):
+                menu.addSeparator()
                 composite_action = menu.addAction("Create Composite Component from Selection")
+
         menu.addSeparator()
 
         remove_text = (
@@ -1059,6 +1115,22 @@ class ComponentNodeItem(QGraphicsRectItem):
             if scene is not None and hasattr(scene, "component_favorite_requested_callback"):
                 scene.component_favorite_requested_callback(self.component)
 
+        elif copy_action is not None and action == copy_action:
+            if scene is not None:
+                scene.copy_selection_to_clipboard()
+
+        elif paste_action is not None and action == paste_action:
+            if scene is not None:
+                scene.paste_clipboard(event.scenePos())
+
+        elif group_action is not None and action == group_action:
+            if scene is not None:
+                scene.group_selection()
+
+        elif ungroup_action is not None and action == ungroup_action:
+            if scene is not None:
+                scene.ungroup_selection()
+
         elif composite_action is not None and action == composite_action:
             if scene is not None:
                 from fuse.core.ui.selection_helpers import request_composite_from_selection
@@ -1069,8 +1141,11 @@ class ComponentNodeItem(QGraphicsRectItem):
                 )
 
         elif action == remove_action:
-            if scene is not None and hasattr(scene, "delete_component_node"):
-                scene.delete_component_node(self)
+            if scene is not None:
+                if hasattr(scene, "delete_selection"):
+                    scene.delete_selection()
+                elif hasattr(scene, "delete_component_node"):
+                    scene.delete_component_node(self)
 
         event.accept()
 
@@ -1618,8 +1693,22 @@ class ComponentNodeItem(QGraphicsRectItem):
         if change == QGraphicsItem.ItemSelectedHasChanged:
             self.update_selection_style()
 
+        if change == QGraphicsItem.ItemPositionChange:
+            scene = self.scene()
+            if (
+                scene is not None
+                and bool(getattr(scene, "snap_to_grid_enabled", False))
+                and not bool(getattr(scene, "_dragging_node", False))
+                and isinstance(value, QPointF)
+                and hasattr(scene, "snap_position_to_grid")
+            ):
+                return scene.snap_position_to_grid(value)
+
         if change == QGraphicsItem.ItemPositionHasChanged:
             scene = self.scene()
+
+            if scene is not None and hasattr(scene, "apply_group_drag"):
+                scene.apply_group_drag(self)
 
             if scene is not None and hasattr(scene, "reroute_links_for_node"):
                 scene.reroute_links_for_node(self)

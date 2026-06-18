@@ -1,0 +1,9 @@
+<map id="fuse.plugins.community.sst.plugin.SSTPlugin.check_link_compatibility" name="fuse.plugins.community.sst.plugin.SSTPlugin.check_link_compatibility">
+<area shape="rect" id="Node000001" title=" " alt="" coords="559,49,811,89"/>
+<area shape="rect" id="Node000002" href="$classfuse_1_1core_1_1ui_1_1model__scene_1_1ModelScene.html#a33a2a5288073c16fb1dba85fedef8bcd" title=" " alt="" coords="272,5,483,60"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="545,55,483,48,483,42,545,50"/>
+<area shape="rect" id="Node000004" href="$classfuse_1_1plugins_1_1community_1_1gem5_1_1plugin_1_1Gem5Plugin.html#ada8f27c73f34b379aca51d39f194f387" title=" " alt="" coords="244,85,511,125"/>
+<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="545,88,511,92,510,86,545,82"/>
+<area shape="rect" id="Node000003" href="$classfuse_1_1core_1_1ui_1_1model__scene_1_1ModelScene.html#a6135bfefd770a9430f7c19766940caf1" title=" " alt="" coords="5,5,196,60"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="258,35,196,35,196,30,258,30"/>
+</map>

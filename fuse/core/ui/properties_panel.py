@@ -11,6 +11,13 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+"""Selection properties and inline validation panel for the model editor.
+
+The properties panel displays editable fields for the currently selected
+component, link, or subcomponent attachment. It also overlays validation issues
+from the latest model validation pass so users can see which parameters or
+objects need attention without leaving the main editor.
+"""
 from typing import Optional
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QBrush
@@ -29,6 +36,13 @@ from fuse.core.ui.graphics_items import ComponentNodeItem, ConnectionItem, Subco
 
 
 class PropertiesPanel(QWidget):
+    """Dock widget content for inspecting and editing selected model objects.
+
+    The panel renders a two-column property tree and maps user edits back to the
+    selected canvas item. Component parameters are loaded from plugin metadata
+    when available, while common instance/link/attachment properties are handled
+    by the core editor.
+    """
     def __init__(self):
         super().__init__()
         self.validation_issues_by_node: dict[int, dict[str, list[str]]] = {}
@@ -40,13 +54,29 @@ class PropertiesPanel(QWidget):
 
         layout = QVBoxLayout(self)
 
-        self.title = QLabel("Nothing selected")
-        self.title.setStyleSheet("font-weight: bold; font-size: 14px;")
-        layout.addWidget(self.title)
+        # Keep a title label object for code/tests that inspect the panel state,
+        # but do not add it to the layout. The dock title is the single visible
+        # properties title and is updated through title_changed_callback.
+        self.title = QLabel("Properties")
+        self.title_changed_callback = None
 
         self.tree = QTreeWidget()
         self.tree.setColumnCount(2)
         self.tree.setHeaderLabels(["Property", "Value"])
+        self.tree.setAlternatingRowColors(True)
+        self.tree.setStyleSheet(
+            """
+            QTreeWidget {
+                background: #ffffff;
+                alternate-background-color: #eef4fb;
+            }
+            QTreeWidget::item {
+                min-height: 24px;
+                padding-top: 2px;
+                padding-bottom: 2px;
+            }
+            """
+        )
         self.tree.itemChanged.connect(self.on_item_changed)
         layout.addWidget(self.tree)
 
@@ -56,13 +86,31 @@ class PropertiesPanel(QWidget):
         self.delete_link_button.setVisible(False)
         layout.addWidget(self.delete_link_button)
 
+        self.show_empty()
+
+    def set_title_changed_callback(self, callback):
+        self.title_changed_callback = callback
+        self._set_title(self.title.text())
+
+    def _set_title(self, title: str):
+        self.title.setText(title)
+
+        if self.title_changed_callback is not None:
+            self.title_changed_callback(title)
+
     def show_empty(self):
         self._loading = True
         self.current_node = None
         self.current_link = None
         self.current_subcomp_attachment = None
-        self.title.setText("Nothing selected")
+        self._set_title("Properties")
         self.tree.clear()
+
+        placeholder = QTreeWidgetItem(["", "Nothing selected"])
+        placeholder.setFlags(placeholder.flags() & ~Qt.ItemIsEditable)
+        self.tree.addTopLevelItem(placeholder)
+        self.tree.resizeColumnToContents(0)
+
         self._loading = False
         self.delete_link_button.setVisible(False)
 
@@ -103,14 +151,18 @@ class PropertiesPanel(QWidget):
         self.current_node = node
         self.current_link = None
         self.current_subcomp_attachment = None
-        self.title.setText("Component Instance")
+        self._set_title("Component Properties")
         self.tree.clear()
         self.delete_link_button.setVisible(False)
 
         component = node.component
         component_is_composite = bool(int(getattr(component, "is_composite", 0) or 0))
+        component_is_subcomponent = bool(int(getattr(component, "is_subcomp", 0) or 0))
+
         if component_is_composite:
-            self.title.setText("Composite Component Instance")
+            self._set_title("Composite Component Properties")
+        elif component_is_subcomponent:
+            self._set_title("SubComponent Properties")
 
         object_group = self.add_category("Object")
 
@@ -129,7 +181,7 @@ class PropertiesPanel(QWidget):
         if component_is_composite:
             kind_label = "Composite Component"
         else:
-            kind_label = "SubComponent" if component.is_subcomp else "Component"
+            kind_label = "SubComponent" if component_is_subcomponent else "Component"
 
         self.add_property(
             object_group,
@@ -245,7 +297,7 @@ class PropertiesPanel(QWidget):
         self.current_node = None
         self.current_link = connection
         self.current_subcomp_attachment = None
-        self.title.setText("Point-to-Point Link")
+        self._set_title("Link Properties")
         self.tree.clear()
         self.delete_link_button.setVisible(True)
 
@@ -323,7 +375,7 @@ class PropertiesPanel(QWidget):
         self.current_node = None
         self.current_link = None
         self.current_subcomp_attachment = attachment_item
-        self.title.setText("SubComponent Attachment")
+        self._set_title("SubComponent Attachment Properties")
         self.tree.clear()
         self.delete_link_button.setText("Delete Selected Attachment")
         self.delete_link_button.setVisible(True)

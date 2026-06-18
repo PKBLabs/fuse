@@ -11,6 +11,16 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+"""Flatten composite instances into plain components for validation/export.
+
+The graphical editor can contain reusable composite nodes whose internals are
+stored as mini-models. Simulator exporters, however, generally need a flat set
+of concrete framework components and links. This module expands composite
+instances recursively, rewrites node ids and endpoint names, and preserves
+enough metadata for plugins to export the result as if the user had built the
+expanded model directly.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -23,10 +33,12 @@ from fuse.core.model.composite_mini_model import normalize_mini_model_and_port_m
 
 
 def mini_model_has_components(mini_model: dict[str, Any]) -> bool:
+    """Return whether a serialized composite mini-model contains components."""
     return isinstance(mini_model, dict) and bool(mini_model.get("components") or [])
 
 
 def exposed_port_mappings(port_mappings: list[CompositePortMapping]) -> list[CompositePortMapping]:
+    """Filter composite port mappings to those visible on the boundary."""
     return [
         mapping
         for mapping in port_mappings
@@ -36,6 +48,7 @@ def exposed_port_mappings(port_mappings: list[CompositePortMapping]) -> list[Com
 
 @dataclass(frozen=True)
 class FlattenedEndpoint:
+    """Resolved endpoint in the flattened export model."""
     node_id: int
     component_name: str
     port_name: str
@@ -43,12 +56,19 @@ class FlattenedEndpoint:
 
 @dataclass
 class FlattenedPort:
+    """Port metadata carried by a flattened component node."""
     name: str
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class FlattenedComponentNode:
+    """Component node after composite expansion.
+
+    Exporters consume flattened nodes instead of Qt scene items when composite
+    instances are present. The object preserves parameters, variable-port
+    counts, and generated port metadata needed by SST/gem5 exporters.
+    """
     component: ComponentDefinition
     node_id: int
     instance_name: str
@@ -57,6 +77,7 @@ class FlattenedComponentNode:
     ports: list[FlattenedPort] = field(default_factory=list)
 
     def expanded_port_names(self) -> list[str]:
+        """Return concrete port names after applying variable-port counts."""
         if self.ports:
             return [port.name for port in self.ports]
 
@@ -84,17 +105,20 @@ class FlattenedComponentNode:
 
 @dataclass
 class FlattenedScene:
+    """Flat, exporter-friendly scene representation."""
     nodes: list[FlattenedComponentNode]
     links: list[ModelLink]
     subcomp_attachments: list[ModelSubcompAttachment]
     active_plugin_id: str = ""
 
     def component_items(self) -> list[FlattenedComponentNode]:
+        """Return components using the same accessor shape as ``ModelScene``."""
         return sorted(self.nodes, key=lambda node: int(node.node_id))
 
 
 @dataclass
 class CompositeExpansion:
+    """Result of expanding one composite instance."""
     nodes: list[FlattenedComponentNode] = field(default_factory=list)
     links: list[ModelLink] = field(default_factory=list)
     subcomp_attachments: list[ModelSubcompAttachment] = field(default_factory=list)
@@ -102,7 +126,9 @@ class CompositeExpansion:
 
 
 class CompositeExpansionState:
+    """Mutable state used while assigning stable flattened node ids."""
     def __init__(self, scene) -> None:
+        """Initialize id counters from the existing live scene."""
         self.next_node_id = max([int(getattr(node, "node_id", 0)) for node in scene.component_items()] + [0]) + 1
         self.next_link_id = max([int(getattr(link, "link_id", 0)) for link in getattr(scene, "links", [])] + [0]) + 1
         self.next_attachment_id = max(
@@ -117,25 +143,30 @@ class CompositeExpansionState:
         }
 
     def allocate_node_id(self) -> int:
+        """Reserve and return the next flattened node id."""
         node_id = self.next_node_id
         self.next_node_id += 1
         return node_id
 
     def allocate_link_id(self) -> int:
+        """Reserve and return the next flattened link id."""
         link_id = self.next_link_id
         self.next_link_id += 1
         return link_id
 
     def allocate_attachment_id(self) -> int:
+        """Reserve and return the next flattened subcomponent attachment id."""
         attachment_id = self.next_attachment_id
         self.next_attachment_id += 1
         return attachment_id
 
     def next_composite_suffix(self) -> str:
+        """Return a unique suffix for expanded composite internals."""
         self.composite_instance_index += 1
         return f"mc{self.composite_instance_index}"
 
     def unique_component_name(self, base_name: str) -> str:
+        """Return a component name that does not collide in the flat scene."""
         candidate = base_name
         index = 2
         while candidate in self.used_component_names:
@@ -146,11 +177,13 @@ class CompositeExpansionState:
 
 
 def component_is_composite(node) -> bool:
+    """Return true when a scene node represents a composite instance."""
     component = getattr(node, "component", None)
     return bool(int(getattr(component, "is_composite", 0) or 0))
 
 
 def component_definition_from_save_dict(data: dict[str, Any]) -> ComponentDefinition:
+    """Rehydrate a component definition from serialized project data."""
     return ComponentDefinition(
         plugin_id=data.get("pluginId", data.get("plugin_id", "core")),
         target_id=data.get("targetId", data.get("target_id", "")),
@@ -172,6 +205,7 @@ def component_definition_from_save_dict(data: dict[str, Any]) -> ComponentDefini
 
 
 def flattened_ports_for_node(component: ComponentDefinition, variable_port_counts: dict[str, int]) -> list[FlattenedPort]:
+    """Build flattened port metadata from a component definition."""
     if int(getattr(component, "is_composite", 0) or 0):
         return []
 
@@ -201,6 +235,7 @@ def flattened_ports_for_node(component: ComponentDefinition, variable_port_count
 
 
 def copied_existing_node(node) -> FlattenedComponentNode:
+    """Copy an existing non-composite scene node into flattened form."""
     component = getattr(node, "component")
     ports = [
         FlattenedPort(
@@ -226,6 +261,11 @@ def endpoint_for_component_port(
     direct_endpoints: dict[tuple[int, str], FlattenedEndpoint],
     composite_endpoints: dict[tuple[int, str], FlattenedEndpoint],
 ) -> FlattenedEndpoint:
+    """Resolve a saved component/port pair into a flattened endpoint.
+
+    This helper is used while expanding links that originate inside composite
+    mini-models. Boundary ports are resolved through the supplied mapping table.
+    """
     composite_endpoint = composite_endpoints.get((int(original_node_id), port_name))
     if composite_endpoint is not None:
         return composite_endpoint
@@ -240,6 +280,7 @@ def endpoint_for_component_port(
 
 
 def model_link_from_dict(data: dict[str, Any]) -> ModelLink:
+    """Build a :class:`ModelLink` from serialized mini-model data."""
     source = data.get("source", {}) or {}
     target = data.get("target", {}) or {}
     compatibility = data.get("compatibility", {}) or {}
@@ -265,6 +306,7 @@ def model_link_from_dict(data: dict[str, Any]) -> ModelLink:
 
 
 def model_subcomp_attachment_from_dict(data: dict[str, Any]) -> ModelSubcompAttachment:
+    """Build a subcomponent attachment from serialized mini-model data."""
     parent = data.get("parent", {}) or {}
     child = data.get("child", {}) or {}
     compatibility = data.get("compatibility", {}) or {}
@@ -291,6 +333,12 @@ def expand_composite_instance(
     state: CompositeExpansionState,
     expansion_stack: list[str] | None = None,
 ) -> CompositeExpansion:
+    """Expand one composite instance into concrete flattened nodes and links.
+
+    Nested composite definitions are expanded recursively. External composite
+    boundary links are represented in the returned endpoint map so callers can
+    reconnect links that cross into or out of the composite instance.
+    """
     expansion_stack = list(expansion_stack or [])
     component = getattr(node, "component")
     composite_id = getattr(component, "composite_id", "") or getattr(component, "component_id", "") or ""
@@ -439,6 +487,7 @@ def expand_composite_instance(
 
 
 def copied_existing_link(link: ModelLink) -> ModelLink:
+    """Copy a normal link that already references flattened node ids."""
     return ModelLink(
         link_id=int(link.link_id),
         name=link.name,
@@ -460,6 +509,7 @@ def copied_existing_link(link: ModelLink) -> ModelLink:
 
 
 def copied_existing_attachment(attachment: ModelSubcompAttachment) -> ModelSubcompAttachment:
+    """Copy a subcomponent attachment that already references flattened nodes."""
     return ModelSubcompAttachment(
         attachment_id=int(attachment.attachment_id),
         name=attachment.name,
@@ -479,6 +529,7 @@ def copied_existing_attachment(attachment: ModelSubcompAttachment) -> ModelSubco
 
 
 def flatten_scene_for_export(scene) -> FlattenedScene:
+    """Return a flat scene suitable for plugin validation and export."""
     if not any(component_is_composite(node) for node in scene.component_items()):
         return FlattenedScene(
             nodes=[copied_existing_node(node) for node in scene.component_items()],

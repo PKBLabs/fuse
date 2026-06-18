@@ -1,0 +1,16 @@
+<map id="fuse.plugins.community.sst.external_validation.fixtures.make_fixture_component" name="fuse.plugins.community.sst.external_validation.fixtures.make_fixture_component">
+<area shape="rect" id="Node000001" title=" " alt="" coords="619,124,877,179"/>
+<area shape="rect" id="Node000002" href="$namespacefuse_1_1plugins_1_1community_1_1sst_1_1external__validation_1_1fixtures.html#a87c589a139a3cfaa12a904cbc5352065" title=" " alt="" coords="312,5,571,60"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="678,120,570,74,538,63,539,58,572,69,680,115"/>
+<area shape="rect" id="Node000004" href="$namespacefuse_1_1plugins_1_1community_1_1sst_1_1external__validation_1_1fixtures.html#a41690daad39dfef09b5946e69b889c37" title=" " alt="" coords="312,84,571,139"/>
+<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="605,135,571,131,571,126,606,130"/>
+<area shape="rect" id="Node000005" href="$namespacefuse_1_1plugins_1_1community_1_1sst_1_1external__validation_1_1fixtures.html#afaa390125b80f9184928889498cce353" title=" " alt="" coords="312,163,571,217"/>
+<area shape="poly" id="edge5_Node000001_Node000005" title=" " alt="" coords="606,172,571,176,571,171,605,167"/>
+<area shape="rect" id="Node000006" href="$namespacefuse_1_1plugins_1_1community_1_1sst_1_1external__validation_1_1fixtures.html#ab4f10ab2713de47522af9e8903e0c196" title=" " alt="" coords="312,241,571,296"/>
+<area shape="poly" id="edge7_Node000001_Node000006" title=" " alt="" coords="677,187,572,231,536,244,534,239,570,226,675,182"/>
+<area shape="rect" id="Node000003" href="$namespacefuse_1_1plugins_1_1community_1_1sst_1_1external__validation_1_1fixtures.html#a5491300358416b629c2e239dd99b8b9f" title=" " alt="" coords="5,124,264,179"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="332,67,313,74,193,126,190,121,311,69,330,62"/>
+<area shape="poly" id="edge4_Node000004_Node000003" title=" " alt="" coords="299,133,265,137,264,132,298,127"/>
+<area shape="poly" id="edge6_Node000005_Node000003" title=" " alt="" coords="298,175,264,170,265,165,299,169"/>
+<area shape="poly" id="edge8_Node000006_Node000003" title=" " alt="" coords="334,239,311,231,193,181,195,176,313,226,336,234"/>
+</map>

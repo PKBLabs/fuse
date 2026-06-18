@@ -11,6 +11,21 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+"""Main Qt application shell for the FUSE desktop editor.
+
+This module owns the top-level application lifecycle: database initialization,
+plugin discovery, framework target selection, model tab management, document
+save/load/export actions, validation result presentation, and dock/widget
+composition. Most simulator-specific behavior is delegated to plugin-facing
+services or exporters so that the main window remains responsible for workflow
+coordination rather than simulator semantics.
+
+The central ``MainWindow`` class deliberately connects many UI subsystems
+because it is the point where project state, Qt widgets, and user actions meet.
+Lower-level modules such as ``ModelScene`` and ``ModelView`` implement canvas
+behavior, while this module decides when those behaviors become application
+commands.
+"""
 import copy
 import json
 import os
@@ -102,7 +117,38 @@ UNSAVED_CHOICE_DISCARD = "discard"
 UNSAVED_CHOICE_CANCEL = "cancel"
 
 
+
+def prefer_xcb_platform_for_window_manager_shadows() -> None:
+    """Use X11/XWayland on Linux Wayland sessions unless the user opts out.
+
+    Some PySide6/Qt Wayland client-side decorations are rendered without the
+    compositor-provided outer window shadow even when other desktop apps have
+    one. Running the normal native main window through xcb lets the desktop
+    window manager decorate FUSE like the rest of the user's applications.
+
+    Users can override this by setting QT_QPA_PLATFORM themselves, or disable
+    the FUSE default with FUSE_PREFER_XCB_WINDOW_SHADOWS=0.
+    """
+
+    if sys.platform != "linux":
+        return
+    if os.environ.get("FUSE_PREFER_XCB_WINDOW_SHADOWS", "1").lower() in {"0", "false", "no"}:
+        return
+    if os.environ.get("QT_QPA_PLATFORM"):
+        return
+    if os.environ.get("XDG_SESSION_TYPE", "").lower() != "wayland":
+        return
+
+    os.environ["QT_QPA_PLATFORM"] = "xcb"
+
+
 class FloatingDockTitleBar(QWidget):
+    """Custom title bar used when a dock widget is floating.
+
+    Qt's default floating dock title bar does not expose the exact controls and
+    styling used by FUSE, so this lightweight widget provides explicit dock and
+    close buttons while preserving drag-to-move behavior for floating panels.
+    """
     def __init__(self, dock: QDockWidget, title: str):
         super().__init__(dock)
         self.dock = dock
@@ -218,10 +264,25 @@ class FloatingDockTitleBar(QWidget):
 
 
 class MainWindow(QMainWindow):
+    """Top-level window and command coordinator for the FUSE editor.
+
+    ``MainWindow`` wires together the component palette, model canvas,
+    properties panel, model outline, validation output, project settings, and
+    export actions. It also owns tab lifecycles for normal model documents,
+    composite instance editors, and composite template editors.
+
+    The class intentionally keeps long-lived project state such as the active
+    framework target, dirty flag, undo/redo snapshots, and current project path.
+    Canvas items and scene-level interaction are delegated to ``ModelScene`` and
+    ``ModelView``; simulator-specific validation/export work is delegated to the
+    active plugin and exporter modules.
+    """
     def __init__(self):
         super().__init__()
         self.setWindowTitle("FUSE")
         self.resize(1300, 800)
+        self.setObjectName("fuseMainWindow")
+
 
         self.current_project_path: Optional[Path] = None
         self.project_name = "Untitled FUSE Project"
@@ -568,6 +629,22 @@ class MainWindow(QMainWindow):
         self.redo_action.triggered.connect(self.redo)
         self.redo_action.setEnabled(False)
 
+        self.copy_action = QAction("Copy", self)
+        self.copy_action.setShortcut("Ctrl+C")
+        self.copy_action.triggered.connect(lambda: self.active_model_view().copy_selection())
+
+        self.paste_action = QAction("Paste", self)
+        self.paste_action.setShortcut("Ctrl+V")
+        self.paste_action.triggered.connect(lambda: self.active_model_view().paste_clipboard())
+
+        self.group_action = QAction("Group", self)
+        self.group_action.setShortcut("Ctrl+G")
+        self.group_action.triggered.connect(lambda: self.active_model_view().group_selection())
+
+        self.ungroup_action = QAction("Ungroup", self)
+        self.ungroup_action.setShortcut("Ctrl+Shift+G")
+        self.ungroup_action.triggered.connect(lambda: self.active_model_view().ungroup_selection())
+
         self.create_composite_action = QAction("Create Composite Component from Selection", self)
         self.create_composite_action.triggered.connect(self.request_create_composite_from_selection)
         self.create_composite_action.setEnabled(False)
@@ -581,6 +658,12 @@ class MainWindow(QMainWindow):
 
         edit_menu.addAction(self.undo_action)
         edit_menu.addAction(self.redo_action)
+        edit_menu.addSeparator()
+        edit_menu.addAction(self.copy_action)
+        edit_menu.addAction(self.paste_action)
+        edit_menu.addSeparator()
+        edit_menu.addAction(self.group_action)
+        edit_menu.addAction(self.ungroup_action)
         edit_menu.addSeparator()
         edit_menu.addAction(self.create_composite_action)
         edit_menu.addAction(self.manage_composite_components_action)
@@ -951,8 +1034,23 @@ class MainWindow(QMainWindow):
         palette_layout.addWidget(self.palette)
 
         self.model_tabs = QTabWidget(self)
+        self.model_tabs.setObjectName("centralModelTabs")
         self.model_tabs.setDocumentMode(True)
         self.model_tabs.setTabsClosable(True)
+        self.model_tabs.setStyleSheet(
+            """
+            QTabWidget#centralModelTabs::pane {
+                background: palette(base);
+                border: 1px solid #9ca3af;
+                border-radius: 4px;
+            }
+            QTabBar::tab {
+                padding: 6px 10px;
+            }
+            """
+        )
+
+
         self.model_tabs.tabCloseRequested.connect(self.close_model_tab)
         self.model_tabs.currentChanged.connect(self.on_model_tab_changed)
         self.model_tabs.addTab(self.model_view, self.project_model_tab_title())
@@ -1012,6 +1110,9 @@ class MainWindow(QMainWindow):
             "availableComponentsDock",
         )
         self.properties_dock = self.make_dock("Properties", self.properties_panel, "propertiesDock")
+        self.properties_panel.set_title_changed_callback(
+            self.properties_dock.setWindowTitle
+        )
         self.model_outline_dock = self.make_dock("Model Outline", self.model_outline, "modelOutlineDock")
         self.validation_results_dock = self.make_dock(
             "Validation Results",
@@ -1332,6 +1433,9 @@ class MainWindow(QMainWindow):
 
     def model_outline_group_for_node(self, node) -> str:
         component = node.component
+
+        if int(getattr(component, "is_composite", 0) or 0):
+            return "Composite Components"
 
         text = " ".join(
             [
@@ -2221,6 +2325,14 @@ class MainWindow(QMainWindow):
             event.ignore()
 
 def main():
+    """Run the FUSE desktop application event loop.
+
+    The function creates the Qt application, displays the splash screen,
+    initializes persistent storage and plugin data through ``MainWindow``, and
+    then enters the Qt event loop. It is the console/script entry point used by
+    development launches and packaged desktop artifacts.
+    """
+    prefer_xcb_platform_for_window_manager_shadows()
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
     app.setOrganizationName(ORG_NAME)

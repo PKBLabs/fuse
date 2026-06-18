@@ -8,6 +8,12 @@
 # Foundation, either version 3 of the License, or, at your option, any later
 # version.
 
+"""SST target migration planning and application.
+
+When a project changes from one imported SST framework target to another, this
+module compares the current scene with destination metadata and prepares a
+conservative migration plan."""
+
 from __future__ import annotations
 
 from fuse.plugin_api.interfaces import MigrationPlan
@@ -19,10 +25,12 @@ from fuse.plugins.community.sst.db_utils import get_component_details
 
 
 def _target_parameters(details: dict) -> dict[str, dict]:
+    """Index destination-target parameter definitions by name."""
     return {str(parameter.get("name", "")): parameter for parameter in details.get("parameters", [])}
 
 
 def plan_scene_migration(scene, target_id: str, plugin_id: str = "sst") -> MigrationPlan:
+    """Build a conservative migration plan from the current scene to another SST target."""
     report = validate_scene_for_target(scene, target_id=target_id, plugin_id=plugin_id)
     source_target_ids = {
         str(getattr(node.component, "target_id", "") or "")
@@ -91,6 +99,7 @@ def plan_scene_migration(scene, target_id: str, plugin_id: str = "sst") -> Migra
 
 
 def apply_scene_migration(scene, target_id: str, plugin_id: str = "sst") -> MigrationPlan:
+    """Apply a generated SST migration plan to matching scene nodes."""
     plan = plan_scene_migration(scene, target_id=target_id, plugin_id=plugin_id)
 
     if not plan.can_apply:

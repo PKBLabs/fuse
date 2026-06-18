@@ -1,0 +1,12 @@
+<map id="app.MainWindow.on_model_outline_item_clicked" name="app.MainWindow.on_model_outline_item_clicked">
+<area shape="rect" id="Node000001" title=" " alt="" coords="5,69,207,109"/>
+<area shape="rect" id="Node000002" href="$classapp_1_1MainWindow.html#a484f07fe9298fb9460e26498176fba18" title=" " alt="" coords="287,5,464,45"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="190,67,277,46,278,51,192,72"/>
+<area shape="rect" id="Node000004" href="$classapp_1_1MainWindow.html#a3c3fbe1948c38367319a3627482609e2" title=" " alt="" coords="287,69,464,109"/>
+<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="207,87,272,87,272,92,207,92"/>
+<area shape="rect" id="Node000005" href="$classapp_1_1MainWindow.html#a87e7d671e6f6b0ef1e1de3adb4016464" title=" " alt="" coords="255,133,496,173"/>
+<area shape="poly" id="edge5_Node000001_Node000005" title=" " alt="" coords="192,107,278,128,277,133,190,112"/>
+<area shape="rect" id="Node000003" href="$classapp_1_1MainWindow.html#a85fab24fdc5fa950e46c5f92a7bf50be" title=" " alt="" coords="544,37,721,77"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="465,34,531,42,530,47,464,39"/>
+<area shape="poly" id="edge4_Node000004_Node000003" title=" " alt="" coords="464,76,530,67,531,73,465,81"/>
+</map>

@@ -11,6 +11,12 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+"""Database query helpers for SST metadata.
+
+The SST plugin stores imported sst-info metadata in SQLite tables. This module
+centralizes read-only query helpers used by palette loading, details panels,
+compatibility checks, exporters, and migration code."""
+
 from fuse.core.persistence.database import get_connection, rows_to_dicts
 
 
@@ -19,6 +25,7 @@ SST_STATISTIC_PARENT_TYPE = "sst_statistics"
 
 
 def get_default_framework_version_id():
+    """Return the default imported SST framework-version id."""
     with get_connection() as conn:
         row = conn.execute("""
             SELECT id
@@ -42,6 +49,7 @@ def get_default_framework_version_id():
 
 
 def resolve_framework_version_id(framework_version_id=None):
+    """Resolve an explicit or default SST framework-version id."""
     if framework_version_id in (None, ""):
         return get_default_framework_version_id()
 
@@ -49,6 +57,7 @@ def resolve_framework_version_id(framework_version_id=None):
 
 
 def get_framework_versions():
+    """Return imported SST framework versions ordered for display."""
     with get_connection() as conn:
         rows = conn.execute("""
             SELECT *
@@ -60,6 +69,7 @@ def get_framework_versions():
 
 
 def get_all_elements(framework_version_id=None):
+    """Return all SST elements for a framework version."""
     framework_version_id = resolve_framework_version_id(framework_version_id)
 
     if framework_version_id is None:
@@ -77,6 +87,7 @@ def get_all_elements(framework_version_id=None):
 
 
 def get_element_by_name(element_name, framework_version_id=None):
+    """Look up an SST element by name within a framework version."""
     framework_version_id = resolve_framework_version_id(framework_version_id)
 
     if framework_version_id is None:
@@ -94,6 +105,7 @@ def get_element_by_name(element_name, framework_version_id=None):
 
 
 def get_component_id(component_name, element_name=None, is_subcomp=None, framework_version_id=None):
+    """Return the database id for an SST component or subcomponent."""
     framework_version_id = resolve_framework_version_id(framework_version_id)
 
     if framework_version_id is None:
@@ -126,6 +138,7 @@ def get_component_id(component_name, element_name=None, is_subcomp=None, framewo
 
 
 def get_all_components_for_element(element_name, framework_version_id=None):
+    """Return all components and subcomponents associated with an SST element."""
     framework_version_id = resolve_framework_version_id(framework_version_id)
 
     if framework_version_id is None:
@@ -146,6 +159,7 @@ def get_all_components_for_element(element_name, framework_version_id=None):
 
 
 def get_components_for_element(element_name, framework_version_id=None):
+    """Return non-subcomponent SST components for an element."""
     framework_version_id = resolve_framework_version_id(framework_version_id)
 
     if framework_version_id is None:
@@ -167,6 +181,7 @@ def get_components_for_element(element_name, framework_version_id=None):
 
 
 def get_subcomponents_for_element(element_name, framework_version_id=None):
+    """Return SST subcomponents for an element."""
     framework_version_id = resolve_framework_version_id(framework_version_id)
 
     if framework_version_id is None:
@@ -188,6 +203,7 @@ def get_subcomponents_for_element(element_name, framework_version_id=None):
 
 
 def get_parameters_for_component(component_id, framework_version_id=None):
+    """Return parameter metadata attached to an SST component."""
     framework_version_id = resolve_framework_version_id(framework_version_id)
 
     if framework_version_id is None:
@@ -207,6 +223,7 @@ def get_parameters_for_component(component_id, framework_version_id=None):
 
 
 def get_ports_for_component(component_id, framework_version_id=None):
+    """Return port metadata attached to an SST component."""
     framework_version_id = resolve_framework_version_id(framework_version_id)
 
     if framework_version_id is None:
@@ -225,6 +242,7 @@ def get_ports_for_component(component_id, framework_version_id=None):
 
 
 def get_statistics_for_component(component_id, framework_version_id=None):
+    """Return statistic metadata attached to an SST component."""
     framework_version_id = resolve_framework_version_id(framework_version_id)
 
     if framework_version_id is None:
@@ -243,6 +261,7 @@ def get_statistics_for_component(component_id, framework_version_id=None):
 
 
 def get_parameters_for_statistics(statistic_ids, framework_version_id=None):
+    """Return parameter metadata attached to SST statistic rows."""
     framework_version_id = resolve_framework_version_id(framework_version_id)
 
     if framework_version_id is None or not statistic_ids:
@@ -273,6 +292,7 @@ def get_parameters_for_statistics(statistic_ids, framework_version_id=None):
 
 
 def get_subcomponent_slots_for_component(component_id, framework_version_id=None):
+    """Return subcomponent-slot metadata attached to an SST component."""
     framework_version_id = resolve_framework_version_id(framework_version_id)
 
     if framework_version_id is None:
@@ -291,6 +311,7 @@ def get_subcomponent_slots_for_component(component_id, framework_version_id=None
 
 
 def get_component_details(component_id, framework_version_id=None):
+    """Return a complete details dictionary for an SST component database id."""
     framework_version_id = resolve_framework_version_id(framework_version_id)
 
     query = """

@@ -1,0 +1,16 @@
+<map id="fuse.plugins.community.gem5.plugin.Gem5Plugin.load_item_details" name="fuse.plugins.community.gem5.plugin.Gem5Plugin.load_item_details">
+<area shape="rect" id="Node000001" title=" " alt="" coords="5,120,272,160"/>
+<area shape="rect" id="Node000002" href="$classfuse_1_1plugins_1_1community_1_1gem5_1_1plugin_1_1Gem5Plugin.html#a25d5ffe402e375c7c9dedcbfe2b80148" title=" " alt="" coords="320,5,615,45"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="182,118,246,90,319,61,368,46,370,52,321,67,248,94,184,122"/>
+<area shape="rect" id="Node000003" href="$namespacefuse_1_1plugins_1_1community_1_1gem5_1_1plugin.html#ae01da31743a16f0accef41846d52d1bc" title=" " alt="" coords="663,35,965,75"/>
+<area shape="poly" id="edge4_Node000001_Node000003" title=" " alt="" coords="246,117,320,105,489,84,649,67,649,72,490,89,320,111,246,123"/>
+<area shape="rect" id="Node000005" href="$classfuse_1_1plugin__api_1_1interfaces_1_1FusePlugin.html#a3ed051660469a9e06def20b16c064e40" title=" " alt="" coords="370,120,565,160"/>
+<area shape="poly" id="edge5_Node000001_Node000005" title=" " alt="" coords="272,137,356,137,356,143,272,143"/>
+<area shape="rect" id="Node000006" href="$classfuse_1_1plugins_1_1community_1_1gem5_1_1plugin_1_1Gem5Plugin.html#aea17600cc7ca6b1905a7522d739f25b2" title=" " alt="" coords="334,184,601,224"/>
+<area shape="poly" id="edge6_Node000001_Node000006" title=" " alt="" coords="243,157,351,179,350,184,242,163"/>
+<area shape="rect" id="Node000007" href="$classfuse_1_1plugins_1_1community_1_1sst_1_1plugin_1_1SSTPlugin.html#acdbed2d44f044dc68cba27e9f236a283" title=" " alt="" coords="343,248,591,288"/>
+<area shape="poly" id="edge7_Node000001_Node000007" title=" " alt="" coords="173,158,239,196,321,234,346,242,345,247,319,238,237,201,170,162"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="615,35,649,38,649,43,615,40"/>
+<area shape="rect" id="Node000004" href="$namespacefuse_1_1plugins_1_1community_1_1gem5_1_1plugin.html#aec705822fedd2e5ecd4a5a52eaa730ea" title=" " alt="" coords="1013,35,1280,75"/>
+<area shape="poly" id="edge3_Node000003_Node000004" title=" " alt="" coords="965,52,999,52,999,57,965,57"/>
+</map>

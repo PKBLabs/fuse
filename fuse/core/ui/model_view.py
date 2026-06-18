@@ -11,25 +11,64 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+"""Graphics view and toolbar behavior for the FUSE model canvas.
+
+The scene owns model items; this module owns how the user views and navigates
+them. ``ModelView`` provides zooming, panning, drag-and-drop component creation,
+grid drawing, persisted editor viewport state, and a small floating toolbar for
+interaction modes. It intentionally delegates model mutations to ``ModelScene``
+so that view code stays focused on input interpretation and presentation.
+"""
 from __future__ import annotations
 
-from PySide6.QtCore import QPoint, Qt, QRectF
-from PySide6.QtGui import QAction, QKeySequence, QPainter, QPen
+from pathlib import Path
+
+from PySide6.QtCore import QPoint, QPointF, QSize, Qt, QRectF
+from PySide6.QtGui import QAction, QIcon, QKeySequence, QPainter, QPen
 from PySide6.QtWidgets import (
     QComboBox,
     QFrame,
     QGraphicsView,
     QHBoxLayout,
+    QMenu,
     QSizePolicy,
     QToolButton,
 )
 
 from fuse.core.model.models import ComponentDefinition, MIME_COMPONENT
+from fuse.core.ui.graphics_items import ComponentNodeItem
 from fuse.core.ui.model_scene import ModelScene
 from fuse.core.ui.selection_helpers import update_selection_dependent_highlights
 
 
+
+MODEL_VIEW_TOOLBAR_ICON_DIR = (
+    Path(__file__).resolve().parents[1]
+    / "resources"
+    / "icons"
+)
+
+MODEL_VIEW_TOOLBAR_ICONS = {
+    "select_move": "pointer_cursor.svg",
+    "multiselect": "selection_drag.svg",
+    "undo": "undo.svg",
+    "redo": "redo.svg",
+    "zoom_in": "zoom_in.svg",
+    "zoom_out": "zoom_out.svg",
+    "snap_to_grid": "snap_to_grid.svg",
+    "group": "group.svg",
+    "ungroup": "ungroup.svg",
+}
+
+
 class FloatingModelToolbar(QFrame):
+    """Floating control strip for canvas interaction modes and zoom.
+
+    The toolbar is parented to the view viewport so it moves with the editor
+    surface rather than with model contents. It exposes common canvas commands
+    such as select/move, multiselect, composite port exposure mode, zoom, and
+    undo/redo hooks.
+    """
     def __init__(self, view: "ModelView"):
         super().__init__(view.viewport())
         self.view = view
@@ -47,9 +86,9 @@ class FloatingModelToolbar(QFrame):
                 border-radius: 6px;
             }
             QToolButton {
-                min-width: 28px;
-                min-height: 24px;
-                padding: 2px 6px;
+                min-width: 30px;
+                min-height: 28px;
+                padding: 2px 4px;
             }
             QToolButton:checked {
                 background: #dbeafe;
@@ -57,7 +96,8 @@ class FloatingModelToolbar(QFrame):
                 border-radius: 4px;
             }
             QComboBox {
-                min-width: 84px;
+                min-width: 75px;
+                max-width: 75px;
             }
             """
         )
@@ -66,12 +106,12 @@ class FloatingModelToolbar(QFrame):
         layout.setContentsMargins(6, 4, 6, 4)
         layout.setSpacing(4)
 
-        self.select_button = self.make_button("Select/Move", checkable=True)
+        self.select_button = self.make_button("Select/Move", checkable=True, icon_name="select_move")
         self.select_button.setChecked(True)
         self.select_button.clicked.connect(view.enable_select_move_mode)
         layout.addWidget(self.select_button)
 
-        self.multiselect_button = self.make_button("Multiselect", checkable=True)
+        self.multiselect_button = self.make_button("Multiselect", checkable=True, icon_name="multiselect")
         self.multiselect_button.clicked.connect(view.enable_multiselect_mode)
         layout.addWidget(self.multiselect_button)
 
@@ -79,42 +119,90 @@ class FloatingModelToolbar(QFrame):
         self.expose_ports_button.setToolTip("Toggle whether internal ports are exposed on the composite boundary")
         self.expose_ports_button.clicked.connect(view.enable_composite_port_exposure_mode)
         self.expose_ports_button.setEnabled(False)
+        self.expose_ports_button.setVisible(False)
         layout.addWidget(self.expose_ports_button)
 
         layout.addWidget(self.make_separator())
 
-        self.undo_button = self.make_button("Undo")
+        self.undo_button = self.make_button("Undo", icon_name="undo")
         self.undo_button.clicked.connect(view.request_undo)
         layout.addWidget(self.undo_button)
 
-        self.redo_button = self.make_button("Redo")
+        self.redo_button = self.make_button("Redo", icon_name="redo")
         self.redo_button.clicked.connect(view.request_redo)
         layout.addWidget(self.redo_button)
 
         layout.addWidget(self.make_separator())
 
+        self.zoom_in_button = self.make_button("Zoom In", icon_name="zoom_in")
+        self.zoom_in_button.clicked.connect(view.zoom_in)
+        layout.addWidget(self.zoom_in_button)
+
+        self.zoom_out_button = self.make_button("Zoom Out", icon_name="zoom_out")
+        self.zoom_out_button.clicked.connect(view.zoom_out)
+        layout.addWidget(self.zoom_out_button)
+
         self.zoom_selector = QComboBox(self)
+        self.zoom_selector.setFixedWidth(100)
         self.zoom_selector.addItems(["12.5%", "25%", "50%", "100%", "200%"])
         self.zoom_selector.setEditable(True)
         self.zoom_selector.setCurrentText("100%")
         self.zoom_selector.currentTextChanged.connect(self.on_zoom_text_changed)
         layout.addWidget(self.zoom_selector)
 
-        self.zoom_in_button = self.make_button("Zoom In")
-        self.zoom_in_button.clicked.connect(view.zoom_in)
-        layout.addWidget(self.zoom_in_button)
+        layout.addWidget(self.make_separator())
 
-        self.zoom_out_button = self.make_button("Zoom Out")
-        self.zoom_out_button.clicked.connect(view.zoom_out)
-        layout.addWidget(self.zoom_out_button)
+        self.snap_to_grid_button = self.make_button(
+            "Snap Grid", checkable=True, icon_name="snap_to_grid"
+        )
+        self.snap_to_grid_button.setIconSize(QSize(34, 34))
+        self.snap_to_grid_button.setToolTip(
+            "Snap components to component-sized grid cells when dropped"
+        )
+        self.snap_to_grid_button.setChecked(view.snap_to_grid_enabled)
+        self.snap_to_grid_button.toggled.connect(view.set_snap_to_grid)
+        layout.addWidget(self.snap_to_grid_button)
 
-        self.adjustSize()
+        layout.addWidget(self.make_separator())
 
-    def make_button(self, text: str, checkable: bool = False) -> QToolButton:
+        self.group_button = self.make_button("Group", icon_name="group")
+        self.group_button.clicked.connect(view.group_selection)
+        layout.addWidget(self.group_button)
+
+        self.ungroup_button = self.make_button("Ungroup", icon_name="ungroup")
+        self.ungroup_button.clicked.connect(view.ungroup_selection)
+        layout.addWidget(self.ungroup_button)
+
+        self.restore_preferred_size()
+
+    def restore_preferred_size(self) -> None:
+        """Keep the floating toolbar at its natural size after view resizes."""
+        layout = self.layout()
+        if layout is not None:
+            layout.activate()
+        self.setMaximumSize(16777215, 16777215)
+        self.setMinimumSize(self.sizeHint())
+        self.resize(self.sizeHint())
+
+    def make_button(
+        self,
+        text: str,
+        checkable: bool = False,
+        icon_name: str | None = None,
+    ) -> QToolButton:
         button = QToolButton(self)
-        button.setText(text)
         button.setToolTip(text)
         button.setCheckable(checkable)
+
+        if icon_name:
+            icon_path = MODEL_VIEW_TOOLBAR_ICON_DIR / MODEL_VIEW_TOOLBAR_ICONS[icon_name]
+            button.setIcon(QIcon(str(icon_path)))
+            button.setIconSize(QSize(30, 30))
+            button.setToolButtonStyle(Qt.ToolButtonIconOnly)
+            button.setText("")
+        else:
+            button.setText(text)
+
         return button
 
     def make_separator(self) -> QFrame:
@@ -140,6 +228,11 @@ class FloatingModelToolbar(QFrame):
             self.zoom_selector.setEditText(text)
         self.zoom_selector.blockSignals(False)
 
+    def set_snap_to_grid(self, enabled: bool) -> None:
+        self.snap_to_grid_button.blockSignals(True)
+        self.snap_to_grid_button.setChecked(bool(enabled))
+        self.snap_to_grid_button.blockSignals(False)
+
     def set_mode(self, mode: str) -> None:
         self.select_button.blockSignals(True)
         self.multiselect_button.blockSignals(True)
@@ -152,9 +245,12 @@ class FloatingModelToolbar(QFrame):
         self.expose_ports_button.blockSignals(False)
 
     def set_port_exposure_tools_available(self, available: bool) -> None:
-        self.expose_ports_button.setEnabled(bool(available))
+        available = bool(available)
+        self.expose_ports_button.setEnabled(available)
+        self.expose_ports_button.setVisible(available)
         if not available and self.expose_ports_button.isChecked():
             self.view.enable_select_move_mode()
+        self.restore_preferred_size()
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -183,8 +279,17 @@ class FloatingModelToolbar(QFrame):
 
 
 class ModelView(QGraphicsView):
+    """Qt graphics view used to display and navigate a ``ModelScene``.
+
+    ``ModelView`` translates viewport input into editor commands. It handles
+    wheel zoom, middle-button panning, rubber-band/multiselect behavior,
+    drop-to-create-component interactions, and persistence of the viewport
+    center/zoom/toolbar position in project files.
+    """
     ZOOM_LEVELS = [12.5, 25.0, 50.0, 100.0, 200.0]
-    GRID_SPACING = 200.0
+    GRID_CELL_WIDTH = float(ComponentNodeItem.WIDTH)
+    GRID_CELL_HEIGHT = float(ComponentNodeItem.HEIGHT)
+    GRID_SPACING = GRID_CELL_WIDTH
 
     def __init__(self, scene: ModelScene):
         super().__init__(scene)
@@ -204,10 +309,17 @@ class ModelView(QGraphicsView):
         self.pan_start_position = QPoint()
         self.pan_start_h_value = 0
         self.pan_start_v_value = 0
+        self.snap_to_grid_enabled = False
+
+        if hasattr(scene, "set_snap_grid_size"):
+            scene.set_snap_grid_size(self.GRID_CELL_WIDTH, self.GRID_CELL_HEIGHT)
+        if hasattr(scene, "set_snap_to_grid"):
+            scene.set_snap_to_grid(self.snap_to_grid_enabled)
 
         self.toolbar = FloatingModelToolbar(self)
         self.toolbar.move(12, 12)
         self.toolbar.show()
+        self._port_exposure_tools_available = False
         self.editor_state_changed_callback = None
         scene.selectionChanged.connect(self.update_selection_highlights)
 
@@ -221,6 +333,26 @@ class ModelView(QGraphicsView):
         self.zoom_out_action.triggered.connect(self.zoom_out)
         self.addAction(self.zoom_out_action)
 
+        self.copy_action = QAction("Copy", self)
+        self.copy_action.triggered.connect(self.copy_selection)
+        self.addAction(self.copy_action)
+
+        self.paste_action = QAction("Paste", self)
+        self.paste_action.triggered.connect(self.paste_clipboard)
+        self.addAction(self.paste_action)
+
+        self.group_action = QAction("Group", self)
+        self.group_action.triggered.connect(self.group_selection)
+        self.addAction(self.group_action)
+
+        self.ungroup_action = QAction("Ungroup", self)
+        self.ungroup_action.triggered.connect(self.ungroup_selection)
+        self.addAction(self.ungroup_action)
+
+        self.delete_action = QAction("Delete", self)
+        self.delete_action.triggered.connect(self.delete_selection)
+        self.addAction(self.delete_action)
+
 
     def update_selection_highlights(self) -> None:
         scene = self.scene()
@@ -230,9 +362,40 @@ class ModelView(QGraphicsView):
             getattr(scene, "properties_panel", None),
         )
 
+    @staticmethod
+    def parse_bool(value) -> bool:
+        if isinstance(value, str):
+            return value.strip().lower() in {"1", "true", "yes", "on"}
+        return bool(value)
+
     def notify_editor_state_changed(self) -> None:
         if self.editor_state_changed_callback is not None:
             self.editor_state_changed_callback(self.editor_state())
+
+    def set_snap_to_grid(self, enabled: bool) -> None:
+        enabled = bool(enabled)
+        self.snap_to_grid_enabled = enabled
+
+        scene = self.scene()
+        if scene is not None:
+            if hasattr(scene, "set_snap_grid_size"):
+                scene.set_snap_grid_size(self.GRID_CELL_WIDTH, self.GRID_CELL_HEIGHT)
+            if hasattr(scene, "set_snap_to_grid"):
+                scene.set_snap_to_grid(enabled)
+            else:
+                scene.snap_to_grid_enabled = enabled
+
+        if hasattr(self, "toolbar"):
+            self.toolbar.set_snap_to_grid(enabled)
+
+        self.viewport().update()
+        self.notify_editor_state_changed()
+
+    def snap_scene_position(self, position: QPointF) -> QPointF:
+        scene = self.scene()
+        if scene is not None and hasattr(scene, "snap_position_to_grid"):
+            return scene.snap_position_to_grid(position)
+        return QPointF(position)
 
     def editor_state(self) -> dict:
         center = self.mapToScene(self.viewport().rect().center())
@@ -243,6 +406,7 @@ class ModelView(QGraphicsView):
             "viewCenter": {"x": round(center.x()), "y": round(center.y())},
             "zoomPercent": self.zoom_percent,
             "mode": self.mode,
+            "snapToGrid": self.snap_to_grid_enabled,
             "toolbarPosition": {
                 "x": self.toolbar.pos().x(),
                 "y": self.toolbar.pos().y(),
@@ -266,6 +430,10 @@ class ModelView(QGraphicsView):
         else:
             self.enable_select_move_mode()
 
+        self.set_snap_to_grid(
+            self.parse_bool(editor.get("snapToGrid", editor.get("snap_to_grid", False)))
+        )
+
         position = editor.get("toolbarPosition", editor.get("toolbar_position", {})) or {}
         try:
             self.set_toolbar_position(int(position.get("x", 12)), int(position.get("y", 12)))
@@ -281,13 +449,7 @@ class ModelView(QGraphicsView):
 
     def set_toolbar_position(self, x: int, y: int) -> None:
         margin = 4
-        available_width = max(1, self.viewport().width() - (margin * 2))
-        available_height = max(1, self.viewport().height() - (margin * 2))
-
-        if self.toolbar.maximumWidth() != available_width:
-            self.toolbar.setMaximumWidth(available_width)
-        if self.toolbar.maximumHeight() != available_height:
-            self.toolbar.setMaximumHeight(available_height)
+        self.toolbar.restore_preferred_size()
 
         # Clamp the toolbar anchor point to the viewport rather than requiring
         # the full toolbar rectangle to fit. Composite-edit tools can make the
@@ -357,10 +519,11 @@ class ModelView(QGraphicsView):
             self.redo_callback()
 
     def set_port_exposure_tools_available(self, available: bool) -> None:
-        self.toolbar.set_port_exposure_tools_available(bool(available))
+        self._port_exposure_tools_available = bool(available)
+        self.toolbar.set_port_exposure_tools_available(self._port_exposure_tools_available)
 
     def port_exposure_tools_available(self) -> bool:
-        return bool(self.toolbar.expose_ports_button.isEnabled())
+        return self._port_exposure_tools_available
 
     def set_scene_port_exposure_mode(self, enabled: bool) -> None:
         scene = self.scene()
@@ -472,11 +635,96 @@ class ModelView(QGraphicsView):
             return
         super().mouseReleaseEvent(event)
 
+
+    def copy_selection(self) -> None:
+        scene = self.scene()
+        if scene is not None and hasattr(scene, "copy_selection_to_clipboard"):
+            scene.copy_selection_to_clipboard()
+
+    def paste_clipboard(self, scene_pos: QPointF | None = None) -> None:
+        scene = self.scene()
+        if scene is None or not hasattr(scene, "paste_clipboard"):
+            return
+        if scene_pos is None:
+            scene_pos = self.mapToScene(self.viewport().rect().center())
+        scene.paste_clipboard(scene_pos)
+
+    def group_selection(self) -> None:
+        scene = self.scene()
+        if scene is not None and hasattr(scene, "group_selection"):
+            scene.group_selection()
+
+    def ungroup_selection(self) -> None:
+        scene = self.scene()
+        if scene is not None and hasattr(scene, "ungroup_selection"):
+            scene.ungroup_selection()
+
+    def delete_selection(self) -> None:
+        scene = self.scene()
+        if scene is not None and hasattr(scene, "delete_selection"):
+            scene.delete_selection()
+
+    def keyPressEvent(self, event):
+        if event.key() in (Qt.Key_Delete, Qt.Key_Backspace):
+            scene = self.scene()
+            if scene is not None and hasattr(scene, "delete_selection"):
+                if scene.delete_selection():
+                    event.accept()
+                    return
+
+        super().keyPressEvent(event)
+
+    def contextMenuEvent(self, event):
+        scene = self.scene()
+        if scene is None:
+            super().contextMenuEvent(event)
+            return
+
+        # Let graphics items own their context menus. Without this guard, a
+        # right-click on a component can first show the view-level copy/paste
+        # menu and then the component-level menu.
+        if self.itemAt(event.pos()) is not None:
+            super().contextMenuEvent(event)
+            return
+
+        menu = QMenu(self)
+        copy_action = menu.addAction("Copy")
+        copy_action.setEnabled(bool(getattr(scene, "selected_component_nodes", lambda: [])()))
+        paste_action = menu.addAction("Paste")
+        paste_action.setEnabled(bool(getattr(scene.__class__, "_entity_clipboard", None)))
+        menu.addSeparator()
+        group_action = menu.addAction("Group")
+        group_action.setEnabled(len(getattr(scene, "selected_component_nodes", lambda expand_groups=False: [])(expand_groups=False)) >= 2)
+        ungroup_action = menu.addAction("Ungroup")
+        selected_nodes = getattr(scene, "selected_component_nodes", lambda expand_groups=True: [])(expand_groups=True)
+        ungroup_action.setEnabled(any(node.node_id in getattr(scene, "node_group_ids", {}) for node in selected_nodes))
+
+        action = menu.exec(event.globalPos())
+        if action == copy_action:
+            self.copy_selection()
+            event.accept()
+            return
+        if action == paste_action:
+            self.paste_clipboard(self.mapToScene(event.pos()))
+            event.accept()
+            return
+        if action == group_action:
+            self.group_selection()
+            event.accept()
+            return
+        if action == ungroup_action:
+            self.ungroup_selection()
+            event.accept()
+            return
+
+        super().contextMenuEvent(event)
+
     def drawBackground(self, painter: QPainter, rect):
         super().drawBackground(painter, rect)
-        grid_spacing = self.GRID_SPACING
-        left = int(rect.left() // grid_spacing) * grid_spacing
-        top = int(rect.top() // grid_spacing) * grid_spacing
+        grid_width = self.GRID_CELL_WIDTH
+        grid_height = self.GRID_CELL_HEIGHT
+        left = int(rect.left() // grid_width) * grid_width
+        top = int(rect.top() // grid_height) * grid_height
 
         pen = QPen(Qt.lightGray)
         pen.setWidthF(0.0)
@@ -485,12 +733,12 @@ class ModelView(QGraphicsView):
         x = left
         while x < rect.right():
             painter.drawLine(x, rect.top(), x, rect.bottom())
-            x += grid_spacing
+            x += grid_width
 
         y = top
         while y < rect.bottom():
             painter.drawLine(rect.left(), y, rect.right(), y)
-            y += grid_spacing
+            y += grid_height
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasFormat(MIME_COMPONENT):
@@ -513,6 +761,9 @@ class ModelView(QGraphicsView):
         component = ComponentDefinition.from_drag_text(raw)
 
         scene_pos = self.mapToScene(event.position().toPoint())
+        if self.snap_to_grid_enabled:
+            scene_pos = self.snap_scene_position(scene_pos)
+
         scene = self.scene()
 
         if hasattr(scene, "create_component_node"):

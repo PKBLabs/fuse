@@ -16,6 +16,11 @@ This guide documents the expected workflow, validation rules, JSON mapping, veri
 
 ## Export workflow
 
+<!-- FUSE-MEDIA-TODO id=sst-export-dialog type=screenshot path=../../assets/screenshots/sst-json-export-dialog.png -->
+> **Media TODO (sst-export-dialog)**: Add a screenshot of the SST JSON export action, destination chooser, or export result panel.
+> Planned asset: `../../assets/screenshots/sst-json-export-dialog.png`
+
+
 1. Create or open an SST project.
 2. Select the intended SST target/version in Project Settings.
 3. Build the model using SST components from that target.

@@ -1,0 +1,11 @@
+<map id="fuse.core.model.composite_flattening.FlattenedComponentNode.expanded_port_names" name="fuse.core.model.composite_flattening.FlattenedComponentNode.expanded_port_names">
+<area shape="rect" id="Node000001" title=" " alt="" coords="917,45,1149,100"/>
+<area shape="rect" id="Node000002" href="$classfuse_1_1core_1_1ui_1_1graphics__items_1_1ComponentNodeItem.html#a0925905734cb465c6b7681d9f0cc0465" title=" " alt="" coords="627,45,869,100"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="903,75,870,75,870,70,903,70"/>
+<area shape="rect" id="Node000003" href="$classfuse_1_1core_1_1ui_1_1graphics__items_1_1ComponentNodeItem.html#a790f6a50761526a06e68c789b811b368" title=" " alt="" coords="339,5,572,60"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="613,57,572,51,573,46,613,52"/>
+<area shape="rect" id="Node000005" href="$classfuse_1_1core_1_1ui_1_1graphics__items_1_1ComponentNodeItem.html#a28bcb1aa646a93ad9645781ce0e849d5" title=" " alt="" coords="332,84,579,139"/>
+<area shape="poly" id="edge4_Node000002_Node000005" title=" " alt="" coords="614,93,579,98,579,92,613,88"/>
+<area shape="rect" id="Node000004" href="$classfuse_1_1core_1_1ui_1_1graphics__items_1_1ComponentNodeItem.html#aadbff61b3c653ea2ebfd152dd1682ca9" title=" " alt="" coords="5,5,284,60"/>
+<area shape="poly" id="edge3_Node000003_Node000004" title=" " alt="" coords="325,35,284,35,284,30,325,30"/>
+</map>

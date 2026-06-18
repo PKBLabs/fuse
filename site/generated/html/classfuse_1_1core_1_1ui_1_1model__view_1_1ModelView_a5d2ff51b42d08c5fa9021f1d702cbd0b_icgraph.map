@@ -1,0 +1,14 @@
+<map id="fuse.core.ui.model_view.ModelView.set_scene_port_exposure_mode" name="fuse.core.ui.model_view.ModelView.set_scene_port_exposure_mode">
+<area shape="rect" id="Node000001" title=" " alt="" coords="748,77,959,132"/>
+<area shape="rect" id="Node000002" href="$classfuse_1_1core_1_1ui_1_1model__view_1_1ModelView.html#aa8616d93837df392c0fdc065c0be872d" title=" " alt="" coords="228,84,469,139"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="734,109,470,112,470,107,734,104"/>
+<area shape="rect" id="Node000004" href="$classfuse_1_1core_1_1ui_1_1model__view_1_1ModelView.html#ad6aba7cf478395cbb6f2a5a86ee39b0a" title=" " alt="" coords="257,5,440,60"/>
+<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="734,90,440,48,440,43,735,85"/>
+<area shape="rect" id="Node000005" href="$classfuse_1_1core_1_1ui_1_1model__view_1_1ModelView.html#a08307d6956d2e2378039f5afbde6d31e" title=" " alt="" coords="517,143,700,197"/>
+<area shape="poly" id="edge5_Node000001_Node000005" title=" " alt="" coords="738,138,701,148,699,143,737,133"/>
+<area shape="rect" id="Node000003" href="$classfuse_1_1core_1_1ui_1_1model__view_1_1ModelView.html#a6f193e3fa354e8cbb7dbc002426bf6cf" title=" " alt="" coords="5,84,180,139"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="214,114,180,114,180,109,214,109"/>
+<area shape="poly" id="edge4_Node000004_Node000003" title=" " alt="" coords="247,67,181,87,179,82,246,61"/>
+<area shape="poly" id="edge7_Node000005_Node000002" title=" " alt="" coords="503,149,469,141,470,136,505,144"/>
+<area shape="poly" id="edge6_Node000005_Node000003" title=" " alt="" coords="503,174,371,170,299,164,228,154,174,141,175,136,228,149,299,158,372,165,504,169"/>
+</map>

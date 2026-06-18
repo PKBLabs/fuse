@@ -11,6 +11,14 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+"""Read and write FUSE ``.fse`` project files.
+
+This module bridges the live Qt scene objects and the JSON project schema. It
+converts graphics items into plain dictionaries, validates serialized projects,
+performs atomic file writes, and reconstructs a scene when users open a saved
+project.
+"""
+
 import json
 import os
 import tempfile
@@ -28,10 +36,12 @@ from fuse.core.persistence.model_serializer import finalize_project_dict, valida
 
 
 def now_iso() -> str:
+    """Return the current UTC timestamp in ISO 8601 format."""
     return datetime.now(timezone.utc).isoformat()
 
 
 def component_node_to_save_dict(node: ComponentNodeItem) -> dict:
+    """Convert a component graphics item into the project-file node schema."""
     position = node.pos()
 
     saved = {
@@ -81,6 +91,7 @@ def component_node_to_save_dict(node: ComponentNodeItem) -> dict:
 
 
 def model_link_to_save_dict(link: ModelLink) -> dict:
+    """Convert a model link into the project-file link schema."""
     return {
         "id": link.link_id,
         "name": link.name,
@@ -109,6 +120,7 @@ def model_link_to_save_dict(link: ModelLink) -> dict:
 
 
 def subcomp_attachment_to_save_dict(attachment: ModelSubcompAttachment) -> dict:
+    """Convert a subcomponent attachment into the project-file schema."""
     return {
         "id": attachment.attachment_id,
         "name": attachment.name,
@@ -141,6 +153,7 @@ def build_project_dict(
     active_target_id: str | None = None,
     project_settings: ProjectSettings | None = None,
 ) -> dict:
+    """Build a complete JSON-serializable project document from a scene."""
     if project_settings is not None:
         active_plugin_id = project_settings.active_plugin_id
         active_settings = project_settings.active_plugin_settings()
@@ -197,6 +210,7 @@ def build_project_dict(
 
 
 def validate_project_dict(project: dict) -> None:
+    """Validate a project dictionary before save or after load."""
     # Preserve the older, user-friendly error messages for the most common
     # project-file failures while delegating deeper structural checks to the
     # serializer validator.
@@ -218,6 +232,7 @@ def validate_project_dict(project: dict) -> None:
 
 
 def load_project_file(file_path: str | Path) -> dict:
+    """Load, parse, and validate a ``.fse`` project file."""
     with Path(file_path).open("r", encoding="utf-8") as file:
         project = json.load(file)
 
@@ -226,6 +241,7 @@ def load_project_file(file_path: str | Path) -> dict:
 
 
 def save_project_file(project: dict, file_path: str | Path) -> None:
+    """Atomically save a validated project dictionary to disk."""
     destination = Path(file_path)
     validate_project_dict(project)
     project = finalize_project_dict(project)
@@ -257,6 +273,7 @@ def save_project_file(project: dict, file_path: str | Path) -> None:
 
 
 def load_project_into_scene(project: dict, scene: ModelScene) -> None:
+    """Rebuild a model scene from an already-loaded project dictionary."""
     validate_project_dict(project)
     scene.clear_model()
 

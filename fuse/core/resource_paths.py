@@ -12,6 +12,10 @@
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
+"""Package-relative resource path constants and helpers.
+
+This module centralizes lookup of bundled icons and media assets so development checkouts and packaged applications resolve the same logical asset paths."""
+
 from pathlib import Path
 
 
@@ -30,6 +34,7 @@ FUSE_ICON_PATH = FUSE_PACKAGE_ROOT / FUSE_ICON_RELATIVE_PATH
 
 
 def resolve_icon_path(icon_path: str) -> Path:
+    """Resolve an icon path from absolute, project-relative, or bundled icon locations."""
     if not icon_path:
         return Path()
 

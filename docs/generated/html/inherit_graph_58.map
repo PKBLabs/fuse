@@ -1,0 +1,7 @@
+<map id="Graphical Class Hierarchy" name="Graphical Class Hierarchy">
+<area shape="rect" id="Node000000" title=" " alt="" coords="5,45,80,70"/>
+<area shape="rect" id="Node000001" href="$classfuse_1_1core_1_1toolchains_1_1providers_1_1CommandProvider.html" title=" " alt="" coords="128,5,351,45"/>
+<area shape="poly" id="edge1_Node000000_Node000001" title=" " alt="" coords="93,47,128,41,128,46,94,52"/>
+<area shape="rect" id="Node000002" href="$classfuse_1_1plugin__api_1_1interfaces_1_1FusePlugin.html" title=" " alt="" coords="142,69,337,109"/>
+<area shape="poly" id="edge2_Node000000_Node000002" title=" " alt="" coords="94,63,142,71,142,76,93,68"/>
+</map>

@@ -1,0 +1,6 @@
+<map id="app.MainWindow.add_outline_node_item" name="app.MainWindow.add_outline_node_item">
+<area shape="rect" id="Node000001" title=" " alt="" coords="5,29,167,69"/>
+<area shape="poly" id="edge1_Node000001_Node000001" title=" " alt="" coords="45,30,43,20,49,10,64,5,86,3,112,6,126,13,123,18,110,11,86,8,65,10,52,15,48,21,50,28"/>
+<area shape="rect" id="Node000002" href="$classapp_1_1MainWindow.html#a81a2f9806ab8e227f6c896c452d290a8" title=" " alt="" coords="215,29,397,69"/>
+<area shape="poly" id="edge2_Node000001_Node000002" title=" " alt="" coords="167,47,201,47,201,52,167,52"/>
+</map>

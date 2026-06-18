@@ -11,6 +11,10 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+"""SQLite database lifecycle helpers for FUSE core persistence.
+
+The core database stores reusable composite definitions and plugin metadata caches. These helpers keep connection setup and schema initialization consistent across the application."""
+
 from pathlib import Path
 import os
 import sqlite3
@@ -23,12 +27,14 @@ DB_PATH = _DEFAULT_DB_PATH
 
 
 def get_database_path() -> Path:
+    """Return the configured path of the local FUSE SQLite database."""
     return Path(
         os.environ.get("FUSE_DB_PATH", str(_DEFAULT_DB_PATH))
     ).expanduser()
 
 
 def get_connection():
+    """Open a SQLite connection configured with row objects and foreign-key enforcement."""
     db_path = get_database_path()
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -39,10 +45,12 @@ def get_connection():
 
 
 def rows_to_dicts(rows):
+    """Convert SQLite row objects into plain dictionaries."""
     return [dict(row) for row in rows]
 
 
 def initialize_core_database() -> None:
+    """Create or migrate tables owned by the simulator-neutral FUSE core."""
     with get_connection() as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS core_plugins (

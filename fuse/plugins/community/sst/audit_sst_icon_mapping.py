@@ -51,12 +51,15 @@ from typing import Iterable
 
 
 def import_icon_resolver():
+    """Import the SST icon resolver lazily for command-line use."""
     from fuse.plugins.community.sst import sst_icon_resolver
     return sst_icon_resolver
 
 
 @dataclass
 class SstInfoObject:
+    """Parsed SST object record used during icon-audit generation."""
+
     element_library_index: str = ""
     element_library: str = ""
     element_library_description: str = ""
@@ -78,6 +81,8 @@ class SstInfoObject:
 
 @dataclass
 class IconAuditRow:
+    """One CSV row describing how an SST object resolved to an icon."""
+
     element_library_index: str
     element_library: str
     object_kind: str
@@ -116,10 +121,12 @@ COUNT_RE = re.compile(
 
 
 def strip_value(line: str, prefix: str) -> str:
+    """Return the value following a known textual prefix."""
     return line.split(prefix, 1)[1].strip()
 
 
 def parse_sst_info(text: str, include_kinds: set[str]) -> list[SstInfoObject]:
+    """Parse raw ``sst-info`` output into icon-audit object records."""
     objects: list[SstInfoObject] = []
 
     current_library_index = ""
@@ -231,6 +238,7 @@ def review_reason_for(
     guessed_icon_path: str,
     resolved_icon_path: Path,
 ) -> str:
+    """Explain why a resolved icon mapping may need manual review."""
     reasons: list[str] = []
 
     if guessed_icon_key == "generic_component":
@@ -252,6 +260,7 @@ def review_reason_for(
 
 
 def audit_objects(objects: Iterable[SstInfoObject], resolver) -> list[IconAuditRow]:
+    """Resolve icons for parsed SST objects and build audit rows."""
     rows: list[IconAuditRow] = []
 
     for obj in objects:
@@ -306,6 +315,7 @@ def audit_objects(objects: Iterable[SstInfoObject], resolver) -> list[IconAuditR
 
 
 def write_csv(rows: list[IconAuditRow], output_path: Path) -> None:
+    """Write icon-audit rows to a CSV file."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     fieldnames = list(asdict(rows[0]).keys()) if rows else [
@@ -336,6 +346,7 @@ def write_csv(rows: list[IconAuditRow], output_path: Path) -> None:
 
 
 def build_summary(rows: list[IconAuditRow]) -> str:
+    """Build a human-readable summary of icon-audit results."""
     total = len(rows)
     by_kind = Counter(row.object_kind for row in rows)
     by_icon = Counter(row.guessed_icon_key for row in rows)
@@ -388,6 +399,7 @@ def build_summary(rows: list[IconAuditRow]) -> str:
 
 
 def parse_include_kinds(args: argparse.Namespace) -> set[str]:
+    """Return the SST object kinds requested by command-line options."""
     include_kinds = {"Component", "SubComponent"}
 
     if args.include_modules:
@@ -403,6 +415,7 @@ def parse_include_kinds(args: argparse.Namespace) -> set[str]:
 
 
 def main() -> int:
+    """Run the SST icon mapping audit command-line tool."""
     parser = argparse.ArgumentParser(
         description="Audit SST component/subcomponent icon resolver mappings."
     )

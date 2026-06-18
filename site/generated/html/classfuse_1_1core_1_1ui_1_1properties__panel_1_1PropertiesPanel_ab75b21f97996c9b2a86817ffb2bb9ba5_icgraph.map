@@ -1,0 +1,9 @@
+<map id="fuse.core.ui.properties_panel.PropertiesPanel.add_property" name="fuse.core.ui.properties_panel.PropertiesPanel.add_property">
+<area shape="rect" id="Node000001" title=" " alt="" coords="292,77,491,132"/>
+<area shape="rect" id="Node000002" href="$classfuse_1_1core_1_1ui_1_1properties__panel_1_1PropertiesPanel.html#a2366fdf7e0870f491e10c069a458408b" title=" " alt="" coords="21,5,229,60"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="278,77,226,63,227,58,279,72"/>
+<area shape="rect" id="Node000003" href="$classfuse_1_1core_1_1ui_1_1properties__panel_1_1PropertiesPanel.html#a0fedf188e65ac253875d4356dc4214e0" title=" " alt="" coords="5,85,244,125"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="278,107,244,107,244,102,278,102"/>
+<area shape="rect" id="Node000004" href="$classfuse_1_1core_1_1ui_1_1properties__panel_1_1PropertiesPanel.html#a8737b31269d9a7bf00f57cd2a7ea8f27" title=" " alt="" coords="21,149,229,204"/>
+<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="279,138,227,152,226,147,278,132"/>
+</map>

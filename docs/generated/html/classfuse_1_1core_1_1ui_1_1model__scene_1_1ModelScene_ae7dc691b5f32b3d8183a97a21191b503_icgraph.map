@@ -1,0 +1,7 @@
+<map id="fuse.core.ui.model_scene.ModelScene.warn_port_already_connected" name="fuse.core.ui.model_scene.ModelScene.warn_port_already_connected">
+<area shape="rect" id="Node000001" title=" " alt="" coords="471,5,657,60"/>
+<area shape="rect" id="Node000002" href="$classfuse_1_1core_1_1ui_1_1model__scene_1_1ModelScene.html#a73b27fefb6aeadfba6c07aec0be4b7e9" title=" " alt="" coords="243,5,423,60"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="457,35,423,35,423,30,457,30"/>
+<area shape="rect" id="Node000003" href="$classfuse_1_1core_1_1ui_1_1model__scene_1_1ModelScene.html#adad831b86717db18e0b006d01b427bd3" title=" " alt="" coords="5,5,195,60"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="229,35,195,35,195,30,229,30"/>
+</map>

@@ -1,0 +1,9 @@
+<map id="app.MainWindow.on_composite_template_editor_changed" name="app.MainWindow.on_composite_template_editor_changed">
+<area shape="rect" id="Node000001" title=" " alt="" coords="488,53,716,93"/>
+<area shape="rect" id="Node000002" href="$classapp_1_1MainWindow.html#a6c9c4ef3d8a49dc58b893e49be2600f6" title=" " alt="" coords="247,53,440,93"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="474,75,440,75,440,70,474,70"/>
+<area shape="rect" id="Node000003" href="$classapp_1_1MainWindow.html#ac23e36533423a0be5a2291523800f19d" title=" " alt="" coords="5,5,199,60"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="233,57,198,51,199,46,234,52"/>
+<area shape="rect" id="Node000004" href="$classapp_1_1MainWindow.html#a3c5c60ed498605174c8468bcff4e8deb" title=" " alt="" coords="13,84,191,139"/>
+<area shape="poly" id="edge3_Node000002_Node000004" title=" " alt="" coords="234,93,191,100,190,95,233,88"/>
+</map>

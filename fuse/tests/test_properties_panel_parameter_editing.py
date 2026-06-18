@@ -146,3 +146,12 @@ def test_properties_panel_validates_parameter_types_and_required_values(qtbot, m
     assert clock.text(1) == "1.0"
     assert "clock" not in node.parameters
     assert warnings
+
+
+def test_properties_panel_uses_alternating_row_colors(qtbot):
+    panel = PropertiesPanel()
+    qtbot.addWidget(panel)
+
+    assert panel.tree.alternatingRowColors() is True
+    assert "alternate-background-color: #eef4fb" in panel.tree.styleSheet()
+    assert "background: #ffffff" in panel.tree.styleSheet()

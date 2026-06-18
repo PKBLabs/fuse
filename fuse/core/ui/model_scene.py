@@ -11,12 +11,26 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+"""Graphics-scene model editor for FUSE diagrams.
+
+``ModelScene`` is the canvas data owner for one open model. It manages
+component nodes, port-to-port links, subcomponent attachments, selection state,
+drag rerouting, compatibility feedback, and pending connection gestures. The
+scene exposes editor-oriented operations that ``MainWindow`` and ``ModelView``
+can call without needing to manipulate individual ``QGraphicsItem`` instances
+directly.
+
+The scene stores lightweight Python model records in parallel with Qt graphics
+items. Persistence and exporters consume the model records, while the graphics
+items provide interaction and rendering.
+"""
 from __future__ import annotations
 
 from typing import Optional
+from copy import deepcopy
 
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QPen, QColor
+from PySide6.QtCore import QPointF, Qt, QTimer
+from PySide6.QtGui import QKeySequence, QPen, QColor
 from PySide6.QtWidgets import (
     QCheckBox,
     QGraphicsLineItem,
@@ -37,6 +51,17 @@ from fuse.plugin_api.interfaces import LinkCompatibilityResult, LinkEndpoint
 
 
 class ModelScene(QGraphicsScene):
+    """Interactive graphics scene for a single FUSE model document.
+
+    The scene owns component-node items and connection items, coordinates
+    connection gestures, and notifies the application when the model changes.
+    It is also responsible for local canvas behaviors such as route updates,
+    selection highlights, compatibility warnings, and deletion cascades.
+
+    ``ModelScene`` should remain simulator-neutral. Framework-specific rules are
+    queried through plugin compatibility helpers and are reflected in generic UI
+    warnings/highlights rather than embedded directly in the scene.
+    """
     def __init__(self):
         super().__init__()
         self.setSceneRect(0, 0, 2000, 1500)
@@ -53,7 +78,18 @@ class ModelScene(QGraphicsScene):
         self._next_link_id = 1
         self._next_subcomp_attachment_id = 1
 
+        self._next_group_id = 1
+        self.node_group_ids: dict[int, int] = {}
+        self._moving_group = False
+
+        self.snap_to_grid_enabled = False
+        self.snap_grid_width = float(ComponentNodeItem.WIDTH)
+        self.snap_grid_height = float(ComponentNodeItem.HEIGHT)
+        self.snap_grid_origin = QPointF(0.0, 0.0)
+
         self.model_changed_callback = None
+        self._model_change_batch_depth = 0
+        self._batched_model_change_pending = False
         self.component_added_callback = None
         self.component_used_callback = None
         self.component_favorite_requested_callback = None
@@ -101,12 +137,52 @@ class ModelScene(QGraphicsScene):
         self.subcomp_attachments = []
         self._next_link_id = 1
         self._next_subcomp_attachment_id = 1
+        self._next_group_id = 1
+        self.node_group_ids = {}
         ComponentNodeItem._next_node_id = 1
         self.notify_model_changed()
 
+    def set_snap_grid_size(self, width: float, height: float) -> None:
+        self.snap_grid_width = max(1.0, float(width))
+        self.snap_grid_height = max(1.0, float(height))
+
+    def set_snap_to_grid(self, enabled: bool) -> None:
+        self.snap_to_grid_enabled = bool(enabled)
+
+    def snap_position_to_grid(self, position: QPointF) -> QPointF:
+        width = max(1.0, float(getattr(self, "snap_grid_width", ComponentNodeItem.WIDTH)))
+        height = max(1.0, float(getattr(self, "snap_grid_height", ComponentNodeItem.HEIGHT)))
+        origin = getattr(self, "snap_grid_origin", QPointF(0.0, 0.0))
+
+        x_units = (position.x() - origin.x()) / width
+        y_units = (position.y() - origin.y()) / height
+        x_index = int(x_units + 0.5) if x_units >= 0 else int(x_units - 0.5)
+        y_index = int(y_units + 0.5) if y_units >= 0 else int(y_units - 0.5)
+
+        return QPointF(
+            origin.x() + x_index * width,
+            origin.y() + y_index * height,
+        )
+
     def notify_model_changed(self):
+        if self._model_change_batch_depth > 0:
+            self._batched_model_change_pending = True
+            return
+
         if self.model_changed_callback is not None:
             self.model_changed_callback()
+
+    def begin_model_change_batch(self) -> None:
+        self._model_change_batch_depth += 1
+
+    def end_model_change_batch(self) -> None:
+        if self._model_change_batch_depth <= 0:
+            return
+
+        self._model_change_batch_depth -= 1
+        if self._model_change_batch_depth == 0 and self._batched_model_change_pending:
+            self._batched_model_change_pending = False
+            self.notify_model_changed()
 
     def notify_component_added(self, node: ComponentNodeItem):
         if self.component_added_callback is not None:
@@ -126,7 +202,311 @@ class ModelScene(QGraphicsScene):
 
         return f"{base_name}_{index}"
 
+
+    def generate_unique_name_from_base(self, base_name: str, used_names: set[str] | None = None) -> str:
+        base = (base_name or "Component").strip() or "Component"
+        used = set(self.existing_component_names() if used_names is None else used_names)
+
+        index = 1
+        while f"{base}_{index}" in used:
+            index += 1
+
+        return f"{base}_{index}"
+
+    def existing_link_names(self) -> set[str]:
+        return {link.name for link in self.links}
+
+    def generate_unique_link_name_from_base(self, base_name: str) -> str:
+        base = (base_name or "link").strip() or "link"
+        used = self.existing_link_names()
+
+        if base not in used:
+            return base
+
+        index = 1
+        while f"{base}_{index}" in used:
+            index += 1
+
+        return f"{base}_{index}"
+
+    def selected_component_nodes(self, expand_groups: bool = True) -> list[ComponentNodeItem]:
+        selected = [
+            item
+            for item in self.selectedItems()
+            if isinstance(item, ComponentNodeItem)
+        ]
+
+        if self.selected_component is not None and self.selected_component not in selected:
+            selected.append(self.selected_component)
+
+        if not expand_groups:
+            return sorted(set(selected), key=lambda node: node.node_id)
+
+        selected_ids = {node.node_id for node in selected}
+        group_ids = {
+            self.node_group_ids[node_id]
+            for node_id in selected_ids
+            if node_id in self.node_group_ids
+        }
+
+        if group_ids:
+            for node in self.component_items():
+                if self.node_group_ids.get(node.node_id) in group_ids:
+                    selected_ids.add(node.node_id)
+
+        return [
+            node
+            for node in self.component_items()
+            if node.node_id in selected_ids
+        ]
+
+    def copy_selection_to_clipboard(self) -> bool:
+        nodes = self.selected_component_nodes(expand_groups=True)
+        if not nodes:
+            return False
+
+        node_ids = {node.node_id for node in nodes}
+        node_payloads = []
+        for node in nodes:
+            node_payloads.append(
+                {
+                    "old_node_id": node.node_id,
+                    "component": deepcopy(node.component),
+                    "instance_name": node.instance_name,
+                    "parameters": deepcopy(getattr(node, "parameters", {}) or {}),
+                    "variable_port_counts": deepcopy(getattr(node, "variable_port_counts", {}) or {}),
+                    "icon_path": getattr(node, "icon_path", ""),
+                    "composite_instance_model": deepcopy(getattr(node, "composite_instance_model", {}) or {}),
+                    "composite_port_mappings": deepcopy(getattr(node, "composite_port_mappings", []) or []),
+                    "pos": {"x": node.pos().x(), "y": node.pos().y()},
+                    "group_id": self.node_group_ids.get(node.node_id),
+                }
+            )
+
+        link_payloads = []
+        for connection in self.connection_items():
+            link = connection.link
+            if link.source_node_id in node_ids and link.target_node_id in node_ids:
+                link_payloads.append({"link": deepcopy(link)})
+
+        attachment_payloads = []
+        for item in self.subcomp_attachment_items():
+            attachment = item.attachment
+            if attachment.parent_node_id in node_ids and attachment.child_node_id in node_ids:
+                attachment_payloads.append(
+                    {
+                        "attachment": deepcopy(attachment),
+                        "target_connector_name": getattr(item.target_connector, "name", ""),
+                    }
+                )
+
+        ModelScene._entity_clipboard = {
+            "nodes": node_payloads,
+            "links": link_payloads,
+            "subcomp_attachments": attachment_payloads,
+        }
+        return True
+
+    def paste_clipboard(self, scene_pos: QPointF | None = None) -> list[ComponentNodeItem]:
+        payload = getattr(ModelScene, "_entity_clipboard", None)
+        if not payload or not payload.get("nodes"):
+            return []
+
+        nodes_payload = payload.get("nodes", [])
+        if scene_pos is None:
+            scene_pos = QPointF(40.0, 40.0)
+
+        min_x = min(float(item["pos"]["x"]) for item in nodes_payload)
+        min_y = min(float(item["pos"]["y"]) for item in nodes_payload)
+
+        used_names = self.existing_component_names()
+        old_to_new: dict[int, ComponentNodeItem] = {}
+        old_group_to_new: dict[int, int] = {}
+
+        self.clearSelection()
+
+        for item in nodes_payload:
+            component = deepcopy(item["component"])
+            new_name = self.generate_unique_name_from_base(str(item.get("instance_name") or component.name), used_names)
+            used_names.add(new_name)
+
+            offset_x = float(item["pos"]["x"]) - min_x
+            offset_y = float(item["pos"]["y"]) - min_y
+            node = self.create_component_node(
+                component,
+                QPointF(scene_pos.x() + offset_x, scene_pos.y() + offset_y),
+                instance_name=new_name,
+            )
+            node.parameters = deepcopy(item.get("parameters", {}) or {})
+            node.variable_port_counts = deepcopy(item.get("variable_port_counts", {}) or {})
+            node.composite_instance_model = deepcopy(item.get("composite_instance_model", {}) or {})
+            node.composite_port_mappings = deepcopy(item.get("composite_port_mappings", []) or [])
+            if item.get("icon_path") and hasattr(node, "set_icon_path"):
+                node.set_icon_path(str(item.get("icon_path") or ""))
+            if hasattr(node, "sync_ports_to_templates"):
+                node.sync_ports_to_templates()
+            if hasattr(node, "sync_composite_ports_from_mappings"):
+                node.sync_composite_ports_from_mappings()
+
+            old_to_new[int(item["old_node_id"])] = node
+            old_group_id = item.get("group_id")
+            if old_group_id is not None:
+                old_group_id = int(old_group_id)
+                if old_group_id not in old_group_to_new:
+                    old_group_to_new[old_group_id] = self._next_group_id
+                    self._next_group_id += 1
+                self.node_group_ids[node.node_id] = old_group_to_new[old_group_id]
+
+            node.setSelected(True)
+
+        for item in payload.get("links", []):
+            old_link = item.get("link")
+            source_node = old_to_new.get(int(old_link.source_node_id))
+            target_node = old_to_new.get(int(old_link.target_node_id))
+            if source_node is None or target_node is None:
+                continue
+
+            source_port = self.find_port(source_node.node_id, old_link.source_port)
+            target_port = self.find_port(target_node.node_id, old_link.target_port)
+            if source_port is None or target_port is None:
+                continue
+
+            link = deepcopy(old_link)
+            link.link_id = self._next_link_id
+            self._next_link_id += 1
+            link.name = self.generate_unique_link_name_from_base(link.name)
+            link.source_node_id = source_node.node_id
+            link.source_component_name = source_node.instance_name
+            link.target_node_id = target_node.node_id
+            link.target_component_name = target_node.instance_name
+
+            self.links.append(link)
+            connection = ConnectionItem(link, source_port, target_port)
+            self.addItem(connection)
+            connection.update_position()
+
+        for item in payload.get("subcomp_attachments", []):
+            old_attachment = item.get("attachment")
+            parent_node = old_to_new.get(int(old_attachment.parent_node_id))
+            child_node = old_to_new.get(int(old_attachment.child_node_id))
+            if parent_node is None or child_node is None:
+                continue
+
+            slot_connector = self.find_subcomp_connector(
+                parent_node.node_id,
+                old_attachment.slot_name,
+                role="slot",
+            )
+            interface_connector = self.find_subcomp_connector(
+                child_node.node_id,
+                str(item.get("target_connector_name") or ""),
+                role="interface",
+            )
+            if slot_connector is None:
+                continue
+            if interface_connector is None:
+                connectors = [
+                    connector
+                    for connector in getattr(child_node, "subcomp_connectors", [])
+                    if getattr(connector, "role", "") == "interface"
+                ]
+                interface_connector = connectors[0] if connectors else None
+            if interface_connector is None:
+                continue
+
+            attachment = deepcopy(old_attachment)
+            attachment.attachment_id = self._next_subcomp_attachment_id
+            self._next_subcomp_attachment_id += 1
+            attachment.parent_node_id = parent_node.node_id
+            attachment.parent_component_name = parent_node.instance_name
+            attachment.child_node_id = child_node.node_id
+            attachment.child_component_name = child_node.instance_name
+
+            self.subcomp_attachments.append(attachment)
+            attachment_item = SubcompAttachmentItem(attachment, slot_connector, interface_connector)
+            self.addItem(attachment_item)
+            attachment_item.update_position()
+
+        self.reroute_all_links()
+        self.notify_model_changed()
+        return list(old_to_new.values())
+
+    def group_selection(self) -> bool:
+        nodes = self.selected_component_nodes(expand_groups=False)
+        if len(nodes) < 2:
+            return False
+
+        group_id = self._next_group_id
+        self._next_group_id += 1
+
+        for node in nodes:
+            self.node_group_ids[node.node_id] = group_id
+
+        self.notify_model_changed()
+        return True
+
+    def ungroup_selection(self) -> bool:
+        nodes = self.selected_component_nodes(expand_groups=True)
+        if not nodes:
+            return False
+
+        group_ids = {
+            self.node_group_ids[node.node_id]
+            for node in nodes
+            if node.node_id in self.node_group_ids
+        }
+        if not group_ids:
+            return False
+
+        self.node_group_ids = {
+            node_id: group_id
+            for node_id, group_id in self.node_group_ids.items()
+            if group_id not in group_ids
+        }
+        self.notify_model_changed()
+        return True
+
+    def group_members_for_node(self, node: ComponentNodeItem) -> list[ComponentNodeItem]:
+        group_id = self.node_group_ids.get(node.node_id)
+        if group_id is None:
+            return []
+        return [
+            candidate
+            for candidate in self.component_items()
+            if candidate is not node and self.node_group_ids.get(candidate.node_id) == group_id
+        ]
+
+    def apply_group_drag(self, node: ComponentNodeItem) -> None:
+        if self._moving_group or not self._dragging_node:
+            return
+
+        members = self.group_members_for_node(node)
+        if not members:
+            return
+
+        start = self._drag_start_positions.get(node.node_id)
+        if start is None:
+            return
+
+        dx = node.pos().x() - start[0]
+        dy = node.pos().y() - start[1]
+        if abs(dx) < 0.001 and abs(dy) < 0.001:
+            return
+
+        self._moving_group = True
+        try:
+            for member in members:
+                member_start = self._drag_start_positions.get(member.node_id)
+                if member_start is None:
+                    continue
+                member.setPos(member_start[0] + dx, member_start[1] + dy)
+        finally:
+            self._moving_group = False
+
     def create_component_node(self, component, scene_pos, instance_name: str | None = None):
+        if self.snap_to_grid_enabled:
+            scene_pos = self.snap_position_to_grid(scene_pos)
+
         node = ComponentNodeItem(
             component,
             instance_name=instance_name or self.generate_unique_component_name(component),
@@ -258,18 +638,28 @@ class ModelScene(QGraphicsScene):
           1. links attached to the moved node,
           2. subcomponent attachment edges attached to the moved node, and
           3. existing links whose current route now intersects the moved node box.
+
+        Snap-to-grid intentionally happens here, not during ItemPositionChange,
+        so dragged components move smoothly while the mouse button is held and
+        settle onto the grid only when the user drops them.
         """
-        self._dragging_node = False
-
-        if node is not None:
-            self.reroute_links_affected_by_node(node)
-            self.update_subcomp_attachments_for_node(node)
-
         changed = self._drag_changed
         if node is not None:
             start = self._drag_start_positions.get(node.node_id)
             if start is not None:
                 changed = changed or (node.pos().x(), node.pos().y()) != start
+
+        if changed and node is not None and self.snap_to_grid_enabled:
+            snapped_position = self.snap_position_to_grid(node.pos())
+            if snapped_position != node.pos():
+                node.setPos(snapped_position)
+                changed = True
+
+        self._dragging_node = False
+
+        if node is not None:
+            self.reroute_links_affected_by_node(node)
+            self.update_subcomp_attachments_for_node(node)
 
         self._drag_changed = False
         self._drag_start_positions = {}
@@ -574,11 +964,114 @@ class ModelScene(QGraphicsScene):
         if self.selected_component is node:
             self.selected_component = None
 
+        self.node_group_ids.pop(node.node_id, None)
+
         if self.properties_panel is not None:
             self.properties_panel.show_empty()
 
         self.removeItem(node)
         self.notify_model_changed()
+
+    def delete_component_nodes(self, nodes: list[ComponentNodeItem]) -> bool:
+        """Delete several component nodes as one model change.
+
+        Group expansion and recursive subcomponent deletion can cause the same
+        node to appear more than once or to be removed while the batch is still
+        iterating, so deletion is driven by stable node ids and skips ids that
+        have already disappeared.
+        """
+        node_ids = sorted(
+            {
+                int(getattr(node, "node_id", 0))
+                for node in nodes
+                if node is not None and int(getattr(node, "node_id", 0)) > 0
+            }
+        )
+        if not node_ids:
+            return False
+
+        deleted_any = False
+        self.begin_model_change_batch()
+        try:
+            for node_id in node_ids:
+                node = self.find_node_by_id(node_id)
+                if node is None:
+                    continue
+                self.delete_component_node(node)
+                deleted_any = True
+        finally:
+            self.end_model_change_batch()
+
+        return deleted_any
+
+    def delete_selection(self) -> bool:
+        """Delete the current canvas selection.
+
+        Component selections are preferred over highlighted links/attachments so
+        deleting a multi-component selection removes the selected components, and
+        selecting one member of a group removes every component in that group.
+        """
+        nodes = self.selected_component_nodes(expand_groups=True)
+        if nodes:
+            return self.delete_component_nodes(nodes)
+
+        selected_connections = [
+            item for item in self.selectedItems() if isinstance(item, ConnectionItem)
+        ]
+        if self.selected_connection is not None:
+            selected_connections.append(self.selected_connection)
+
+        unique_connections = []
+        seen_connections: set[int] = set()
+        for connection in selected_connections:
+            link_id = getattr(getattr(connection, "link", None), "link_id", id(connection))
+            if link_id in seen_connections:
+                continue
+            seen_connections.add(link_id)
+            unique_connections.append(connection)
+
+        if unique_connections:
+            self.begin_model_change_batch()
+            try:
+                for connection in list(unique_connections):
+                    if connection.scene() is self:
+                        self.delete_link(connection)
+            finally:
+                self.end_model_change_batch()
+            return True
+
+        selected_attachments = [
+            item
+            for item in self.selectedItems()
+            if isinstance(item, SubcompAttachmentItem)
+        ]
+        if self.selected_subcomp_attachment is not None:
+            selected_attachments.append(self.selected_subcomp_attachment)
+
+        unique_attachments = []
+        seen_attachments: set[int] = set()
+        for attachment_item in selected_attachments:
+            attachment_id = getattr(
+                getattr(attachment_item, "attachment", None),
+                "attachment_id",
+                id(attachment_item),
+            )
+            if attachment_id in seen_attachments:
+                continue
+            seen_attachments.add(attachment_id)
+            unique_attachments.append(attachment_item)
+
+        if unique_attachments:
+            self.begin_model_change_batch()
+            try:
+                for attachment_item in list(unique_attachments):
+                    if attachment_item.scene() is self:
+                        self.delete_subcomp_attachment(attachment_item)
+            finally:
+                self.end_model_change_batch()
+            return True
+
+        return False
 
     def delete_component_by_id(self, node_id: int):
         node = self.find_node_by_id(node_id)
@@ -1018,19 +1511,28 @@ class ModelScene(QGraphicsScene):
         self.clear_subcomp_connector_compatibility_highlights()
 
     def keyPressEvent(self, event):
+        if event.matches(QKeySequence.Copy):
+            if self.copy_selection_to_clipboard():
+                event.accept()
+                return
+
+        if event.matches(QKeySequence.Paste):
+            self.paste_clipboard()
+            event.accept()
+            return
+
+        if event.key() == Qt.Key_G and event.modifiers() == Qt.ControlModifier:
+            if self.group_selection():
+                event.accept()
+                return
+
+        if event.key() == Qt.Key_G and event.modifiers() == (Qt.ControlModifier | Qt.ShiftModifier):
+            if self.ungroup_selection():
+                event.accept()
+                return
+
         if event.key() in (Qt.Key_Delete, Qt.Key_Backspace):
-            if self.selected_connection is not None:
-                self.delete_link(self.selected_connection)
-                event.accept()
-                return
-
-            if self.selected_subcomp_attachment is not None:
-                self.delete_subcomp_attachment(self.selected_subcomp_attachment)
-                event.accept()
-                return
-
-            if self.selected_component is not None:
-                self.delete_component_node(self.selected_component)
+            if self.delete_selection():
                 event.accept()
                 return
 

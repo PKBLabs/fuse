@@ -1,0 +1,17 @@
+<map id="fuse.plugins.community.gem5.export_python.export_gem5_python" name="fuse.plugins.community.gem5.export_python.export_gem5_python">
+<area shape="rect" id="Node000001" title=" " alt="" coords="5,101,269,141"/>
+<area shape="rect" id="Node000002" href="$namespacefuse_1_1plugins_1_1community_1_1gem5_1_1export__python.html#ace2d5fa384ff60f4068bdd77f286feb1" title=" " alt="" coords="317,101,581,141"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="269,119,304,119,304,124,269,124"/>
+<area shape="rect" id="Node000003" href="$namespacefuse_1_1plugins_1_1community_1_1gem5_1_1export__python.html#a8bb3aa7075f9437c2123d5d1bdc16127" title=" " alt="" coords="629,5,893,45"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="501,99,629,55,659,46,661,51,630,60,503,104"/>
+<area shape="rect" id="Node000004" href="$namespacefuse_1_1plugins_1_1community_1_1gem5_1_1export__python.html#a2016c761044fc57873acbb66f39134f9" title=" " alt="" coords="629,69,893,109"/>
+<area shape="poly" id="edge3_Node000002_Node000004" title=" " alt="" coords="581,105,616,102,616,107,582,110"/>
+<area shape="rect" id="Node000006" href="$namespacefuse_1_1plugins_1_1community_1_1gem5_1_1export__python.html#a2e7a147a03cd90c6f912649b6d1db680" title=" " alt="" coords="629,133,893,173"/>
+<area shape="poly" id="edge5_Node000002_Node000006" title=" " alt="" coords="582,132,616,136,616,141,581,138"/>
+<area shape="rect" id="Node000007" href="$namespacefuse_1_1plugins_1_1community_1_1gem5_1_1export__python.html#a079d93713b3c2596d1632eaf13ac1c77" title=" " alt="" coords="629,197,893,237"/>
+<area shape="poly" id="edge6_Node000002_Node000007" title=" " alt="" coords="503,139,630,183,661,191,659,196,629,188,501,144"/>
+<area shape="rect" id="Node000005" href="$namespacefuse_1_1plugins_1_1community_1_1gem5_1_1export__python.html#a757b5301a81a22837b906b3604c833eb" title=" " alt="" coords="941,69,1205,109"/>
+<area shape="poly" id="edge4_Node000004_Node000005" title=" " alt="" coords="893,87,928,87,928,92,893,92"/>
+<area shape="rect" id="Node000008" href="$namespacefuse_1_1plugins_1_1community_1_1gem5_1_1export__python.html#afdcc1c74e3e378b3d6cf607b4b87b9aa" title=" " alt="" coords="941,197,1205,237"/>
+<area shape="poly" id="edge7_Node000007_Node000008" title=" " alt="" coords="893,215,928,215,928,220,893,220"/>
+</map>
