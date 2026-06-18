@@ -1141,8 +1141,11 @@ class ComponentNodeItem(QGraphicsRectItem):
                 )
 
         elif action == remove_action:
-            if scene is not None and hasattr(scene, "delete_component_node"):
-                scene.delete_component_node(self)
+            if scene is not None:
+                if hasattr(scene, "delete_selection"):
+                    scene.delete_selection()
+                elif hasattr(scene, "delete_component_node"):
+                    scene.delete_component_node(self)
 
         event.accept()
 

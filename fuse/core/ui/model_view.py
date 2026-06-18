@@ -55,6 +55,7 @@ MODEL_VIEW_TOOLBAR_ICONS = {
     "redo": "redo.svg",
     "zoom_in": "zoom_in.svg",
     "zoom_out": "zoom_out.svg",
+    "snap_to_grid": "snap_to_grid.svg",
     "group": "group.svg",
     "ungroup": "ungroup.svg",
 }
@@ -95,8 +96,8 @@ class FloatingModelToolbar(QFrame):
                 border-radius: 4px;
             }
             QComboBox {
-                min-width: 50px;
-                max-width: 50px;
+                min-width: 75px;
+                max-width: 75px;
             }
             """
         )
@@ -133,13 +134,6 @@ class FloatingModelToolbar(QFrame):
 
         layout.addWidget(self.make_separator())
 
-        self.zoom_selector = QComboBox(self)
-        self.zoom_selector.addItems(["12.5%", "25%", "50%", "100%", "200%"])
-        self.zoom_selector.setEditable(True)
-        self.zoom_selector.setCurrentText("100%")
-        self.zoom_selector.currentTextChanged.connect(self.on_zoom_text_changed)
-        layout.addWidget(self.zoom_selector)
-
         self.zoom_in_button = self.make_button("Zoom In", icon_name="zoom_in")
         self.zoom_in_button.clicked.connect(view.zoom_in)
         layout.addWidget(self.zoom_in_button)
@@ -148,9 +142,20 @@ class FloatingModelToolbar(QFrame):
         self.zoom_out_button.clicked.connect(view.zoom_out)
         layout.addWidget(self.zoom_out_button)
 
+        self.zoom_selector = QComboBox(self)
+        self.zoom_selector.setFixedWidth(100)
+        self.zoom_selector.addItems(["12.5%", "25%", "50%", "100%", "200%"])
+        self.zoom_selector.setEditable(True)
+        self.zoom_selector.setCurrentText("100%")
+        self.zoom_selector.currentTextChanged.connect(self.on_zoom_text_changed)
+        layout.addWidget(self.zoom_selector)
+
         layout.addWidget(self.make_separator())
 
-        self.snap_to_grid_button = self.make_button("Snap Grid", checkable=True)
+        self.snap_to_grid_button = self.make_button(
+            "Snap Grid", checkable=True, icon_name="snap_to_grid"
+        )
+        self.snap_to_grid_button.setIconSize(QSize(34, 34))
         self.snap_to_grid_button.setToolTip(
             "Snap components to component-sized grid cells when dropped"
         )
@@ -334,6 +339,10 @@ class ModelView(QGraphicsView):
         self.ungroup_action = QAction("Ungroup", self)
         self.ungroup_action.triggered.connect(self.ungroup_selection)
         self.addAction(self.ungroup_action)
+
+        self.delete_action = QAction("Delete", self)
+        self.delete_action.triggered.connect(self.delete_selection)
+        self.addAction(self.delete_action)
 
 
     def update_selection_highlights(self) -> None:
@@ -646,6 +655,21 @@ class ModelView(QGraphicsView):
         scene = self.scene()
         if scene is not None and hasattr(scene, "ungroup_selection"):
             scene.ungroup_selection()
+
+    def delete_selection(self) -> None:
+        scene = self.scene()
+        if scene is not None and hasattr(scene, "delete_selection"):
+            scene.delete_selection()
+
+    def keyPressEvent(self, event):
+        if event.key() in (Qt.Key_Delete, Qt.Key_Backspace):
+            scene = self.scene()
+            if scene is not None and hasattr(scene, "delete_selection"):
+                if scene.delete_selection():
+                    event.accept()
+                    return
+
+        super().keyPressEvent(event)
 
     def contextMenuEvent(self, event):
         scene = self.scene()

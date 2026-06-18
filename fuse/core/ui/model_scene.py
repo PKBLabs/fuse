@@ -88,6 +88,8 @@ class ModelScene(QGraphicsScene):
         self.snap_grid_origin = QPointF(0.0, 0.0)
 
         self.model_changed_callback = None
+        self._model_change_batch_depth = 0
+        self._batched_model_change_pending = False
         self.component_added_callback = None
         self.component_used_callback = None
         self.component_favorite_requested_callback = None
@@ -163,8 +165,24 @@ class ModelScene(QGraphicsScene):
         )
 
     def notify_model_changed(self):
+        if self._model_change_batch_depth > 0:
+            self._batched_model_change_pending = True
+            return
+
         if self.model_changed_callback is not None:
             self.model_changed_callback()
+
+    def begin_model_change_batch(self) -> None:
+        self._model_change_batch_depth += 1
+
+    def end_model_change_batch(self) -> None:
+        if self._model_change_batch_depth <= 0:
+            return
+
+        self._model_change_batch_depth -= 1
+        if self._model_change_batch_depth == 0 and self._batched_model_change_pending:
+            self._batched_model_change_pending = False
+            self.notify_model_changed()
 
     def notify_component_added(self, node: ComponentNodeItem):
         if self.component_added_callback is not None:
@@ -954,6 +972,107 @@ class ModelScene(QGraphicsScene):
         self.removeItem(node)
         self.notify_model_changed()
 
+    def delete_component_nodes(self, nodes: list[ComponentNodeItem]) -> bool:
+        """Delete several component nodes as one model change.
+
+        Group expansion and recursive subcomponent deletion can cause the same
+        node to appear more than once or to be removed while the batch is still
+        iterating, so deletion is driven by stable node ids and skips ids that
+        have already disappeared.
+        """
+        node_ids = sorted(
+            {
+                int(getattr(node, "node_id", 0))
+                for node in nodes
+                if node is not None and int(getattr(node, "node_id", 0)) > 0
+            }
+        )
+        if not node_ids:
+            return False
+
+        deleted_any = False
+        self.begin_model_change_batch()
+        try:
+            for node_id in node_ids:
+                node = self.find_node_by_id(node_id)
+                if node is None:
+                    continue
+                self.delete_component_node(node)
+                deleted_any = True
+        finally:
+            self.end_model_change_batch()
+
+        return deleted_any
+
+    def delete_selection(self) -> bool:
+        """Delete the current canvas selection.
+
+        Component selections are preferred over highlighted links/attachments so
+        deleting a multi-component selection removes the selected components, and
+        selecting one member of a group removes every component in that group.
+        """
+        nodes = self.selected_component_nodes(expand_groups=True)
+        if nodes:
+            return self.delete_component_nodes(nodes)
+
+        selected_connections = [
+            item for item in self.selectedItems() if isinstance(item, ConnectionItem)
+        ]
+        if self.selected_connection is not None:
+            selected_connections.append(self.selected_connection)
+
+        unique_connections = []
+        seen_connections: set[int] = set()
+        for connection in selected_connections:
+            link_id = getattr(getattr(connection, "link", None), "link_id", id(connection))
+            if link_id in seen_connections:
+                continue
+            seen_connections.add(link_id)
+            unique_connections.append(connection)
+
+        if unique_connections:
+            self.begin_model_change_batch()
+            try:
+                for connection in list(unique_connections):
+                    if connection.scene() is self:
+                        self.delete_link(connection)
+            finally:
+                self.end_model_change_batch()
+            return True
+
+        selected_attachments = [
+            item
+            for item in self.selectedItems()
+            if isinstance(item, SubcompAttachmentItem)
+        ]
+        if self.selected_subcomp_attachment is not None:
+            selected_attachments.append(self.selected_subcomp_attachment)
+
+        unique_attachments = []
+        seen_attachments: set[int] = set()
+        for attachment_item in selected_attachments:
+            attachment_id = getattr(
+                getattr(attachment_item, "attachment", None),
+                "attachment_id",
+                id(attachment_item),
+            )
+            if attachment_id in seen_attachments:
+                continue
+            seen_attachments.add(attachment_id)
+            unique_attachments.append(attachment_item)
+
+        if unique_attachments:
+            self.begin_model_change_batch()
+            try:
+                for attachment_item in list(unique_attachments):
+                    if attachment_item.scene() is self:
+                        self.delete_subcomp_attachment(attachment_item)
+            finally:
+                self.end_model_change_batch()
+            return True
+
+        return False
+
     def delete_component_by_id(self, node_id: int):
         node = self.find_node_by_id(node_id)
 
@@ -1413,18 +1532,7 @@ class ModelScene(QGraphicsScene):
                 return
 
         if event.key() in (Qt.Key_Delete, Qt.Key_Backspace):
-            if self.selected_connection is not None:
-                self.delete_link(self.selected_connection)
-                event.accept()
-                return
-
-            if self.selected_subcomp_attachment is not None:
-                self.delete_subcomp_attachment(self.selected_subcomp_attachment)
-                event.accept()
-                return
-
-            if self.selected_component is not None:
-                self.delete_component_node(self.selected_component)
+            if self.delete_selection():
                 event.accept()
                 return
 
