@@ -1710,7 +1710,14 @@ class MainWindow(QMainWindow):
         self._last_history_signature = self._saved_history_signature
         self.update_undo_redo_actions()
         self.set_dirty(False)
-        self.statusBar().showMessage(f"Saved {self.current_project_path}", 3000)
+        issue_count = int(getattr(self, "_last_save_validation_issue_count", 0) or 0)
+        if issue_count:
+            self.statusBar().showMessage(
+                f"Saved {self.current_project_path} with {issue_count} validation issue(s) still present",
+                5000,
+            )
+        else:
+            self.statusBar().showMessage(f"Saved {self.current_project_path}", 3000)
         return True
 
     def save_model_as(self) -> bool:
@@ -2160,25 +2167,21 @@ class MainWindow(QMainWindow):
         return True
 
     def validate_model_before_save(self) -> bool:
+        """Refresh validation feedback before saving without blocking the save.
+
+        A .fse file is the editable project state, so users must be able to save
+        work-in-progress models and return later to repair required parameters,
+        duplicate names, or incomplete links. Export paths still run their own
+        blocking validation because generated simulator files should be runnable.
+        """
         issues = validate_model(self.scene)
+        self._last_save_validation_issue_count = len(issues)
         self.apply_validation_issues(issues)
-        self.show_validation_results(issues, "FUSE model validation")
 
-        if not issues:
-            return True
+        if issues:
+            self.focus_first_validation_issue(issues)
 
-        self.focus_first_validation_issue(issues)
-
-        QMessageBox.warning(
-            self,
-            "Model Needs Attention",
-            self.format_validation_message(
-                issues,
-                "The model has issues that must be fixed before saving",
-            ),
-        )
-
-        return False
+        return True
 
     def on_component_used(self, component):
         self.palette.record_component_used(component)

@@ -125,6 +125,68 @@ def test_validate_required_component_parameters_falls_back_to_two_argument_looku
     assert issues == []
 
 
+
+def test_required_visual_subcomponent_connection_parameter_does_not_block_validation(monkeypatch):
+    import fuse.core.model.validation as validation_module
+
+    def fake_get_component_details(plugin_id, component_id, target_id):
+        return {
+            "parameters": [
+                {
+                    "name": "port",
+                    "default_val": "<required>",
+                    "required": True,
+                    "description": (
+                        "port name to use for interfacing to the memory system. "
+                        "This must be provided if this subcomponent is being loaded anonymously."
+                    ),
+                },
+                {
+                    "name": "mem_size",
+                    "default_val": "<required>",
+                    "required": True,
+                    "description": "Actual simulator setting.",
+                },
+            ]
+        }
+
+    monkeypatch.setattr(validation_module, "get_component_details", fake_get_component_details)
+    component = SimpleNamespace(
+        component_id="standardInterface",
+        plugin_id="sst",
+        target_id="1",
+        is_subcomp=1,
+    )
+    scene = FakeScene(nodes=[make_node(1, "iface0", parameters={}, component=component)])
+
+    issues = validate_required_component_parameters(scene)
+
+    assert [issue.parameter_name for issue in issues] == ["mem_size"]
+
+
+def test_visual_connection_parameter_still_required_on_normal_components(monkeypatch):
+    import fuse.core.model.validation as validation_module
+
+    def fake_get_component_details(plugin_id, component_id, target_id):
+        return {
+            "parameters": [
+                {
+                    "name": "port",
+                    "default_val": "<required>",
+                    "required": True,
+                    "description": "Ordinary component port setting.",
+                },
+            ]
+        }
+
+    monkeypatch.setattr(validation_module, "get_component_details", fake_get_component_details)
+    component = SimpleNamespace(component_id="net", plugin_id="sst", target_id="1", is_subcomp=0)
+    scene = FakeScene(nodes=[make_node(1, "net0", parameters={}, component=component)])
+
+    issues = validate_required_component_parameters(scene)
+
+    assert [issue.parameter_name for issue in issues] == ["port"]
+
 def test_validate_required_component_parameters_ignores_lookup_failures(monkeypatch):
     import fuse.core.model.validation as validation_module
 

@@ -166,6 +166,13 @@ def external_suite_root(environ: dict[str, str] | None = None) -> Path | None:
     return Path(value).expanduser()
 
 
+def external_suite_root_validation_requested(
+    environ: dict[str, str] | None = None,
+) -> bool:
+    """Return true when a configured sst-ext-tests root should be validated."""
+    return external_suite_root(environ) is not None
+
+
 def validate_external_suite_root(
     environ: dict[str, str] | None = None,
 ) -> SSTExternalValidationResult:
@@ -709,6 +716,12 @@ def run_sst_external_acceptance(
     if not json_result.ok:
         return results
 
+    if external_suite_root_validation_requested(environ):
+        external_root_result = validate_external_suite_root(environ)
+        results.append(external_root_result)
+        if external_root_result.failed:
+            return results
+
     if metadata.run_mode in {"init", "run"}:
         version_result = run_sst_version_check(
             metadata,
@@ -864,6 +877,18 @@ def run_generated_fixture_acceptance(
                     "sst_json_contract",
                     f"Exported SST JSON is missing top-level section(s): {', '.join(missing)}.",
                 )
+            )
+
+    if external_suite_root_validation_requested(environ):
+        external_root_result = validate_external_suite_root(environ)
+        results.append(external_root_result)
+        if external_root_result.failed:
+            return SSTFixtureAcceptanceResult(
+                metadata=fixture.metadata,
+                output_path=output_path,
+                export_can_export=report.can_export,
+                expected_top_level_sections_present=expected_sections_present,
+                results=tuple(results),
             )
 
     if fixture.metadata.run_mode in {"init", "run"}:

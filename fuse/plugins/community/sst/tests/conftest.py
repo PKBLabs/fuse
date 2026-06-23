@@ -14,6 +14,41 @@
 import pytest
 
 
+from fuse.plugins.community.sst.tests.sst_version_support import (
+    detect_installed_sst_version,
+)
+
+
+def _required_sst_majors_for_node(node) -> set[int]:
+    """Return SST major versions required by version-specific markers."""
+    required: set[int] = set()
+
+    if node.get_closest_marker("sst_15"):
+        required.add(15)
+
+    if node.get_closest_marker("sst_16"):
+        required.add(16)
+
+    return required
+
+
+@pytest.fixture(autouse=True)
+def skip_incompatible_sst_version_marker(request):
+    """Skip SST-version-specific live tests on incompatible local installs."""
+    required_majors = _required_sst_majors_for_node(request.node)
+    if not required_majors:
+        return
+
+    detected = detect_installed_sst_version()
+
+    if detected.major not in required_majors:
+        pytest.skip(
+            f"Test requires SST major {sorted(required_majors)}, "
+            f"but detected SST {detected.text} from {detected.sst_info_path}."
+        )
+
+
+
 SAMPLE_SSTINFO = """
 ELEMENT LIBRARY 0 = testElement (Some test element)
 Components (2 total)

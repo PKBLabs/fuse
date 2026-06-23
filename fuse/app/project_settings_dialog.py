@@ -57,7 +57,11 @@ from fuse.core.toolchains.discovery import (
 )
 from fuse.core.toolchains.providers import provider_from_toolchain
 from fuse.core.toolchains.version_match import compare_version_prefix
-from fuse.plugins.community.sst.get_sstinfo import validate_sst_toolchain
+from fuse.plugins.community.sst.get_sstinfo import (
+    sync_sstinfo_to_database,
+    validate_sst_toolchain,
+)
+from fuse.plugins.community.sst.policy.loader import has_policy_catalog
 
 
 class ProjectSettingsDialog(QDialog):
@@ -739,6 +743,31 @@ class ProjectSettingsDialog(QDialog):
     def _validate_sst(self, toolchain: ToolchainSettings) -> tuple[bool, str]:
         target_data = self._target_data_for_plugin("sst")
         expected_version = target_data.get("framework_version", "") or ""
+        target_label = (
+            target_data.get("target_label", "")
+            or target_data.get("display_name", "")
+            or f"SST {expected_version}"
+        )
+
+        if not expected_version:
+            return (
+                False,
+                (
+                    "No SST target catalog is selected.\n\n"
+                    "Choose a supported SST target version in Project Settings."
+                ),
+            )
+
+        if not has_policy_catalog(expected_version):
+            return (
+                False,
+                (
+                    f"FUSE does not have a bundled SST policy catalog for "
+                    f"SST {expected_version}.\n\n"
+                    "Choose one of the supported SST versions bundled with this "
+                    "FUSE build."
+                ),
+            )
 
         sst_info_path = toolchain.tool_paths.get("sstInfo", "").strip()
 
@@ -773,7 +802,34 @@ class ProjectSettingsDialog(QDialog):
             timeout_seconds=60,
         )
 
-        return ok, message
+        if not ok:
+            return ok, message
+
+        try:
+            sync_sstinfo_to_database(
+                version=expected_version,
+                label=target_label,
+                is_default=True,
+                toolchain=toolchain,
+            )
+        except Exception as exc:
+            return (
+                False,
+                (
+                    "The SST toolchain version check passed, but FUSE could not "
+                    "import SST component metadata with sst-info.\n\n"
+                    f"{exc}"
+                ),
+            )
+
+        return (
+            True,
+            (
+                f"{message}\n\n"
+                f"FUSE imported SST component metadata for {target_label} and "
+                "will use the bundled policy catalog for export validation."
+            ),
+        )
 
     def _validate_gem5(self, toolchain: ToolchainSettings) -> tuple[bool, str]:
         target_data = self._target_data_for_plugin("gem5")

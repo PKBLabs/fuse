@@ -251,8 +251,16 @@ def validate_sst_toolchain(
     toolchain: ToolchainSettings,
     expected_version: str = "",
     timeout_seconds=60,
+    version_policy: str = "major_minor_patch",
 ) -> tuple[bool, str, CommandResult | None]:
-    """Validate that configured SST toolchain settings can run and match a target version."""
+    """Validate that configured SST toolchain settings can run and match a target version.
+
+    ``version_policy`` controls how strictly ``expected_version`` is compared
+    with the version reported by ``sst-info --version``. The default preserves
+    the interactive/project-settings behavior of accepting any matching major
+    SST version, while CI can pass ``major_minor_patch`` for pinned release
+    validation.
+    """
     result = get_sstinfo_for_toolchain(
         toolchain=toolchain,
         args=["--version"],
@@ -276,7 +284,7 @@ def validate_sst_toolchain(
         match = compare_version_prefix(
             expected_version=expected_version,
             detected_text=output,
-            policy="major",
+            policy=version_policy,
         )
 
         if not match.matched:

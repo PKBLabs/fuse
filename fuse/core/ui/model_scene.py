@@ -101,6 +101,7 @@ class ModelScene(QGraphicsScene):
         self.selected_component: Optional[ComponentNodeItem] = None
         self.suppress_mixed_endpoint_warning = False
         self.suppress_port_occupied_warning = False
+        self.suppressed_compatibility_warnings: set[str] = set()
 
         # Link routing is relatively expensive. A component drag can generate
         # hundreds of ItemPositionHasChanged events per second. During drag we
@@ -137,6 +138,7 @@ class ModelScene(QGraphicsScene):
         self.subcomp_attachments = []
         self._next_link_id = 1
         self._next_subcomp_attachment_id = 1
+        self.suppressed_compatibility_warnings = set()
         self._next_group_id = 1
         self.node_group_ids = {}
         ComponentNodeItem._next_node_id = 1
@@ -819,6 +821,38 @@ class ModelScene(QGraphicsScene):
 
         return response == QMessageBox.Yes
 
+    def compatibility_warning_is_suppressed(self, result: LinkCompatibilityResult) -> bool:
+        code = (result.code or "").strip()
+        return bool(code and code in self.suppressed_compatibility_warnings)
+
+    def confirm_subcomp_compatibility_warning(self, result: LinkCompatibilityResult) -> bool:
+        if self.compatibility_warning_is_suppressed(result):
+            return True
+
+        message_box = QMessageBox()
+        message_box.setIcon(QMessageBox.Warning)
+        message_box.setWindowTitle(result.title or "SubComponent Compatibility Warning")
+        message_box.setText(
+            result.message
+            or "The selected SubComponent may not be compatible with this slot."
+        )
+        message_box.setInformativeText("Create the SubComponent attachment anyway?")
+        message_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        message_box.setDefaultButton(QMessageBox.No)
+
+        checkbox = None
+        warning_code = (result.code or "").strip()
+        if warning_code:
+            checkbox = QCheckBox("Do not show this warning again for this project")
+            message_box.setCheckBox(checkbox)
+
+        response = message_box.exec()
+
+        if checkbox is not None and checkbox.isChecked():
+            self.suppressed_compatibility_warnings.add(warning_code)
+
+        return response == QMessageBox.Yes
+
     def clear_port_compatibility_highlights(self):
         for node in self.component_items():
             for port in node.ports:
@@ -1479,7 +1513,7 @@ class ModelScene(QGraphicsScene):
             return
 
         if compatibility.severity == "warning":
-            if not self.confirm_link_compatibility_warning(compatibility):
+            if not self.confirm_subcomp_compatibility_warning(compatibility):
                 self.cancel_pending_subcomp_attachment()
                 return
 

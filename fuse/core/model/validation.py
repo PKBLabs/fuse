@@ -20,6 +20,7 @@ plugin-provided compatibility before save/export operations."""
 from dataclasses import dataclass
 from typing import Optional
 from fuse.core.persistence.db_access import get_component_details
+from fuse.core.model.subcomponents import is_visual_subcomponent_connection_parameter
 from fuse.core.plugin_runtime.manager import get_plugin_by_id
 
 @dataclass
@@ -151,6 +152,12 @@ def validate_required_component_parameters(scene) -> list[ValidationIssue]:
             name = parameter.get("name", "")
             required = bool(parameter.get("required"))
 
+            if is_visual_subcomponent_connection_parameter(
+                parameter,
+                component_is_subcomponent=bool(int(getattr(node.component, "is_subcomp", 0) or 0)),
+            ):
+                required = False
+
             if not required:
                 continue
 
@@ -264,12 +271,13 @@ def validate_subcomp_attachments(scene) -> list[ValidationIssue]:
                     ValidationIssue(
                         issue_type="subcomp_attachment",
                         object_name=attachment.name,
-                        node_id=attachment.parent_node_id,
-                        parameter_name=attachment.slot_name,
+                        attachment_id=attachment.attachment_id,
+                        severity="warning",
                         message=(
-                            "SubComponent interface mismatch: slot requires "
-                            f"{attachment.required_interface}, but subcomponent provides "
-                            f"{attachment.provided_interface}."
+                            "SubComponent interface metadata mismatch: slot declares "
+                            f"{attachment.required_interface}, but subcomponent declares "
+                            f"{attachment.provided_interface}. "
+                            "FUSE will use the visual parent/slot attachment for export."
                         ),
                     )
                 )

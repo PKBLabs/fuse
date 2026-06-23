@@ -1,0 +1,324 @@
+{
+  "components": {
+    "memHierarchy.Bus": {
+      "params": {
+        "bus_frequency": {
+          "export_default": false,
+          "kind": "string"
+        }
+      }
+    },
+    "memHierarchy.Cache": {
+      "params": {
+        "L1": {
+          "default_value": "false",
+          "kind": "integer"
+        },
+        "access_latency_cycles": {
+          "kind": "integer"
+        },
+        "associativity": {
+          "kind": "integer"
+        },
+        "banks": {
+          "default_kind": "literal",
+          "default_value": "0",
+          "export_default": true,
+          "kind": "integer"
+        },
+        "cache_frequency": {
+          "kind": "string"
+        },
+        "cache_line_size": {
+          "default_kind": "literal",
+          "default_value": "64",
+          "export_default": true,
+          "kind": "integer"
+        },
+        "cache_size": {
+          "kind": "string"
+        },
+        "cache_type": {
+          "default_kind": "literal",
+          "default_value": "inclusive",
+          "export_default": true,
+          "kind": "string"
+        },
+        "coherence_protocol": {
+          "default_kind": "literal",
+          "default_value": "MESI",
+          "export_default": true,
+          "kind": "string"
+        },
+        "debug": {
+          "default_kind": "literal",
+          "default_value": "0",
+          "export_default": true,
+          "kind": "integer"
+        },
+        "debug_addr": {
+          "default_kind": "literal",
+          "default_value": "[]",
+          "export_default": false,
+          "kind": "string",
+          "notes": "Empty/debug-only default is not useful in normal exported JSON."
+        },
+        "debug_level": {
+          "default_kind": "literal",
+          "default_value": "0",
+          "export_default": true,
+          "kind": "integer"
+        },
+        "drop_prefetch_mshr_level": {
+          "default_kind": "symbolic",
+          "default_value": "mshr_num_entries-2",
+          "export_default": false,
+          "kind": "integer"
+        },
+        "force_noncacheable_reqs": {
+          "default_kind": "literal",
+          "default_value": "false",
+          "export_default": true,
+          "kind": "bool"
+        },
+        "llsc_block_cycles": {
+          "default_kind": "literal",
+          "default_value": "0",
+          "export_default": true,
+          "kind": "integer"
+        },
+        "maxRequestDelay": {
+          "default_kind": "literal",
+          "default_value": "0",
+          "export_default": true,
+          "kind": "integer"
+        },
+        "max_outstanding_prefetch": {
+          "default_kind": "symbolic",
+          "default_value": "0.5*mshr_num_entries",
+          "export_default": false,
+          "kind": "integer"
+        },
+        "max_requests_per_cycle": {
+          "default_kind": "literal",
+          "default_value": "-1",
+          "export_default": true,
+          "kind": "integer"
+        },
+        "min_packet_size": {
+          "default_kind": "literal",
+          "default_value": "8B",
+          "export_default": true,
+          "kind": "string"
+        },
+        "mshr_latency_cycles": {
+          "default_kind": "literal",
+          "default_value": "1",
+          "export_default": true,
+          "kind": "integer"
+        },
+        "mshr_num_entries": {
+          "default_kind": "literal",
+          "default_value": "-1",
+          "export_default": true,
+          "kind": "integer"
+        },
+        "node": {
+          "default_kind": "literal",
+          "default_value": "0",
+          "export_default": true,
+          "kind": "integer"
+        },
+        "noninclusive_directory_associativity": {
+          "default_kind": "literal",
+          "default_value": "1",
+          "export_default": true,
+          "kind": "integer"
+        },
+        "noninclusive_directory_entries": {
+          "default_kind": "literal",
+          "default_value": "0",
+          "export_default": true,
+          "kind": "integer"
+        },
+        "num_cache_slices": {
+          "default_kind": "literal",
+          "default_value": "1",
+          "export_default": true,
+          "kind": "integer"
+        },
+        "prefetch_delay_cycles": {
+          "default_kind": "literal",
+          "default_value": "1",
+          "export_default": true,
+          "kind": "integer"
+        },
+        "request_link_width": {
+          "default_kind": "literal",
+          "default_value": "0B",
+          "export_default": true,
+          "kind": "string"
+        },
+        "response_link_width": {
+          "default_kind": "literal",
+          "default_value": "0B",
+          "export_default": true,
+          "kind": "string"
+        },
+        "slice_allocation_policy": {
+          "default_kind": "literal",
+          "default_value": "rr",
+          "export_default": true,
+          "kind": "string"
+        },
+        "slice_id": {
+          "default_kind": "literal",
+          "default_value": "0",
+          "export_default": true,
+          "kind": "integer"
+        },
+        "snoop_l1_invalidations": {
+          "default_kind": "literal",
+          "default_value": "false",
+          "export_default": true,
+          "kind": "bool"
+        },
+        "tag_access_latency_cycles": {
+          "default_kind": "symbolic",
+          "default_value": "access_latency_cycles",
+          "export_default": false,
+          "kind": "integer"
+        },
+        "verbose": {
+          "default_kind": "literal",
+          "default_value": "1",
+          "export_default": true,
+          "kind": "integer"
+        }
+      }
+    },
+    "memHierarchy.DirectoryController": {
+      "params": {
+        "addr_range_end": {
+          "kind": "integer"
+        },
+        "addr_range_start": {
+          "default_kind": "literal",
+          "default_value": "0",
+          "export_default": true,
+          "kind": "integer"
+        },
+        "cache_line_size": {
+          "default_kind": "literal",
+          "default_value": "64",
+          "export_default": true,
+          "kind": "integer"
+        },
+        "coherence_protocol": {
+          "default_kind": "literal",
+          "default_value": "MESI",
+          "export_default": true,
+          "kind": "string"
+        },
+        "node": {
+          "default_kind": "literal",
+          "default_value": "0",
+          "export_default": true,
+          "kind": "integer"
+        }
+      }
+    },
+    "memHierarchy.MemController": {
+      "params": {
+        "addr_range_end": {
+          "kind": "integer"
+        },
+        "addr_range_start": {
+          "default_kind": "literal",
+          "default_value": "0",
+          "export_default": true,
+          "kind": "integer"
+        },
+        "backend.mem_size": {
+          "export_default": false,
+          "kind": "string",
+          "notes": "Suppressed when an explicit backend subcomponent is attached."
+        },
+        "clock": {
+          "kind": "string"
+        }
+      }
+    },
+    "memHierarchy.simpleMem": {
+      "params": {
+        "access_time": {
+          "kind": "string"
+        },
+        "mem_size": {
+          "kind": "string"
+        }
+      }
+    },
+    "memHierarchy.standardCPU": {
+      "params": {
+        "clock": {
+          "kind": "string"
+        },
+        "flush_freq": {
+          "kind": "integer"
+        },
+        "flushcache_freq": {
+          "kind": "integer"
+        },
+        "flushinv_freq": {
+          "kind": "integer"
+        },
+        "llsc_freq": {
+          "kind": "integer"
+        },
+        "maxOutstanding": {
+          "kind": "integer"
+        },
+        "memFreq": {
+          "kind": "integer"
+        },
+        "memSize": {
+          "kind": "string"
+        },
+        "opCount": {
+          "kind": "integer"
+        },
+        "read_freq": {
+          "kind": "integer"
+        },
+        "reqsPerIssue": {
+          "kind": "integer"
+        },
+        "rngseed": {
+          "kind": "integer"
+        },
+        "write_freq": {
+          "kind": "integer"
+        }
+      }
+    },
+    "memHierarchy.standardInterface": {
+      "params": {
+        "port": {
+          "export_default": false,
+          "kind": "string",
+          "missing_severity": "silent",
+          "notes": "FUSE supplies placement through the parent slot attachment in SST JSON.",
+          "required_context": "attached_subcomponent"
+        }
+      }
+    }
+  },
+  "schema_version": 1,
+  "source": {
+    "note": "Initial FUSE policy catalog. Runtime also merges imported sst-info metadata.",
+    "sst_core": "15.1.2",
+    "sst_elements": "15.1.0"
+  },
+  "sst_version": "15.1.2"
+}

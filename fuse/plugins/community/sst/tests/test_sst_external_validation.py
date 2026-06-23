@@ -847,3 +847,71 @@ def test_generated_fixture_suite_report_summarizes_results(tmp_path):
     assert report.to_mapping()["total"] == 1
     assert report.to_mapping()["passed"] == 1
     assert report.results[0].metadata.name == "minimal_two_component_link"
+
+
+def test_generated_fixture_acceptance_records_external_suite_root_when_enabled(tmp_path):
+    from fuse.plugins.community.sst.external_validation.fixtures import (
+        minimal_two_component_link_fixture,
+    )
+
+    suite_root = tmp_path / "sst-ext-tests"
+    suite_root.mkdir()
+
+    acceptance = run_generated_fixture_acceptance(
+        minimal_two_component_link_fixture(),
+        tmp_path / "out",
+        environ={
+            ENABLE_EXTERNAL_VALIDATION_ENV: "1",
+            SST_EXT_TESTS_ROOT_ENV: str(suite_root),
+        },
+    )
+
+    stages = {result.stage: result for result in acceptance.results}
+
+    assert acceptance.ok is True
+    assert stages["sst_ext_tests_root"].ok is True
+    assert str(suite_root) in stages["sst_ext_tests_root"].message
+
+
+def test_generated_fixture_acceptance_fails_when_configured_external_suite_root_is_missing(
+    tmp_path,
+):
+    from fuse.plugins.community.sst.external_validation.fixtures import (
+        minimal_two_component_link_fixture,
+    )
+
+    acceptance = run_generated_fixture_acceptance(
+        minimal_two_component_link_fixture(),
+        tmp_path / "out",
+        environ={SST_EXT_TESTS_ROOT_ENV: str(tmp_path / "missing-suite")},
+    )
+
+    assert acceptance.ok is False
+    assert acceptance.failed_results[-1].stage == "sst_ext_tests_root"
+    assert "does not exist" in acceptance.failed_results[-1].message
+
+
+def test_sst_external_acceptance_records_external_suite_root_stage(tmp_path):
+    json_path = tmp_path / "model.sst.json"
+    json_path.write_text("{}", encoding="utf-8")
+    suite_root = tmp_path / "sst-ext-tests"
+    suite_root.mkdir()
+    metadata = SSTExternalValidationMetadata(name="json_only", run_mode="json")
+
+    results = run_sst_external_acceptance(
+        json_path,
+        metadata,
+        environ={
+            ENABLE_EXTERNAL_VALIDATION_ENV: "1",
+            SST_EXT_TESTS_ROOT_ENV: str(suite_root),
+        },
+    )
+
+    assert [result.stage for result in results] == [
+        "fixture_metadata",
+        "json_syntax",
+        "sst_ext_tests_root",
+        "sst_runtime",
+    ]
+    assert results[2].ok is True
+    assert str(suite_root) in results[2].message

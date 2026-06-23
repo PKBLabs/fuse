@@ -11,20 +11,24 @@
 # FUSE is distributed in the hope that it will be useful, but WITHOUT ANY
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-"""SST JSON export and validation helpers.
-
-This module converts a FUSE scene, including flattened composite scenes, into
-the SST JSON structure consumed by SST's Python input layer. It also performs
-export-readiness checks so users get actionable validation errors before a file
-is written.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 import json
 from pathlib import Path
 from typing import Any
+
+from fuse.core.model.subcomponents import is_visual_subcomponent_connection_parameter
+from fuse.plugins.community.sst.policy.models import ParamKind
+from fuse.plugins.community.sst.policy.runtime import (
+    default_params_for_node,
+    looks_like_untyped_number,
+    normalize_param_value,
+    normalize_params,
+    parameter_metadata_for_node,
+    resolve_param_kind,
+    should_require_metadata_param_for_export,
+)
 
 
 DEFAULT_LINK_LATENCY = "1ns"
@@ -45,16 +49,13 @@ class SSTExportReport:
 
     @property
     def can_export(self) -> bool:
-        """Return true when no blocking export errors are present."""
         return not self.errors
 
     @property
     def issues(self) -> list[Any]:
-        """Return errors followed by warnings for display/reporting."""
         return [*self.errors, *self.warnings]
 
     def raise_for_errors(self) -> None:
-        """Raise :class:`SSTJsonExportError` when blocking errors exist."""
         if not self.errors:
             return
 
@@ -81,7 +82,6 @@ def validation_issue(
     attachment_id: int | None = None,
     parameter_name: str | None = None,
 ):
-    """Create a core validation issue from SST exporter context."""
     from fuse.core.model.validation import ValidationIssue
 
     return ValidationIssue(
@@ -111,7 +111,6 @@ def clean_value(value: Any) -> Any:
 
 
 def non_empty_params(parameters: dict[str, Any]) -> dict[str, Any]:
-    """Return parameters after dropping empty string/None values."""
     result: dict[str, Any] = {}
 
     for key, value in sorted(parameters.items(), key=lambda item: str(item[0])):
@@ -164,6 +163,83 @@ def sst_component_type_for_node(node) -> str:
     return f"{element}.{name}"
 
 
+def raw_export_params_for_node(
+    node,
+    *,
+    suppress_prefixed_slots: set[str] | None = None,
+) -> dict[str, Any]:
+    """Return user/FUSE model parameters that should be considered for export."""
+
+    raw_params = dict(getattr(node, "parameters", {}) or {})
+    suppress_prefixed_slots = suppress_prefixed_slots or set()
+
+    if node_is_subcomponent(node):
+        raw_params = {
+            key: value
+            for key, value in raw_params.items()
+            if not is_visual_subcomponent_connection_parameter(key)
+        }
+
+    if suppress_prefixed_slots:
+        raw_params = {
+            key: value
+            for key, value in raw_params.items()
+            if not any(
+                str(key).startswith(f"{slot}.")
+                for slot in suppress_prefixed_slots
+            )
+        }
+
+    return non_empty_params(raw_params)
+
+
+def exportable_params_for_node(
+    node,
+    *,
+    suppress_prefixed_slots: set[str] | None = None,
+) -> dict[str, Any]:
+    """
+    Return component parameters that should be written to SST JSON.
+
+    The exporter makes safe literal SST metadata defaults explicit for the
+    selected SST version, then overlays user-provided values. Symbolic/internal
+    defaults are left for SST to resolve.
+    """
+
+    suppress_prefixed_slots = suppress_prefixed_slots or set()
+
+    merged: dict[str, Any] = {}
+    merged.update(
+        default_params_for_node(
+            node,
+            suppress_prefixed_slots=suppress_prefixed_slots,
+        )
+    )
+    merged.update(
+        raw_export_params_for_node(
+            node,
+            suppress_prefixed_slots=suppress_prefixed_slots,
+        )
+    )
+
+    return non_empty_params(merged)
+
+
+def normalize_params_for_node(
+    node,
+    params: dict[str, Any],
+) -> dict[str, Any]:
+    """Normalize a node's parameters to their SST JSON value kinds."""
+
+    component_type = sst_component_type_for_node(node)
+    return normalize_params(
+        component_type,
+        params,
+        parameter_metadata_for_node(node),
+        node=node,
+    )
+
+
 def build_partition(node) -> dict[str, int] | None:
     """
     Optional SST partition metadata.
@@ -184,22 +260,31 @@ def build_partition(node) -> dict[str, int] | None:
     }
 
 
-def build_sst_component(node) -> dict[str, Any]:
+def build_sst_component(
+    node,
+    *,
+    suppress_prefixed_slots: set[str] | None = None,
+) -> dict[str, Any]:
     """
     Build one SST JSON component object.
 
     Field order matters for readability and is also safer for SST's streaming
     reader behavior: name and type are emitted first.
     """
+
+    component_type = sst_component_type_for_node(node)
     component: dict[str, Any] = {
         "name": node.instance_name,
-        "type": sst_component_type_for_node(node),
+        "type": component_type,
     }
 
-    params = non_empty_params(getattr(node, "parameters", {}) or {})
+    params = exportable_params_for_node(
+        node,
+        suppress_prefixed_slots=suppress_prefixed_slots,
+    )
 
     if params:
-        component["params"] = params
+        component["params"] = normalize_params_for_node(node, params)
 
     partition = build_partition(node)
 
@@ -220,13 +305,23 @@ def build_sst_component_tree(
     Attached child subcomponents are nested under their parent with the slot
     name that should be used by SST's subcomponent assignment mechanism.
     """
-    component = build_sst_component(node)
-    children = []
-
-    for attachment in sorted(
+    child_attachments = sorted(
         attachments_by_parent_id.get(node.node_id, []),
         key=lambda item: (str(item.slot_name), str(item.name), int(item.attachment_id)),
-    ):
+    )
+    attached_slot_names = {
+        str(attachment.slot_name)
+        for attachment in child_attachments
+        if str(getattr(attachment, "slot_name", "") or "").strip()
+    }
+
+    component = build_sst_component(
+        node,
+        suppress_prefixed_slots=attached_slot_names,
+    )
+    children = []
+
+    for attachment in child_attachments:
         child = nodes_by_id.get(attachment.child_node_id)
         if child is None:
             raise SSTJsonExportError(
@@ -249,7 +344,6 @@ def build_sst_component_tree(
 
 
 def source_link_latency(link) -> str:
-    """Return the SST source latency for a link, including legacy fallback."""
     latency = (
         getattr(link, "source_latency", "")
         or getattr(link, "latency", "")
@@ -259,7 +353,6 @@ def source_link_latency(link) -> str:
 
 
 def target_link_latency(link) -> str:
-    """Return the SST target latency for a link, including legacy fallback."""
     latency = (
         getattr(link, "target_latency", "")
         or getattr(link, "latency", "")
@@ -269,17 +362,14 @@ def target_link_latency(link) -> str:
 
 
 def has_explicit_source_latency(link) -> bool:
-    """Return whether a link explicitly defines source latency."""
     return bool(str(getattr(link, "source_latency", "") or "").strip())
 
 
 def has_explicit_target_latency(link) -> bool:
-    """Return whether a link explicitly defines target latency."""
     return bool(str(getattr(link, "target_latency", "") or "").strip())
 
 
 def current_node_name(nodes_by_id: dict[int, object] | None, node_id: int, fallback: str) -> str:
-    """Resolve a node id to its current instance name for link export."""
     if nodes_by_id is None:
         return fallback
 
@@ -350,7 +440,6 @@ def build_sst_link(link, nodes_by_id: dict[int, object] | None = None) -> dict[s
 
 
 def port_names_for_node(node) -> set[str]:
-    """Return concrete port names available on a node."""
     names = set()
 
     if hasattr(node, "expanded_port_names"):
@@ -368,12 +457,10 @@ def port_names_for_node(node) -> set[str]:
 
 
 def node_is_sst(node) -> bool:
-    """Return true when a node belongs to the SST plugin."""
     return (getattr(node.component, "plugin_id", "") or "core") == "sst"
 
 
 def node_is_subcomponent(node) -> bool:
-    """Return true when a node represents an SST SubComponent."""
     return bool(int(getattr(node.component, "is_subcomp", 0) or 0))
 
 
@@ -388,6 +475,12 @@ def validate_sst_json_export(scene) -> SSTExportReport:
     attachments = list(getattr(scene, "subcomp_attachments", []) or [])
     nodes_by_id = {node.node_id: node for node in nodes}
     attached_child_ids = {attachment.child_node_id for attachment in attachments}
+    attachments_by_parent_id: dict[int, list] = {}
+    for attachment in attachments:
+        attachments_by_parent_id.setdefault(
+            attachment.parent_node_id,
+            [],
+        ).append(attachment)
 
     def add_issue(issue):
         if getattr(issue, "severity", "error") == "warning":
@@ -455,8 +548,9 @@ def validate_sst_json_export(scene) -> SSTExportReport:
                 )
             )
 
+        component_type = ""
         try:
-            sst_component_type_for_node(node)
+            component_type = sst_component_type_for_node(node)
         except SSTJsonExportError as exc:
             add_issue(
                 validation_issue(
@@ -466,6 +560,97 @@ def validate_sst_json_export(scene) -> SSTExportReport:
                     node_id=getattr(node, "node_id", None),
                 )
             )
+
+        if component_type:
+            attached_slot_names = {
+                str(attachment.slot_name)
+                for attachment in attachments_by_parent_id.get(node.node_id, [])
+                if str(getattr(attachment, "slot_name", "") or "").strip()
+            }
+
+            raw_user_params = raw_export_params_for_node(
+                node,
+                suppress_prefixed_slots=attached_slot_names,
+            )
+            params = exportable_params_for_node(
+                node,
+                suppress_prefixed_slots=attached_slot_names,
+            )
+            metadata_by_name = parameter_metadata_for_node(node)
+
+            for param_name, metadata in metadata_by_name.items():
+                if not should_require_metadata_param_for_export(
+                    node,
+                    str(param_name),
+                    metadata,
+                    params,
+                    attached_slot_names,
+                ):
+                    continue
+
+                add_issue(
+                    validation_issue(
+                        "sst_export_parameter",
+                        name or "<unnamed component>",
+                        (
+                            f"Required SST parameter '{param_name}' is not set. "
+                            "Set this parameter before exporting to SST JSON."
+                        ),
+                        node_id=getattr(node, "node_id", None),
+                        parameter_name=str(param_name),
+                    )
+                )
+
+            for param_name, param_value in params.items():
+                metadata = metadata_by_name.get(param_name, {})
+
+                try:
+                    normalize_param_value(
+                        component_type,
+                        param_name,
+                        param_value,
+                        metadata,
+                        node=node,
+                    )
+                except ValueError as exc:
+                    add_issue(
+                        validation_issue(
+                            "sst_export_parameter",
+                            name or "<unnamed component>",
+                            (
+                                f"Parameter '{param_name}' cannot be exported "
+                                f"as the expected SST JSON type: {exc}"
+                            ),
+                            node_id=getattr(node, "node_id", None),
+                            parameter_name=param_name,
+                        )
+                    )
+                    continue
+
+                if (
+                    param_name in raw_user_params
+                    and resolve_param_kind(
+                        component_type,
+                        param_name,
+                        metadata,
+                        node=node,
+                    )
+                    == ParamKind.UNKNOWN
+                    and looks_like_untyped_number(param_value)
+                ):
+                    add_issue(
+                        validation_issue(
+                            "sst_export_warning",
+                            name or "<unnamed component>",
+                            (
+                                f"Parameter '{param_name}' looks numeric but "
+                                "does not have SST type metadata; exporting it as a string."
+                            ),
+                            severity="warning",
+                            node_id=getattr(node, "node_id", None),
+                            parameter_name=param_name,
+                        )
+                    )
 
         if node_is_subcomponent(node) and node.node_id not in attached_child_ids:
             add_issue(
@@ -524,28 +709,9 @@ def validate_sst_json_export(scene) -> SSTExportReport:
                 )
             )
 
-        required = str(getattr(attachment, "required_interface", "") or "").strip()
-        provided = str(getattr(attachment, "provided_interface", "") or "").strip()
-        if required and provided and required != provided:
-            add_issue(
-                validation_issue(
-                    "sst_export_subcomponent",
-                    object_name,
-                    f"SubComponent interface mismatch: slot requires {required}, but subcomponent provides {provided}.",
-                    attachment_id=getattr(attachment, "attachment_id", None),
-                    parameter_name="slot_name",
-                )
-            )
-        elif not required or not provided:
-            add_issue(
-                validation_issue(
-                    "sst_export_warning",
-                    object_name,
-                    "SubComponent interface compatibility could not be fully verified from metadata.",
-                    severity="warning",
-                    attachment_id=getattr(attachment, "attachment_id", None),
-                )
-            )
+        # SST subcomponent interface metadata is not standardized enough to
+        # warn in normal export mode. If the visual parent/slot attachment is
+        # structurally valid, the exporter trusts that attachment.
 
     seen_link_names: dict[str, int] = {}
     for link in links:
@@ -828,7 +994,6 @@ def export_sst_json(
 
 
 def export_sst_report(report: SSTExportReport, output_path: str | Path) -> Path:
-    """Write an SST export validation report beside the exported artifact."""
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 

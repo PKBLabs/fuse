@@ -158,6 +158,7 @@ jobs:
       FUSE_SPLASH_MS: "0"
       FUSE_TEST_AUTOCLOSE_MS: "100"
       FUSE_SST_VERSION: ${{ matrix.sst.version }}
+      FUSE_SST_VERSION_POLICY: major_minor_patch
 
     steps:
       - name: Check out repository
@@ -214,6 +215,7 @@ jobs:
       FUSE_SPLASH_MS: "0"
       FUSE_TEST_AUTOCLOSE_MS: "100"
       FUSE_SST_VERSION: ${{ matrix.sst.version }}
+      FUSE_SST_VERSION_POLICY: major_minor_patch
       FUSE_ENABLE_SST_EXT_TESTS: "1"
       SST_EXT_TESTS_ROOT: /opt/sst-ext-tests
 
