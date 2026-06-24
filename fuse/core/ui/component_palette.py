@@ -386,9 +386,9 @@ class ComponentPalette(QWidget):
         """Load the palette across simulator plugins.
 
         The selected target is authoritative for the active plugin. Other
-        plugins are still shown with their default targets so users can browse
-        SST and gem5 side-by-side, but a plugin must not appear twice with both
-        the selected target and its default target.
+        plugins are still shown with their default targets, but the active
+        plugin must not also appear with its default target because that mixes
+        multiple SST/gem5 versions in one palette.
         """
         try:
             if self.active_plugin_id:

@@ -23,6 +23,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -1036,6 +1037,275 @@ def sync_parsed_sstinfo_to_database(
         backfill_component_icons(conn, framework_version_id=framework_version_id)
 
 
+
+def parsed_sstinfo_to_catalog_dict(
+    *,
+    version: str,
+    elements: list[ParsedElement],
+    components: list[ParsedComponent],
+) -> dict:
+    """Convert parsed sst-info metadata into a portable JSON component catalog."""
+
+    return {
+        "schema_version": "1.0.0",
+        "source": "sst-info",
+        "sst_version": version,
+        "elements": [asdict(element) for element in elements],
+        "components": [asdict(component) for component in components],
+    }
+
+
+def _parameter_from_dict(data: dict) -> ParsedParameter:
+    return ParsedParameter(
+        name=str(data.get("name", "") or ""),
+        description=str(data.get("description", "") or ""),
+        default_val=str(data.get("default_val", "") or ""),
+        required=int(data.get("required", 0) or 0),
+    )
+
+
+def _port_from_dict(data: dict) -> ParsedPort:
+    return ParsedPort(
+        name=str(data.get("name", "") or ""),
+        description=str(data.get("description", "") or ""),
+        iface=str(data.get("iface", "") or ""),
+        is_variable=int(data.get("is_variable", 0) or 0),
+        base_name=str(data.get("base_name", "") or ""),
+        count_parameter=str(data.get("count_parameter", "") or ""),
+        default_count=int(data.get("default_count", 1) or 1),
+    )
+
+
+def _subcomp_slot_from_dict(data: dict) -> ParsedSubcompSlot:
+    return ParsedSubcompSlot(
+        name=str(data.get("name", "") or ""),
+        description=str(data.get("description", "") or ""),
+        iface=str(data.get("iface", "") or ""),
+    )
+
+
+def _statistic_from_dict(data: dict) -> ParsedStatistic:
+    return ParsedStatistic(
+        name=str(data.get("name", "") or ""),
+        description=str(data.get("description", "") or ""),
+        units=str(data.get("units", "") or ""),
+        iface=str(data.get("iface", "") or ""),
+        parameters=[
+            _parameter_from_dict(parameter)
+            for parameter in data.get("parameters", []) or []
+        ],
+    )
+
+
+def _component_from_dict(data: dict) -> ParsedComponent:
+    return ParsedComponent(
+        element_name=str(data.get("element_name", "") or ""),
+        name=str(data.get("name", "") or ""),
+        description=str(data.get("description", "") or ""),
+        is_subcomp=int(data.get("is_subcomp", 0) or 0),
+        iface=str(data.get("iface", "") or ""),
+        category=str(data.get("category", "") or ""),
+        functionality=str(data.get("functionality", "") or ""),
+        checkpointable=int(data.get("checkpointable", 0) or 0),
+        parameters=[
+            _parameter_from_dict(parameter)
+            for parameter in data.get("parameters", []) or []
+        ],
+        ports=[
+            _port_from_dict(port)
+            for port in data.get("ports", []) or []
+        ],
+        subcomp_slots=[
+            _subcomp_slot_from_dict(slot)
+            for slot in data.get("subcomp_slots", []) or []
+        ],
+        statistics=[
+            _statistic_from_dict(statistic)
+            for statistic in data.get("statistics", []) or []
+        ],
+    )
+
+
+def parsed_sstinfo_from_catalog_dict(
+    catalog: dict,
+) -> tuple[list[ParsedElement], list[ParsedComponent]]:
+    """Load parsed SST metadata from a JSON component catalog."""
+
+    elements = [
+        ParsedElement(
+            name=str(element.get("name", "") or ""),
+            description=str(element.get("description", "") or ""),
+        )
+        for element in catalog.get("elements", []) or []
+    ]
+
+    components = [
+        _component_from_dict(component)
+        for component in catalog.get("components", []) or []
+    ]
+
+    return elements, components
+
+
+def read_sstinfo_catalog_json(path: str | Path) -> tuple[str, list[ParsedElement], list[ParsedComponent], dict]:
+    """Read a component metadata catalog created from parsed sst-info output."""
+
+    path_obj = Path(path)
+    catalog = json.loads(path_obj.read_text(encoding="utf-8"))
+
+    version = str(catalog.get("sst_version", "") or "")
+    elements, components = parsed_sstinfo_from_catalog_dict(catalog)
+
+    return version, elements, components, catalog
+
+
+def write_sstinfo_catalog_json(
+    *,
+    stdout: str,
+    version: str,
+    out_path: str | Path,
+) -> None:
+    """Parse raw sst-info output and write a bundled component metadata catalog."""
+
+    elements, components = parse_sstinfo_output(stdout)
+
+    catalog = parsed_sstinfo_to_catalog_dict(
+        version=version,
+        elements=elements,
+        components=components,
+    )
+
+    out = Path(out_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(
+        json.dumps(catalog, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
+def clear_sst_metadata_for_framework_version(framework_version_id: int) -> None:
+    """Delete all imported SST component metadata for one framework-version row."""
+
+    framework_version_id = int(framework_version_id)
+
+    with get_connection() as conn:
+        statistic_ids = [
+            int(row["id"])
+            for row in conn.execute(
+                "SELECT id FROM sst_statistics WHERE framework_version_id = ?",
+                (framework_version_id,),
+            ).fetchall()
+        ]
+
+        for statistic_id in statistic_ids:
+            delete_parameters_for(
+                conn,
+                framework_version_id,
+                SST_STATISTIC_PARENT_TYPE,
+                statistic_id,
+            )
+
+        conn.execute(
+            """
+            DELETE FROM sst_parameters
+            WHERE framework_version_id = ?
+              AND parent_type = ?
+            """,
+            (framework_version_id, SST_COMPONENT_PARENT_TYPE),
+        )
+        conn.execute(
+            "DELETE FROM sst_ports WHERE framework_version_id = ?",
+            (framework_version_id,),
+        )
+        conn.execute(
+            "DELETE FROM sst_subcomp_slots WHERE framework_version_id = ?",
+            (framework_version_id,),
+        )
+        conn.execute(
+            "DELETE FROM sst_statistics WHERE framework_version_id = ?",
+            (framework_version_id,),
+        )
+        conn.execute(
+            "DELETE FROM sst_components WHERE framework_version_id = ?",
+            (framework_version_id,),
+        )
+        conn.execute(
+            "DELETE FROM sst_elements WHERE framework_version_id = ?",
+            (framework_version_id,),
+        )
+
+
+def sync_sstinfo_catalog_json_to_database(
+    path: str | Path,
+    version: str | None = None,
+    label: str | None = None,
+    is_default: bool = True,
+    *,
+    source_kind: str = "bundled-sst-info-catalog",
+    source_path: str | None = None,
+    clear_existing: bool = False,
+) -> int:
+    """Populate SST DB tables from a JSON component metadata catalog."""
+
+    initialize_database()
+
+    path_obj = Path(path)
+    catalog_version, elements, components, _catalog = read_sstinfo_catalog_json(path_obj)
+    resolved_version = version or catalog_version
+
+    if not resolved_version:
+        raise ValueError(
+            f"SST component catalog {path_obj} does not declare sst_version."
+        )
+
+    with get_connection() as conn:
+        framework_version_id = resolve_framework_version_id(
+            conn=conn,
+            version=resolved_version,
+            label=label or f"SST {resolved_version}",
+            source_kind=source_kind,
+            source_path=source_path if source_path is not None else str(path_obj),
+            command=f"SST component catalog import: {path_obj}",
+            is_default=is_default,
+        )
+
+    if clear_existing:
+        clear_sst_metadata_for_framework_version(framework_version_id)
+
+    sync_parsed_sstinfo_to_database(framework_version_id, elements, components)
+
+    return framework_version_id
+
+
+def toolchain_fingerprint(
+    *,
+    version: str,
+    backend: str,
+    label: str = "",
+    sst_info_path: str = "",
+    sst_path: str = "",
+    host: str = "",
+    username: str = "",
+    remote_setup_command: str = "",
+) -> str:
+    """Return a stable identifier for a discovered SST toolchain."""
+
+    payload = json.dumps(
+        {
+            "version": version,
+            "backend": backend,
+            "label": label,
+            "sst_info_path": sst_info_path,
+            "sst_path": sst_path,
+            "host": host,
+            "username": username,
+            "remote_setup_command": remote_setup_command,
+        },
+        sort_keys=True,
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+
+
 def sync_sstinfo_to_database(
     args=None,
     version: str | None = None,
@@ -1116,194 +1386,6 @@ def sync_sstinfo_file_to_database(
     print("Database populated from file.")
 
 
-
-def parsed_sstinfo_to_catalog_dict(
-    *,
-    version: str,
-    elements: list[ParsedElement],
-    components: list[ParsedComponent],
-) -> dict:
-    """Convert parsed sst-info metadata into a bundled component catalog.
-
-    This preserves the exact structured data that FUSE already imports into the
-    SST metadata tables: components, subcomponents, parameters, ports, variable
-    port metadata, subcomponent slots, and statistics.
-    """
-
-    return {
-        "schema_version": "1.0.0",
-        "source": "sst-info",
-        "sst_version": version,
-        "elements": [asdict(element) for element in elements],
-        "components": [asdict(component) for component in components],
-    }
-
-
-def write_sstinfo_catalog_json(
-    *,
-    stdout: str,
-    version: str,
-    out_path: str | Path,
-) -> None:
-    """Parse raw sst-info output and write a reusable component catalog JSON file.
-
-    This is a maintainer/offline helper. Normal FUSE setup should not run
-    sst-info; it should import the JSON generated by this function.
-    """
-
-    elements, components = parse_sstinfo_output(stdout)
-
-    catalog = parsed_sstinfo_to_catalog_dict(
-        version=version,
-        elements=elements,
-        components=components,
-    )
-
-    out = Path(out_path)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(
-        json.dumps(catalog, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
-
-
-def _parameter_from_dict(data: dict) -> ParsedParameter:
-    return ParsedParameter(
-        name=str(data.get("name", "") or ""),
-        description=str(data.get("description", "") or ""),
-        default_val=str(data.get("default_val", "") or ""),
-        required=int(data.get("required", 0) or 0),
-    )
-
-
-def _port_from_dict(data: dict) -> ParsedPort:
-    return ParsedPort(
-        name=str(data.get("name", "") or ""),
-        description=str(data.get("description", "") or ""),
-        iface=str(data.get("iface", "") or ""),
-        is_variable=int(data.get("is_variable", 0) or 0),
-        base_name=str(data.get("base_name", "") or ""),
-        count_parameter=str(data.get("count_parameter", "") or ""),
-        default_count=int(data.get("default_count", 1) or 1),
-    )
-
-
-def _subcomp_slot_from_dict(data: dict) -> ParsedSubcompSlot:
-    return ParsedSubcompSlot(
-        name=str(data.get("name", "") or ""),
-        description=str(data.get("description", "") or ""),
-        iface=str(data.get("iface", "") or ""),
-    )
-
-
-def _statistic_from_dict(data: dict) -> ParsedStatistic:
-    return ParsedStatistic(
-        name=str(data.get("name", "") or ""),
-        description=str(data.get("description", "") or ""),
-        units=str(data.get("units", "") or ""),
-        iface=str(data.get("iface", "") or ""),
-        parameters=[
-            _parameter_from_dict(parameter)
-            for parameter in data.get("parameters", []) or []
-        ],
-    )
-
-
-def _component_from_dict(data: dict) -> ParsedComponent:
-    return ParsedComponent(
-        element_name=str(data.get("element_name", "") or ""),
-        name=str(data.get("name", "") or ""),
-        description=str(data.get("description", "") or ""),
-        is_subcomp=int(data.get("is_subcomp", 0) or 0),
-        iface=str(data.get("iface", "") or ""),
-        category=str(data.get("category", "") or ""),
-        functionality=str(data.get("functionality", "") or ""),
-        checkpointable=int(data.get("checkpointable", 0) or 0),
-        parameters=[
-            _parameter_from_dict(parameter)
-            for parameter in data.get("parameters", []) or []
-        ],
-        ports=[
-            _port_from_dict(port)
-            for port in data.get("ports", []) or []
-        ],
-        subcomp_slots=[
-            _subcomp_slot_from_dict(slot)
-            for slot in data.get("subcomp_slots", []) or []
-        ],
-        statistics=[
-            _statistic_from_dict(statistic)
-            for statistic in data.get("statistics", []) or []
-        ],
-    )
-
-
-def parsed_sstinfo_from_catalog_dict(
-    catalog: dict,
-) -> tuple[list[ParsedElement], list[ParsedComponent]]:
-    """Load parsed SST metadata from a bundled component catalog JSON object."""
-
-    elements = [
-        ParsedElement(
-            name=str(element.get("name", "") or ""),
-            description=str(element.get("description", "") or ""),
-        )
-        for element in catalog.get("elements", []) or []
-    ]
-
-    components = [
-        _component_from_dict(component)
-        for component in catalog.get("components", []) or []
-    ]
-
-    return elements, components
-
-
-def sync_sstinfo_catalog_json_to_database(
-    path: str | Path,
-    version: str | None = None,
-    label: str | None = None,
-    is_default: bool = True,
-) -> None:
-    """Populate SST DB tables from a bundled sst-info-derived JSON catalog.
-
-    This is the install/bootstrap path. It reads JSON only. It does not run or
-    parse sst-info during normal setup.
-    """
-
-    initialize_database()
-
-    path_obj = Path(path)
-    catalog = json.loads(path_obj.read_text(encoding="utf-8"))
-
-    catalog_version = str(catalog.get("sst_version", "") or "")
-    resolved_version = version or catalog_version
-
-    if not resolved_version:
-        raise ValueError(
-            f"SST component catalog {path_obj} does not declare sst_version."
-        )
-
-    with get_connection() as conn:
-        framework_version_id = resolve_framework_version_id(
-            conn=conn,
-            version=resolved_version,
-            label=label or f"SST {resolved_version}",
-            source_kind="sst-info",
-            source_path="",
-            command=f"bundled SST component catalog: {path_obj}",
-            is_default=is_default,
-        )
-
-    elements, components = parsed_sstinfo_from_catalog_dict(catalog)
-
-    print(f"Importing bundled SST component catalog {path_obj}")
-    print(f"Catalog contains {len(elements)} elements")
-    print(f"Catalog contains {len(components)} components/subcomponents")
-
-    sync_parsed_sstinfo_to_database(framework_version_id, elements, components)
-
-
 def main():
     """Command-line entry point for importing SST metadata outside the GUI."""
     parser = argparse.ArgumentParser(description="Import SST component metadata into the FUSE database.")
@@ -1327,48 +1409,52 @@ def main():
         action="store_true",
         help="Do not mark this imported SST catalog as the default target.",
     )
-
     parser.add_argument(
         "--write-component-catalog",
         default=None,
         help=(
-            "Write a bundled component metadata catalog JSON file instead of "
-            "importing into the database. With --from-file, the input is a "
-            "captured sst-info text file."
+            "Write a parsed JSON component catalog to this path instead of "
+            "syncing the parsed sst-info output directly to the database."
         ),
     )
 
     args = parser.parse_args()
 
-    if args.write_component_catalog:
-        version = args.version or default_sst_version_label()
-
-        if args.from_file:
-            stdout = Path(args.from_file).read_text(encoding="utf-8")
-        else:
-            result = get_sstinfo()
-            if result.return_code != 0:
-                raise RuntimeError(
-                    f"sst-info failed with return code {result.return_code}\n"
-                    f"STDERR:\n{result.stderr}"
-                )
-            stdout = result.stdout
-
-        write_sstinfo_catalog_json(
-            stdout=stdout,
-            version=version,
-            out_path=args.write_component_catalog,
-        )
-        print(f"Wrote SST component catalog: {args.write_component_catalog}")
-        return
-
     if args.from_file:
+        if args.write_component_catalog:
+            if not args.version:
+                raise SystemExit("--version is required when writing a component catalog.")
+            write_sstinfo_catalog_json(
+                stdout=Path(args.from_file).read_text(encoding="utf-8"),
+                version=args.version,
+                out_path=args.write_component_catalog,
+            )
+            print(f"Wrote SST component catalog: {args.write_component_catalog}")
+            return
+
         sync_sstinfo_file_to_database(
             path=args.from_file,
             version=args.version,
             label=args.label,
             is_default=not args.no_default,
         )
+        return
+
+    if args.write_component_catalog:
+        if not args.version:
+            raise SystemExit("--version is required when writing a component catalog.")
+        result = get_sstinfo()
+        if result.return_code != 0:
+            raise RuntimeError(
+                f"sst-info failed with return code {result.return_code}\n"
+                f"STDERR:\n{result.stderr}"
+            )
+        write_sstinfo_catalog_json(
+            stdout=result.stdout,
+            version=args.version,
+            out_path=args.write_component_catalog,
+        )
+        print(f"Wrote SST component catalog: {args.write_component_catalog}")
         return
 
     run_id = sync_sstinfo_to_database(
