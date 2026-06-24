@@ -57,10 +57,7 @@ from fuse.core.toolchains.discovery import (
 )
 from fuse.core.toolchains.providers import provider_from_toolchain
 from fuse.core.toolchains.version_match import compare_version_prefix
-from fuse.plugins.community.sst.get_sstinfo import (
-    sync_sstinfo_to_database,
-    validate_sst_toolchain,
-)
+from fuse.plugins.community.sst.get_sstinfo import validate_sst_toolchain
 from fuse.plugins.community.sst.policy.loader import has_policy_catalog
 
 
@@ -805,29 +802,12 @@ class ProjectSettingsDialog(QDialog):
         if not ok:
             return ok, message
 
-        try:
-            sync_sstinfo_to_database(
-                version=expected_version,
-                label=target_label,
-                is_default=True,
-                toolchain=toolchain,
-            )
-        except Exception as exc:
-            return (
-                False,
-                (
-                    "The SST toolchain version check passed, but FUSE could not "
-                    "import SST component metadata with sst-info.\n\n"
-                    f"{exc}"
-                ),
-            )
-
         return (
             True,
             (
                 f"{message}\n\n"
-                f"FUSE imported SST component metadata for {target_label} and "
-                "will use the bundled policy catalog for export validation."
+                f"FUSE will use the bundled SST component metadata and policy "
+                f"catalogs for {target_label}."
             ),
         )
 

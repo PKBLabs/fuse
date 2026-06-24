@@ -38,6 +38,7 @@ from fuse.plugin_api.interfaces import (
 )
 from fuse.core.model.subcomponents import is_visual_subcomponent_connection_parameter
 from fuse.core.persistence.database import get_connection, rows_to_dicts
+from fuse.plugins.community.sst.component_catalog import import_bundled_component_catalogs
 from fuse.plugins.community.sst.initialize_db import (
     get_or_create_sst_framework_version,
     initialize_sst_schema,
@@ -101,11 +102,13 @@ class SSTPlugin:
     def bootstrap_database(self) -> None:
         """Bootstrap SST plugin metadata that ships with FUSE.
 
-        This intentionally does not run sst-info. Users configure and validate
-        local/remote SST tools from Project Settings.
+        This intentionally does not run sst-info. Bundled JSON component
+        catalogs populate the database for the palette/list panels, and users
+        later validate local/remote tools from Project Settings.
         """
 
         self.register_bundled_policy_targets()
+        import_bundled_component_catalogs()
 
     def list_targets(self) -> list[FrameworkTarget]:
         """Return SST versions available in the local metadata database."""

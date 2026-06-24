@@ -144,30 +144,3 @@ def param_policy_override(version: str | None, component_type: str, param_name: 
 
     override = params.get(param_name, {})
     return override if isinstance(override, dict) else {}
-
-
-def _version_sort_key(version: str) -> tuple[int, ...]:
-    try:
-        return tuple(int(part) for part in normalize_sst_version(version).split("."))
-    except ValueError:
-        return (0,)
-
-
-def available_policy_catalog_versions() -> list[str]:
-    """Return SST versions that have bundled FUSE policy catalogs."""
-
-    return sorted(
-        _available_catalog_paths(),
-        key=_version_sort_key,
-    )
-
-
-def has_policy_catalog(version: str | None) -> bool:
-    """Return true when FUSE has a bundled policy catalog for this SST version."""
-
-    normalized = normalize_sst_version(version)
-
-    if not normalized:
-        return False
-
-    return normalized in _available_catalog_paths()
