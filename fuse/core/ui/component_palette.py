@@ -385,10 +385,10 @@ class ComponentPalette(QWidget):
     def load_components(self):
         """Load the palette across simulator plugins.
 
-        The selected target is authoritative for the active plugin. Other
-        plugins are still shown with their default targets, but the active
-        plugin must not also appear with its default target because that mixes
-        multiple SST/gem5 versions in one palette.
+        The active plugin/target is still preferred for that plugin, but other
+        plugins are included with their default targets so users can browse SST
+        and gem5 side-by-side. Mixed models remain editable/savable even when a
+        single-simulator exporter is selected.
         """
         try:
             if self.active_plugin_id:
@@ -396,9 +396,7 @@ class ComponentPalette(QWidget):
                     plugin_id=self.active_plugin_id,
                     target_id=self.active_target_id,
                 )
-
                 default_components = load_component_definitions()
-
                 self.components = active_components + [
                     component
                     for component in default_components

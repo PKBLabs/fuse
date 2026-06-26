@@ -65,6 +65,10 @@ from fuse.app.project_settings_dialog import ProjectSettingsDialog
 from fuse.app.splash import create_splash_screen
 from fuse.core.app_info import APP_NAME, ORG_NAME
 from fuse.core.model.project_settings import ProjectSettings
+from fuse.plugins.community.sst.component_catalog import (
+    sst_target_requires_runtime_verification,
+    verify_project_sst_runtime,
+)
 from fuse.core.model.validation import validate_model, validate_model_for_export
 from fuse.core.plugin_runtime.manager import get_plugin_by_id
 from fuse.core.persistence.composite_components import (
@@ -1742,6 +1746,68 @@ class MainWindow(QMainWindow):
         self.set_current_project_path(old_path)
         return False
 
+    def verify_sst_runtime_before_export(self, active) -> bool:
+        """Verify custom SST runtime availability before exporting SST JSON."""
+
+        if active is None or active.plugin_id != "sst":
+            return True
+
+        target_id = str(getattr(active, "target_id", "") or "")
+
+        if not sst_target_requires_runtime_verification(target_id):
+            return True
+
+        toolchain = getattr(active, "toolchain", None)
+
+        if toolchain is None:
+            QMessageBox.warning(
+                self,
+                "SST Runtime Verification Required",
+                (
+                    "This SST target was created from a discovered/custom SST "
+                    "toolchain, but no toolchain settings are available for the "
+                    "project. Open Project Settings and verify the SST runtime."
+                ),
+            )
+            return False
+
+        try:
+            report = verify_project_sst_runtime(
+                scene=self.active_model_scene(),
+                framework_version_id=target_id,
+                expected_version=getattr(active, "framework_version", "") or "",
+                target_label=getattr(active, "target_label", "") or f"SST {getattr(active, 'framework_version', '')}",
+                toolchain=toolchain,
+                timeout_seconds=120,
+            )
+        except Exception as exc:
+            QMessageBox.warning(
+                self,
+                "SST Runtime Verification Failed",
+                f"FUSE could not verify the configured SST runtime.\n\n{exc}",
+            )
+            return False
+
+        if report.errors:
+            QMessageBox.critical(
+                self,
+                "SST Runtime Verification Failed",
+                report.message(),
+            )
+            return False
+
+        if report.warnings:
+            response = QMessageBox.warning(
+                self,
+                "SST Runtime Verification Warning",
+                report.message() + "\n\nContinue exporting SST JSON anyway?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            return response == QMessageBox.Yes
+
+        return True
+
     def export_sst_json(self):
         """
         Export the current FUSE model to SST's JSON configuration format.
@@ -1773,6 +1839,9 @@ class MainWindow(QMainWindow):
             return
 
         if not self.validate_current_model_for_export():
+            return
+
+        if not self.verify_sst_runtime_before_export(active):
             return
 
         file_path, _ = QFileDialog.getSaveFileName(

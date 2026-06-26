@@ -37,15 +37,13 @@ from fuse.plugin_api.interfaces import (
     SubcompConnectorDefinition,
 )
 from fuse.core.model.subcomponents import is_visual_subcomponent_connection_parameter
-from fuse.plugins.community.sst.component_catalog import (
-    component_catalog_path_for_version,
-    import_bundled_component_catalogs,
-)
 from fuse.core.persistence.database import get_connection, rows_to_dicts
 from fuse.plugins.community.sst.initialize_db import (
     get_or_create_sst_framework_version,
     initialize_sst_schema,
 )
+from fuse.plugins.community.sst.get_sstinfo import sync_sstinfo_to_database
+from fuse.plugins.community.sst.component_catalog import import_bundled_component_catalogs
 from fuse.plugins.community.sst.policy.loader import (
     available_policy_catalog_versions,
     has_policy_catalog,
@@ -89,15 +87,13 @@ class SSTPlugin:
             ).fetchone()
 
             for version in versions:
-                catalog_path = component_catalog_path_for_version(version)
-
                 get_or_create_sst_framework_version(
                     conn=conn,
                     version=version,
                     label=f"SST {version}",
-                    source_kind="bundled-sst-info-catalog",
-                    source_path=str(catalog_path),
-                    command="bundled FUSE SST policy/component catalog",
+                    source_kind="bundled-component-catalog",
+                    source_path="",
+                    command="bundled FUSE SST policy/component catalogs",
                     is_default=(
                         existing_default is None
                         and version == default_version
@@ -105,11 +101,11 @@ class SSTPlugin:
                 )
 
     def bootstrap_database(self) -> None:
-        """Bootstrap SST metadata bundled with FUSE.
+        """Bootstrap SST plugin metadata that ships with FUSE.
 
-        This intentionally does not require sst-info to be installed. Users can
-        later validate local/remote SST tools from Project Settings, and can
-        optionally refresh custom installed SST components from that toolchain.
+        This intentionally does not run sst-info. Users configure and validate
+        local/remote SST tools from Project Settings. Bundled component catalogs
+        are imported into the database so the palette remains DB-driven.
         """
 
         self.register_bundled_policy_targets()
@@ -124,11 +120,13 @@ class SSTPlugin:
                     fv.version,
                     fv.label,
                     fv.is_default,
-                    COUNT(c.id) AS component_count
+                    fv.source_kind,
+                    (
+                        SELECT COUNT(*)
+                        FROM sst_components c
+                        WHERE c.framework_version_id = fv.id
+                    ) AS component_count
                 FROM sst_framework_versions fv
-                LEFT JOIN sst_components c
-                  ON c.framework_version_id = fv.id
-                GROUP BY fv.id, fv.version, fv.label, fv.is_default
                 ORDER BY fv.is_default DESC, fv.version DESC, fv.id DESC
             """).fetchall()
 
