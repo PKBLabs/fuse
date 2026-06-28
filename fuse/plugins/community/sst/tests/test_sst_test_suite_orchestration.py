@@ -117,7 +117,9 @@ def test_core_workflow_runs_sst_fixture_tier_after_plugin_deterministic_tests(re
 
     assert "sst-external-fixture-tests:" in text
     assert "needs: plugin-deterministic-tests" in text
-    assert "plugins/community/sst/tests" in text
+    assert "PYTHONPATH: ${{ github.workspace }}" in text
+    assert "working-directory: fuse" not in text
+    assert "fuse/plugins/community/sst/tests" in text
     assert "sst_external and not sst_live and not sst_remote and not sst_ext and not slow" in text
 
 

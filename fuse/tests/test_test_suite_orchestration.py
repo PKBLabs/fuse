@@ -60,7 +60,9 @@ def test_core_workflow_core_job_uses_only_core_test_path(repo_root: Path):
 
     core_section = text.split("  plugin-deterministic-tests:", 1)[0]
 
-    assert "python -m pytest --collect-only -q tests" in core_section
-    assert "python -m pytest -q tests" in core_section
-    assert "plugins/community/sst/tests" not in core_section
-    assert "plugins/community/gem5/tests" not in core_section
+    assert "PYTHONPATH: ${{ github.workspace }}" in text
+    assert "working-directory: fuse" not in text
+    assert "python -m pytest --collect-only -q fuse/tests" in core_section
+    assert "python -m pytest -q fuse/tests" in core_section
+    assert "fuse/plugins/community/sst/tests" not in core_section
+    assert "fuse/plugins/community/gem5/tests" not in core_section

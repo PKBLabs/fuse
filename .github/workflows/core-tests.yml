@@ -21,10 +21,9 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: fuse
 
     env:
-      PYTHONPATH: ${{ github.workspace }}/fuse
+      PYTHONPATH: ${{ github.workspace }}
       QT_QPA_PLATFORM: offscreen
       FUSE_SPLASH_MS: "0"
       FUSE_TEST_AUTOCLOSE_MS: "100"
@@ -54,24 +53,24 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r requirements-dev.txt
+          python -m pip install -r fuse/requirements-dev.txt
 
       - name: Show pytest configuration
         run: |
-          python -m pytest --markers | grep -E "sst_live|sst_remote|sst_external|sst_ext|gem5_live|slow"
-          python -m pytest --trace-config -q 2>&1 | grep -E "rootdir|configfile" || true
+          python -m pytest -c fuse/pytest.ini --markers | grep -E "sst_live|sst_remote|sst_external|sst_ext|gem5_live|slow"
+          python -m pytest -c fuse/pytest.ini --trace-config --collect-only -q fuse/tests 2>&1 | grep -E "rootdir|configfile" || true
 
       - name: Collect core tests only
         run: |
-          python -m pytest --collect-only -q tests
+          python -m pytest --collect-only -q fuse/tests
 
       - name: Run core tests only
         run: |
-          python -m pytest -q tests
+          python -m pytest -q fuse/tests
 
       - name: Run core coverage
         run: |
-          python -m pytest -q tests \
+          python -m pytest -q fuse/tests \
             --cov=fuse.core \
             --cov=fuse.app \
             --cov-report=term-missing \
@@ -81,7 +80,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coverage-core
-          path: fuse/coverage-core.xml
+          path: coverage-core.xml
           if-no-files-found: error
 
   plugin-deterministic-tests:
@@ -94,24 +93,21 @@ jobs:
       matrix:
         plugin:
           - name: SST
-            path: plugins/community/sst/tests
+            path: fuse/plugins/community/sst/tests
             markers: not sst_live and not sst_remote and not sst_ext and not sst_external and not slow
           - name: gem5
-            path: plugins/community/gem5/tests
+            path: fuse/plugins/community/gem5/tests
             markers: not gem5_live and not slow
 
     defaults:
       run:
         shell: bash
-        working-directory: fuse
 
     env:
-      PYTHONPATH: ${{ github.workspace }}/fuse
+      PYTHONPATH: ${{ github.workspace }}
       QT_QPA_PLATFORM: offscreen
       FUSE_SPLASH_MS: "0"
       FUSE_TEST_AUTOCLOSE_MS: "100"
-      FUSE_SST_VERSION: ${{ matrix.sst.version }}
-      FUSE_SST_VERSION_POLICY: major_minor_patch
 
     steps:
       - name: Check out repository
@@ -138,7 +134,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r requirements-dev.txt
+          python -m pip install -r fuse/requirements-dev.txt
 
       - name: Collect ${{ matrix.plugin.name }} deterministic plugin tests
         run: |
@@ -156,10 +152,9 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: fuse
 
     env:
-      PYTHONPATH: ${{ github.workspace }}/fuse
+      PYTHONPATH: ${{ github.workspace }}
       QT_QPA_PLATFORM: offscreen
       FUSE_SPLASH_MS: "0"
       FUSE_TEST_AUTOCLOSE_MS: "100"
@@ -190,12 +185,12 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r requirements-dev.txt
+          python -m pip install -r fuse/requirements-dev.txt
 
       - name: Collect deterministic SST external fixture tests
         run: |
-          python -m pytest --collect-only -q plugins/community/sst/tests -m "$SST_EXTERNAL_FIXTURE_MARKERS"
+          python -m pytest --collect-only -q fuse/plugins/community/sst/tests -m "$SST_EXTERNAL_FIXTURE_MARKERS"
 
       - name: Run deterministic SST external fixture tests
         run: |
-          python -m pytest -q plugins/community/sst/tests -m "$SST_EXTERNAL_FIXTURE_MARKERS"
+          python -m pytest -q fuse/plugins/community/sst/tests -m "$SST_EXTERNAL_FIXTURE_MARKERS"
