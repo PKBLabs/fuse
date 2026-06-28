@@ -1,7 +1,7 @@
 
 from __future__ import annotations
 
-from conftest import memcontroller_component, write_catalog
+from fuse.plugins.community.sst.tests.conftest import memcontroller_component, write_catalog
 
 
 def test_component_catalog_json_import_preserves_parameters_ports_slots_and_variable_metadata(sst_env, tmp_path):

@@ -18,14 +18,14 @@ are only install-time seed data and toolchain-discovery snapshots.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 import hashlib
 import json
 from pathlib import Path
 from typing import Any
 
 from fuse.core.model.project_settings import ToolchainSettings
-from fuse.core.persistence.database import get_connection, get_database_path
+from fuse.core.persistence.database import get_connection
 from fuse.plugins.community.sst.get_sstinfo import (
     ParsedComponent,
     ParsedElement,
@@ -47,7 +47,12 @@ from fuse.plugins.community.sst.policy.loader import (
 
 
 _COMPONENT_CATALOG_DIR = Path(__file__).resolve().parent / "component_catalogs"
-_CUSTOM_CATALOG_DIR = get_database_path().parent / "sst" / "component_catalogs" / "toolchains"
+
+# Custom/toolchain-discovered SST catalog snapshots are plugin-owned runtime
+# metadata.  Keep them inside the SST plugin tree instead of under the core
+# application database directory so plugin-specific data never lands in
+# ``fuse/app_data``.
+_CUSTOM_CATALOG_DIR = _COMPONENT_CATALOG_DIR / "toolchains"
 
 
 @dataclass(frozen=True)
@@ -67,6 +72,39 @@ class DiscoveredComponentEntry:
     statistic_count: int = 0
     enabled_by_default: bool = False
     previously_enabled: bool = False
+
+
+@dataclass(frozen=True)
+class ComponentMetadataDiff:
+    """Human-readable metadata differences for one discovered SST component."""
+
+    key: str
+    display_name: str
+    status: str
+    lines: tuple[str, ...] = ()
+
+    def summary(self) -> str:
+        """Return a compact one-line summary for table display."""
+
+        if self.status == "baseline":
+            return "Matches baseline"
+        if self.status == "custom":
+            return "New component"
+        if self.status == "missing":
+            return "Missing from runtime"
+        if not self.lines:
+            return "Changed"
+
+        details = [
+            line
+            for line in self.lines
+            if line.startswith(("+ ", "- ", "~ "))
+        ]
+
+        if not details:
+            return "Changed"
+
+        return "; ".join(line[2:] for line in details[:3])
 
 
 @dataclass
@@ -144,6 +182,144 @@ class SSTRuntimeVerificationReport:
             lines.append("")
             lines.append("Info:")
             lines.extend(f"- {item}" for item in self.infos)
+
+        return "\n".join(lines)
+
+
+@dataclass
+class SSTExportPolicyDiagnostics:
+    """Grouped export diagnostics for custom/changed SST component metadata."""
+
+    target_id: str = ""
+    target_label: str = ""
+    used_component_keys: set[str] = field(default_factory=set)
+    custom_component_keys: set[str] = field(default_factory=set)
+    changed_component_keys: set[str] = field(default_factory=set)
+
+    @property
+    def has_diagnostics(self) -> bool:
+        return bool(self.custom_component_keys or self.changed_component_keys)
+
+    def custom_warning_message(self) -> str:
+        names = ", ".join(
+            component_key_display_name(key)
+            for key in sorted(self.custom_component_keys)
+        )
+        return (
+            "This model uses custom SST components that are not part of the "
+            "bundled baseline SST component catalog. FUSE will use generic SST "
+            "export rules and discovered sst-info metadata for these components: "
+            f"{names}."
+        )
+
+    def changed_warning_message(self) -> str:
+        names = ", ".join(
+            component_key_display_name(key)
+            for key in sorted(self.changed_component_keys)
+        )
+        return (
+            "This model uses SST components whose discovered metadata differs "
+            "from the bundled baseline SST component catalog. FUSE will use "
+            "discovered parameter/port metadata for editing and bundled export "
+            "policy rules where they are still applicable: "
+            f"{names}."
+        )
+
+    def warning_messages(self) -> list[str]:
+        messages: list[str] = []
+
+        if self.custom_component_keys:
+            messages.append(self.custom_warning_message())
+
+        if self.changed_component_keys:
+            messages.append(self.changed_warning_message())
+
+        return messages
+
+
+@dataclass
+class SSTCatalogSourceSummary:
+    """User-facing lifecycle summary for one SST component catalog target."""
+
+    target_id: str = ""
+    target_label: str = ""
+    version: str = ""
+    source_kind: str = ""
+    source_path: str = ""
+    command_text: str = ""
+    catalog_path: str = ""
+    source_label: str = ""
+    source_fingerprint: str = ""
+    discovered_at: str = ""
+    component_count: int = 0
+    baseline_component_count: int = 0
+    enabled_custom_count: int = 0
+    enabled_changed_count: int = 0
+    disabled_discovered_count: int = 0
+    current_toolchain_fingerprint: str = ""
+    fingerprint_stale: bool = False
+
+    @property
+    def is_custom(self) -> bool:
+        return self.source_kind == "toolchain-component-catalog" or bool(
+            self.source_fingerprint
+        )
+
+    @property
+    def is_baseline(self) -> bool:
+        return not self.is_custom
+
+    @property
+    def has_target(self) -> bool:
+        return bool(self.target_id)
+
+    def short_label(self) -> str:
+        if not self.has_target:
+            return "No SST catalog target is selected."
+
+        if self.is_custom:
+            return self.target_label or f"SST {self.version} custom catalog"
+
+        return self.target_label or f"SST {self.version} bundled baseline"
+
+    def message(self) -> str:
+        if not self.has_target:
+            return "No SST catalog target is selected."
+
+        lines: list[str] = [f"Active target: {self.short_label()}"]
+
+        if self.version:
+            lines.append(f"SST version: {self.version}")
+
+        if self.is_custom:
+            lines.append(f"Source: {self.source_label or 'Discovered SST toolchain'}")
+            if self.discovered_at:
+                lines.append(f"Last discovered: {self.discovered_at}")
+            if self.catalog_path:
+                lines.append(f"Snapshot: {self.catalog_path}")
+
+            counts: list[str] = []
+            if self.baseline_component_count:
+                counts.append(f"{self.baseline_component_count} baseline")
+            if self.enabled_custom_count:
+                counts.append(f"{self.enabled_custom_count} custom")
+            if self.enabled_changed_count:
+                counts.append(f"{self.enabled_changed_count} changed")
+            if self.disabled_discovered_count:
+                counts.append(f"{self.disabled_discovered_count} disabled discovered")
+
+            lines.append("Components: " + (", ".join(counts) if counts else f"{self.component_count} total"))
+
+            if self.fingerprint_stale:
+                lines.append("")
+                lines.append(
+                    "The configured SST toolchain path/SSH settings differ from the "
+                    "toolchain used to create this custom catalog. Refresh the catalog "
+                    "before relying on it for export or run validation."
+                )
+        else:
+            lines.append("Source: Bundled FUSE baseline component catalog")
+            lines.append(f"Components: {self.component_count} baseline")
 
         return "\n".join(lines)
 
@@ -241,6 +417,194 @@ def _component_signature(component: dict[str, Any]) -> str:
     return hashlib.sha256(
         json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()
+
+
+def _record_name(record: dict[str, Any]) -> str:
+    return str(record.get("name", "") or "")
+
+
+def _record_signature(record: dict[str, Any]) -> str:
+    return hashlib.sha256(
+        json.dumps(record, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+
+def _records_by_name(records: list[dict[str, Any]] | None) -> dict[str, dict[str, Any]]:
+    result: dict[str, dict[str, Any]] = {}
+
+    for index, record in enumerate(records or []):
+        name = _record_name(record) or f"<unnamed #{index + 1}>"
+        result[name] = record
+
+    return result
+
+
+def _record_collection_diff_lines(
+    *,
+    label: str,
+    baseline_records: list[dict[str, Any]] | None,
+    discovered_records: list[dict[str, Any]] | None,
+) -> list[str]:
+    baseline_by_name = _records_by_name(baseline_records)
+    discovered_by_name = _records_by_name(discovered_records)
+
+    added = sorted(set(discovered_by_name) - set(baseline_by_name))
+    removed = sorted(set(baseline_by_name) - set(discovered_by_name))
+    changed = sorted(
+        name
+        for name in set(baseline_by_name).intersection(discovered_by_name)
+        if _record_signature(baseline_by_name[name]) != _record_signature(discovered_by_name[name])
+    )
+
+    lines: list[str] = []
+
+    if added:
+        lines.append(f"+ Added {label}: {', '.join(added)}")
+    if removed:
+        lines.append(f"- Removed {label}: {', '.join(removed)}")
+    if changed:
+        lines.append(f"~ Changed {label}: {', '.join(changed)}")
+
+    return lines
+
+
+def _scalar_metadata_diff_lines(
+    baseline_component: dict[str, Any],
+    discovered_component: dict[str, Any],
+) -> list[str]:
+    fields = [
+        ("description", "description"),
+        ("iface", "interface"),
+        ("category", "category"),
+        ("functionality", "functionality"),
+        ("checkpointable", "checkpointable"),
+    ]
+
+    lines: list[str] = []
+
+    for field_name, display_name in fields:
+        baseline_value = baseline_component.get(field_name, "") or ""
+        discovered_value = discovered_component.get(field_name, "") or ""
+
+        if field_name == "checkpointable":
+            baseline_value = int(baseline_value or 0)
+            discovered_value = int(discovered_value or 0)
+
+        if baseline_value != discovered_value:
+            lines.append(
+                f"~ Changed {display_name}: {baseline_value!r} → {discovered_value!r}"
+            )
+
+    return lines
+
+
+def describe_component_metadata_diff(
+    *,
+    key: str,
+    baseline_catalog: dict[str, Any],
+    discovered_catalog: dict[str, Any],
+) -> ComponentMetadataDiff:
+    """Return user-facing metadata differences for one discovered SST component.
+
+    The custom component manager uses this to explain why a row is classified as
+    custom, changed, missing, or baseline without requiring users to inspect JSON.
+    """
+
+    baseline_by_key = _catalog_component_map(baseline_catalog)
+    discovered_by_key = _catalog_component_map(discovered_catalog)
+
+    baseline_component = baseline_by_key.get(key)
+    discovered_component = discovered_by_key.get(key)
+    component = discovered_component or baseline_component or {}
+    display_name = _component_display_name(component) if component else key
+
+    if discovered_component is None and baseline_component is None:
+        return ComponentMetadataDiff(
+            key=key,
+            display_name=display_name,
+            status="unknown",
+            lines=("Component metadata is not available in either catalog.",),
+        )
+
+    if baseline_component is None and discovered_component is not None:
+        return ComponentMetadataDiff(
+            key=key,
+            display_name=display_name,
+            status="custom",
+            lines=(
+                "This component was discovered from the configured SST installation, "
+                "but it is not part of the bundled baseline catalog.",
+                f"Parameters: {len(discovered_component.get('parameters', []) or [])}",
+                f"Ports: {len(discovered_component.get('ports', []) or [])}",
+                f"Subcomponent slots: {len(discovered_component.get('subcomp_slots', []) or [])}",
+                f"Statistics: {len(discovered_component.get('statistics', []) or [])}",
+            ),
+        )
+
+    if discovered_component is None and baseline_component is not None:
+        return ComponentMetadataDiff(
+            key=key,
+            display_name=display_name,
+            status="missing",
+            lines=(
+                "This bundled baseline component was not exposed by the configured "
+                "SST installation during discovery.",
+                "Projects can still use the bundled metadata for editing, but running "
+                "against this SST installation may fail if the component is required.",
+            ),
+        )
+
+    assert baseline_component is not None
+    assert discovered_component is not None
+
+    if _component_signature(baseline_component) == _component_signature(discovered_component):
+        return ComponentMetadataDiff(
+            key=key,
+            display_name=display_name,
+            status="baseline",
+            lines=("The discovered metadata matches the bundled baseline catalog.",),
+        )
+
+    lines: list[str] = ["This component differs from the bundled baseline catalog."]
+    lines.extend(_scalar_metadata_diff_lines(baseline_component, discovered_component))
+    lines.extend(
+        _record_collection_diff_lines(
+            label="parameters",
+            baseline_records=baseline_component.get("parameters", []) or [],
+            discovered_records=discovered_component.get("parameters", []) or [],
+        )
+    )
+    lines.extend(
+        _record_collection_diff_lines(
+            label="ports",
+            baseline_records=baseline_component.get("ports", []) or [],
+            discovered_records=discovered_component.get("ports", []) or [],
+        )
+    )
+    lines.extend(
+        _record_collection_diff_lines(
+            label="subcomponent slots",
+            baseline_records=baseline_component.get("subcomp_slots", []) or [],
+            discovered_records=discovered_component.get("subcomp_slots", []) or [],
+        )
+    )
+    lines.extend(
+        _record_collection_diff_lines(
+            label="statistics",
+            baseline_records=baseline_component.get("statistics", []) or [],
+            discovered_records=discovered_component.get("statistics", []) or [],
+        )
+    )
+
+    if len(lines) == 1:
+        lines.append("The metadata changed, but FUSE could not reduce the difference to named fields.")
+
+    return ComponentMetadataDiff(
+        key=key,
+        display_name=display_name,
+        status="changed",
+        lines=tuple(lines),
+    )
 
 
 def _catalog_component_map(catalog: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -596,7 +960,7 @@ def _merge_catalog_for_selection(
         "schema_version": "1.0.0",
         "source": "FUSE custom SST component catalog",
         "sst_version": normalize_sst_version(version),
-        "generated_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        "generated_at": datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z"),
         "baseline_component_catalog": f"sst-{normalize_sst_version(version)}.json",
         "elements": sorted(
             merged_elements.values(),
@@ -636,6 +1000,7 @@ def _record_catalog_source_and_enablement(
     discovery: SSTComponentDiscovery,
     enabled_keys: set[str],
     catalog_path: Path,
+    project_uid: str = "",
 ) -> None:
     with get_connection() as conn:
         cursor = conn.execute(
@@ -688,6 +1053,8 @@ def _record_catalog_source_and_enablement(
             if entry.status not in {"custom", "changed"}:
                 continue
 
+            enabled = 1 if entry.key in enabled_keys else 0
+
             conn.execute(
                 """
                 INSERT INTO sst_component_enablement (
@@ -702,9 +1069,43 @@ def _record_catalog_source_and_enablement(
                     source_id,
                     entry.key,
                     entry.status,
-                    1 if entry.key in enabled_keys else 0,
+                    enabled,
                 ),
             )
+
+            if project_uid:
+                conn.execute(
+                    """
+                    INSERT INTO sst_project_component_enablement (
+                        project_key,
+                        framework_version_id,
+                        base_version,
+                        source_fingerprint,
+                        component_key,
+                        status,
+                        enabled,
+                        reason,
+                        updated_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'user-selection', CURRENT_TIMESTAMP)
+                    ON CONFLICT(project_key, base_version, source_fingerprint, component_key)
+                    DO UPDATE SET
+                        framework_version_id = excluded.framework_version_id,
+                        status = excluded.status,
+                        enabled = excluded.enabled,
+                        reason = excluded.reason,
+                        updated_at = CURRENT_TIMESTAMP
+                    """,
+                    (
+                        project_uid,
+                        framework_version_id,
+                        discovery.version,
+                        discovery.source_fingerprint,
+                        entry.key,
+                        entry.status,
+                        enabled,
+                    ),
+                )
 
 
 def import_custom_component_selection(
@@ -766,6 +1167,7 @@ def import_custom_component_selection(
         discovery=discovery,
         enabled_keys=actionable_enabled,
         catalog_path=catalog_path,
+        project_uid=project_uid,
     )
 
     return framework_version_id, label, catalog_path
@@ -863,6 +1265,301 @@ def _target_metadata(framework_version_id: int) -> dict[str, Any]:
     return dict(row) if row is not None else {}
 
 
+def bundled_target_for_version(version: str) -> tuple[str, str] | None:
+    """Return the bundled baseline SST target id/label for a version, if present."""
+
+    normalized = normalize_sst_version(version)
+
+    if not normalized:
+        return None
+
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT id, label
+            FROM sst_framework_versions
+            WHERE version = ?
+              AND source_kind = 'bundled-component-catalog'
+              AND source_path = ''
+            ORDER BY is_default DESC, id ASC
+            LIMIT 1
+            """,
+            (normalized,),
+        ).fetchone()
+
+    if row is None:
+        return None
+
+    return str(row["id"]), str(row["label"] or f"SST {normalized}")
+
+
+def _catalog_source_for_target(framework_version_id: int) -> dict[str, Any]:
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT
+                id,
+                framework_version_id,
+                base_version,
+                source_kind,
+                source_label,
+                source_fingerprint,
+                catalog_path,
+                discovered_at
+            FROM sst_component_catalog_sources
+            WHERE framework_version_id = ?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (framework_version_id,),
+        ).fetchone()
+
+    return dict(row) if row is not None else {}
+
+
+def _enablement_counts_for_source(source_id: int | None) -> dict[str, int]:
+    if not source_id:
+        return {
+            "enabled_custom_count": 0,
+            "enabled_changed_count": 0,
+            "disabled_discovered_count": 0,
+        }
+
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT status, enabled, COUNT(*) AS count
+            FROM sst_component_enablement
+            WHERE source_id = ?
+            GROUP BY status, enabled
+            """,
+            (source_id,),
+        ).fetchall()
+
+    counts = {
+        "enabled_custom_count": 0,
+        "enabled_changed_count": 0,
+        "disabled_discovered_count": 0,
+    }
+
+    for row in rows:
+        status = str(row["status"] or "")
+        enabled = int(row["enabled"] or 0)
+        count = int(row["count"] or 0)
+
+        if enabled and status == "custom":
+            counts["enabled_custom_count"] += count
+        elif enabled and status == "changed":
+            counts["enabled_changed_count"] += count
+        elif not enabled and status in {"custom", "changed"}:
+            counts["disabled_discovered_count"] += count
+
+    return counts
+
+
+def catalog_source_summary_for_target(
+    framework_version_id: int | str | None,
+    *,
+    toolchain: ToolchainSettings | None = None,
+    project_uid: str = "",
+) -> SSTCatalogSourceSummary:
+    """Return a user-facing lifecycle summary for the selected SST catalog target."""
+
+    if framework_version_id in (None, ""):
+        return SSTCatalogSourceSummary()
+
+    try:
+        target_id = int(framework_version_id)
+    except (TypeError, ValueError):
+        return SSTCatalogSourceSummary(target_id=str(framework_version_id or ""))
+
+    metadata = _target_metadata(target_id)
+
+    if not metadata:
+        return SSTCatalogSourceSummary(target_id=str(framework_version_id or ""))
+
+    version = normalize_sst_version(str(metadata.get("version", "") or ""))
+    source = _catalog_source_for_target(target_id)
+    source_id = int(source.get("id") or 0) if source else None
+
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT COUNT(*) AS count
+            FROM sst_components
+            WHERE framework_version_id = ?
+            """,
+            (target_id,),
+        ).fetchone()
+
+    component_count = int(row["count"] or 0) if row is not None else 0
+
+    baseline_count = 0
+    try:
+        baseline_catalog = load_component_catalog(version)
+        baseline_count = len(baseline_catalog.get("components", []) or [])
+    except Exception:
+        baseline_count = 0
+
+    enablement_counts = _enablement_counts_for_source(source_id)
+
+    current_fingerprint = ""
+    fingerprint_stale = False
+
+    if toolchain is not None and source:
+        current_fingerprint = _toolchain_fingerprint(version, toolchain, project_uid=project_uid)
+        stored_fingerprint = str(source.get("source_fingerprint", "") or "")
+        fingerprint_stale = bool(stored_fingerprint and current_fingerprint != stored_fingerprint)
+
+    return SSTCatalogSourceSummary(
+        target_id=str(target_id),
+        target_label=str(metadata.get("label", "") or ""),
+        version=version,
+        source_kind=str(metadata.get("source_kind", "") or ""),
+        source_path=str(metadata.get("source_path", "") or ""),
+        command_text=str(metadata.get("sst_info_command", "") or ""),
+        catalog_path=str(source.get("catalog_path", "") or ""),
+        source_label=str(source.get("source_label", "") or ""),
+        source_fingerprint=str(source.get("source_fingerprint", "") or ""),
+        discovered_at=str(source.get("discovered_at", "") or ""),
+        component_count=component_count,
+        baseline_component_count=baseline_count,
+        current_toolchain_fingerprint=current_fingerprint,
+        fingerprint_stale=fingerprint_stale,
+        **enablement_counts,
+    )
+
+
+def revert_target_to_bundled_baseline(
+    framework_version_id: int | str | None,
+) -> tuple[str, str] | None:
+    """Return the bundled baseline target for the selected target's SST version."""
+
+    if framework_version_id in (None, ""):
+        return None
+
+    try:
+        target_id = int(framework_version_id)
+    except (TypeError, ValueError):
+        return None
+
+    metadata = _target_metadata(target_id)
+    version = str(metadata.get("version", "") or "")
+
+    if not version:
+        return None
+
+    return bundled_target_for_version(version)
+
+
+def delete_custom_catalog_target(
+    framework_version_id: int | str | None,
+    *,
+    force: bool = False,
+) -> tuple[bool, str]:
+    """Delete a toolchain-discovered custom target and its DB metadata.
+
+    Bundled baseline targets are intentionally protected.
+    """
+
+    if framework_version_id in (None, ""):
+        return False, "No SST target is selected."
+
+    try:
+        target_id = int(framework_version_id)
+    except (TypeError, ValueError):
+        return False, f"Invalid SST target id: {framework_version_id!r}."
+
+    metadata = _target_metadata(target_id)
+
+    if not metadata:
+        return False, f"SST target {target_id} was not found."
+
+    if str(metadata.get("source_kind", "") or "") != "toolchain-component-catalog":
+        return False, "Only toolchain-discovered custom SST catalog targets can be deleted."
+
+    with get_connection() as conn:
+        usage_rows = conn.execute(
+            """
+            SELECT project_key, COUNT(*) AS count
+            FROM sst_project_component_enablement
+            WHERE framework_version_id = ?
+            GROUP BY project_key
+            """,
+            (target_id,),
+        ).fetchall()
+
+        if usage_rows and not force:
+            projects = ", ".join(str(row["project_key"] or "<unknown>") for row in usage_rows[:5])
+            extra = "" if len(usage_rows) <= 5 else f" and {len(usage_rows) - 5} more"
+            return (
+                False,
+                "This custom SST catalog target has project-scoped enablement "
+                f"records for {projects}{extra}. Confirm deletion to remove it.",
+            )
+
+        source_rows = conn.execute(
+            """
+            SELECT id, catalog_path
+            FROM sst_component_catalog_sources
+            WHERE framework_version_id = ?
+            """,
+            (target_id,),
+        ).fetchall()
+
+        for row in source_rows:
+            conn.execute(
+                "DELETE FROM sst_component_enablement WHERE source_id = ?",
+                (int(row["id"]),),
+            )
+
+        conn.execute(
+            "DELETE FROM sst_component_catalog_sources WHERE framework_version_id = ?",
+            (target_id,),
+        )
+        conn.execute(
+            "DELETE FROM sst_project_component_enablement WHERE framework_version_id = ?",
+            (target_id,),
+        )
+
+        # Delete child metadata explicitly so this works even when SQLite foreign
+        # key enforcement is disabled by the connection configuration.
+        for table in (
+            "sst_ports",
+            "sst_subcomp_slots",
+            "sst_statistics",
+            "sst_parameters",
+            "sst_components",
+            "sst_elements",
+            "sst_info_runs",
+        ):
+            conn.execute(
+                f"DELETE FROM {table} WHERE framework_version_id = ?",
+                (target_id,),
+            )
+
+        conn.execute(
+            "DELETE FROM sst_framework_versions WHERE id = ?",
+            (target_id,),
+        )
+
+    deleted_paths: list[str] = []
+    for row in source_rows:
+        path_text = str(row["catalog_path"] or "")
+        if not path_text:
+            continue
+        try:
+            path = Path(path_text)
+            if path.exists() and _CUSTOM_CATALOG_DIR in path.resolve().parents:
+                path.unlink()
+                deleted_paths.append(str(path))
+        except Exception:
+            pass
+
+    suffix = f" Deleted {len(deleted_paths)} catalog snapshot file(s)." if deleted_paths else ""
+    return True, f"Deleted custom SST catalog target {metadata.get('label') or target_id}.{suffix}"
+
+
 def sst_target_requires_runtime_verification(framework_version_id: int | str | None) -> bool:
     """Return true if an SST target depends on a discovered/custom runtime."""
 
@@ -883,6 +1580,84 @@ def sst_target_requires_runtime_verification(framework_version_id: int | str | N
         return True
 
     return bool(_enabled_discovered_component_keys_for_target(target_id))
+
+
+def export_policy_diagnostics_for_scene(scene) -> SSTExportPolicyDiagnostics:
+    """Return grouped export diagnostics for custom/changed components in a scene.
+
+    The exporter uses this to avoid noisy per-parameter messages. Bundled
+    baseline models return an empty diagnostic report. Toolchain-discovered
+    targets report only custom/changed components that are actually used by the
+    model.
+    """
+
+    try:
+        from fuse.core.model.composite_flattening import flatten_scene_for_export
+
+        scene = flatten_scene_for_export(scene)
+    except Exception:
+        pass
+
+    target_ids: set[str] = set()
+
+    for node in list(getattr(scene, "component_items", lambda: [])()):
+        component = getattr(node, "component", None)
+        if component is None:
+            continue
+
+        if str(getattr(component, "plugin_id", "") or "") != "sst":
+            continue
+
+        target_id = str(getattr(component, "target_id", "") or "").strip()
+        if target_id:
+            target_ids.add(target_id)
+
+    if len(target_ids) != 1:
+        return SSTExportPolicyDiagnostics(
+            used_component_keys=used_sst_component_keys_for_scene(scene),
+        )
+
+    target_id_text = next(iter(target_ids))
+
+    try:
+        target_id = int(target_id_text)
+    except (TypeError, ValueError):
+        return SSTExportPolicyDiagnostics(
+            target_id=target_id_text,
+            used_component_keys=used_sst_component_keys_for_scene(scene),
+        )
+
+    status_by_key = _enabled_discovered_component_keys_for_target(target_id)
+
+    if not status_by_key:
+        metadata = _target_metadata(target_id)
+        return SSTExportPolicyDiagnostics(
+            target_id=target_id_text,
+            target_label=str(metadata.get("label", "") or ""),
+            used_component_keys=used_sst_component_keys_for_scene(scene),
+        )
+
+    used_keys = used_sst_component_keys_for_scene(scene)
+    custom_keys = {
+        key
+        for key in used_keys
+        if status_by_key.get(key) == "custom"
+    }
+    changed_keys = {
+        key
+        for key in used_keys
+        if status_by_key.get(key) == "changed"
+    }
+
+    metadata = _target_metadata(target_id)
+
+    return SSTExportPolicyDiagnostics(
+        target_id=target_id_text,
+        target_label=str(metadata.get("label", "") or ""),
+        used_component_keys=used_keys,
+        custom_component_keys=custom_keys,
+        changed_component_keys=changed_keys,
+    )
 
 
 def verify_project_sst_runtime(

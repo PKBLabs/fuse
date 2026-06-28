@@ -1,0 +1,10 @@
+This header is intentionally ignored by the parser.
+ELEMENT LIBRARY 0 = oddElement (Odd element)
+Components (1 total)
+Component 0: OddComponent
+Description: Component with continuation lines
+Parameters (1 total)
+long_param: First line [default]
+continued description text
+Ports (1 total)
+port%d: Simple printf variable port

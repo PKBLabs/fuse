@@ -1,7 +1,7 @@
 
 from __future__ import annotations
 
-from conftest import (
+from fuse.plugins.community.sst.tests.conftest import (
     cache_component,
     custom_cpu_component,
     memcontroller_component,
@@ -48,7 +48,7 @@ def test_custom_target_does_not_pollute_bundled_baseline_target(sst_env):
 
     baseline_catalog = baseline("16.0.0")
     baseline_path = env.tmp_path / "baseline.json"
-    from conftest import write_catalog, make_catalog
+    from fuse.plugins.community.sst.tests.conftest import write_catalog, make_catalog
     write_catalog(baseline_path, baseline_catalog)
 
     baseline_id = env.get_sstinfo.sync_sstinfo_catalog_json_to_database(

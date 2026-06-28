@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from conftest import cache_component, custom_cpu_component, make_catalog, write_catalog
+from fuse.plugins.community.sst.tests.conftest import cache_component, custom_cpu_component, make_catalog, write_catalog
 
 
 def _scene_using(element: str, name: str, *, is_subcomp: int = 0):

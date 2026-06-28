@@ -274,7 +274,7 @@ def validate_subcomp_attachments(scene) -> list[ValidationIssue]:
                         attachment_id=attachment.attachment_id,
                         severity="warning",
                         message=(
-                            "SubComponent interface metadata mismatch: slot declares "
+                            "SubComponent interface mismatch: slot metadata declares "
                             f"{attachment.required_interface}, but subcomponent declares "
                             f"{attachment.provided_interface}. "
                             "FUSE will use the visual parent/slot attachment for export."

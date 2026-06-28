@@ -7,64 +7,69 @@
 # terms of the GNU General Public License as published by the Free Software
 # Foundation, either version 3 of the License, or, at your option, any later
 # version.
-"""Tests that lock down the pytest/GitHub Actions tier contract.
+"""Core-only tests for repository-level test infrastructure.
 
-These tests are intentionally dependency-light. They make CI wiring changes
-visible in the fast suite so live simulator coverage is not accidentally
-removed while editing workflows or pytest markers.
+Plugin-specific SST/gem5 test-suite assertions belong under the corresponding
+plugin test directories.  This file only verifies that the core suite remains
+core-only and that plugin tiers are ordered after the core tier in CI.
 """
 
+from __future__ import annotations
 
-def test_pytest_configuration_declares_all_simulator_test_tiers(repo_root):
+from pathlib import Path
+
+from fuse.tools.run_tests import SUITES, build_pytest_args
+
+
+def test_pytest_configuration_includes_core_test_path(repo_root: Path):
     pytest_ini = (repo_root / "fuse" / "pytest.ini").read_text(encoding="utf-8")
 
-    for test_path in (
-        "tests",
-        "plugins/community/sst/tests",
-        "plugins/community/gem5/tests",
-    ):
-        assert test_path in pytest_ini
-
-    for marker in ("sst_live", "sst_ext", "sst_15", "sst_16", "gem5_live"):
-        assert f"{marker}:" in pytest_ini
+    assert "tests" in pytest_ini
 
 
-def test_core_workflow_preserves_fast_live_and_external_sst_tiers(repo_root):
-    workflow = (
-        repo_root / ".github" / "workflows" / "core-tests.yml"
-    ).read_text(encoding="utf-8")
+def test_core_suite_is_registered_and_core_only():
+    assert "core" in SUITES
+    assert "coverage-core" in SUITES
 
-    assert (
-        'python -m pytest -q -m "not sst_live and not gem5_live and not sst_ext"'
-        in workflow
+    args = build_pytest_args("core")
+
+    assert "fuse/tests" in args
+    assert "fuse/plugins/community/sst/tests" not in args
+    assert "fuse/plugins/community/gem5/tests" not in args
+    assert "-m" not in args
+
+
+def test_core_coverage_suite_is_registered_and_core_only():
+    args = build_pytest_args("coverage-core")
+
+    assert "fuse/tests" in args
+    assert "fuse/plugins/community/sst/tests" not in args
+    assert "fuse/plugins/community/gem5/tests" not in args
+    assert "--cov=fuse.core" in args
+    assert "--cov=fuse.app" in args
+    assert "--cov=fuse.plugins.community.sst" not in args
+    assert "--cov=fuse.plugins.community.gem5" not in args
+
+
+def test_core_workflow_runs_core_tier_before_plugin_tiers(repo_root: Path):
+    workflow = (repo_root / ".github" / "workflows" / "core-tests.yml").read_text(
+        encoding="utf-8"
     )
-    assert "sst-live:" in workflow
-    assert "sst-external-validation:" in workflow
-    assert 'FUSE_ENABLE_SST_EXT_TESTS: "1"' in workflow
-    assert "SST_EXT_TESTS_ROOT: /opt/sst-ext-tests" in workflow
-    assert "FUSE_SST_VERSION_POLICY: major_minor_patch" in workflow
-    assert '/tmp/fuse-venv/bin/python -m pytest -q -m "sst_live"' in workflow
-    assert '/tmp/fuse-venv/bin/python -m pytest -q -m "sst_ext"' in workflow
+
+    assert "core-tests:" in workflow
+    assert "plugin-deterministic-tests:" in workflow
+    assert "sst-external-fixture-tests:" in workflow
+    assert "needs: core-tests" in workflow
+    assert "needs: plugin-deterministic-tests" in workflow
 
 
-def test_standalone_sst_external_workflow_matches_pytest_contract(repo_root):
-    workflow = (
-        repo_root / ".github" / "workflows" / "sst-external-validation.yml"
-    ).read_text(encoding="utf-8")
+def test_core_workflow_core_job_uses_only_core_test_path(repo_root: Path):
+    workflow = (repo_root / ".github" / "workflows" / "core-tests.yml").read_text(
+        encoding="utf-8"
+    )
+    core_job = workflow.split("  plugin-deterministic-tests:", 1)[0]
 
-    assert 'FUSE_ENABLE_SST_EXT_TESTS: "1"' in workflow
-    assert "SST_EXT_TESTS_ROOT: /opt/sst-ext-tests" in workflow
-    assert "FUSE_SST_VERSION_POLICY: major_minor_patch" in workflow
-    assert "sst-info simpleElementExample" in workflow
-    assert '/tmp/fuse-venv/bin/python -m pytest -q -m "sst_ext"' in workflow
-
-
-def test_standalone_sst_live_workflow_matches_pytest_contract(repo_root):
-    workflow = (
-        repo_root / ".github" / "workflows" / "sst-integration.yml"
-    ).read_text(encoding="utf-8")
-
-    assert "FUSE_SST_VERSION:" in workflow
-    assert "FUSE_SST_VERSION_POLICY: major_minor_patch" in workflow
-    assert "sst-info > /tmp/sst-info.txt" in workflow
-    assert '/tmp/fuse-venv/bin/python -m pytest -q -m "sst_live"' in workflow
+    assert "python -m pytest --collect-only -q tests" in core_job
+    assert "python -m pytest -q tests" in core_job
+    assert "plugins/community/sst/tests" not in core_job
+    assert "plugins/community/gem5/tests" not in core_job

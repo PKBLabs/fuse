@@ -111,6 +111,12 @@ class SSTPlugin:
         self.register_bundled_policy_targets()
         import_bundled_component_catalogs()
 
+        if shutil.which("sst-info") is None:
+            print(
+                "SST plugin: sst-info not found; using bundled SST component catalogs. "
+                "Configure local or remote SST tools in Project Settings to refresh metadata."
+            )
+
     def list_targets(self) -> list[FrameworkTarget]:
         """Return SST versions available in the local metadata database."""
         with get_connection() as conn:
@@ -131,13 +137,9 @@ class SSTPlugin:
             """).fetchall()
 
         targets = []
-        supported_versions = set(available_policy_catalog_versions())
 
         for row in rows_to_dicts(rows):
             version = str(row["version"] or "")
-
-            if version not in supported_versions:
-                continue
 
             if int(row.get("component_count", 0) or 0) <= 0:
                 continue
