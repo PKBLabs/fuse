@@ -36,13 +36,18 @@ from fuse.plugin_api.interfaces import (
     PropertyDefinition,
     SubcompConnectorDefinition,
 )
+from fuse.core.model.subcomponents import is_visual_subcomponent_connection_parameter
 from fuse.core.persistence.database import get_connection, rows_to_dicts
-from fuse.plugins.community.sst.initialize_db import initialize_sst_schema
-from fuse.plugins.community.sst.get_sstinfo import (
-    sync_sstinfo_to_database,
-    validate_sst_toolchain,
+from fuse.plugins.community.sst.component_catalog import import_bundled_component_catalogs
+from fuse.plugins.community.sst.initialize_db import (
+    get_or_create_sst_framework_version,
+    initialize_sst_schema,
 )
-
+from fuse.plugins.community.sst.policy.loader import (
+    available_policy_catalog_versions,
+    has_policy_catalog,
+)
+from fuse.plugins.community.sst.policy.bootstrap import ensure_sst_policy_catalogs
 
 @dataclass
 class SSTPlugin:
@@ -55,37 +60,55 @@ class SSTPlugin:
         """Create or migrate SST-specific metadata tables."""
         initialize_sst_schema(conn)
 
-    def bootstrap_database(self) -> None:
-        """Import local SST metadata when ``sst-info`` is available."""
-        if shutil.which("sst-info") is None:
-            print("SST plugin: sst-info not found; skipping SST import.")
+    def register_bundled_policy_targets(self) -> None:
+        """Register bundled SST policy catalogs as selectable FUSE targets.
+
+        This makes Project Settings show supported SST versions even before the
+        user has configured local or remote SST tools.
+        """
+
+        versions = available_policy_catalog_versions()
+
+        if not versions:
+            print("SST plugin: no bundled SST policy catalogs were found.")
             return
 
-        requested_version = os.environ.get("FUSE_SST_VERSION", "15.0.0")
-        force_refresh = os.environ.get("FUSE_REFRESH_SSTINFO", "0") == "1"
+        default_version = versions[-1]
 
         with get_connection() as conn:
-            row = conn.execute("""
-                SELECT COUNT(*) AS count
-                FROM sst_info_runs r
-                JOIN sst_framework_versions fv ON r.framework_version_id = fv.id
-                WHERE r.return_code = 0
-                  AND fv.version = ?
-            """, (requested_version,)).fetchone()
+            existing_default = conn.execute(
+                """
+                SELECT id
+                FROM sst_framework_versions
+                WHERE is_default = 1
+                LIMIT 1
+                """
+            ).fetchone()
 
-        successful_runs = int(row["count"]) if row is not None else 0
+            for version in versions:
+                get_or_create_sst_framework_version(
+                    conn=conn,
+                    version=version,
+                    label=f"SST {version}",
+                    source_kind="sst-info",
+                    source_path="",
+                    command="bundled FUSE SST policy catalog",
+                    is_default=(
+                        existing_default is None
+                        and version == default_version
+                    ),
+                )
 
-        if successful_runs > 0 and not force_refresh:
-            print(f"SST plugin: existing successful SST {requested_version} import found; skipping refresh.")
-            print("SST plugin: set FUSE_REFRESH_SSTINFO=1 to force refresh.")
-            return
+    def bootstrap_database(self) -> None:
+        """Bootstrap SST plugin metadata that ships with FUSE.
 
-        print(f"SST plugin: running sst-info import for SST {requested_version}...")
-        sync_sstinfo_to_database(
-            version=requested_version,
-            label=f"SST {requested_version}",
-            is_default=True,
-        )
+        This intentionally does not run sst-info. Bundled JSON component
+        catalogs populate the database for the palette/list panels, and users
+        later validate local/remote tools from Project Settings.
+        """
+
+        self.register_bundled_policy_targets()
+        import_bundled_component_catalogs()
 
     def list_targets(self) -> list[FrameworkTarget]:
         """Return SST versions available in the local metadata database."""
@@ -97,15 +120,21 @@ class SSTPlugin:
             """).fetchall()
 
         targets = []
+        supported_versions = set(available_policy_catalog_versions())
 
         for row in rows_to_dicts(rows):
+            version = str(row["version"] or "")
+
+            if version not in supported_versions:
+                continue
+
             targets.append(
                 FrameworkTarget(
                     plugin_id=self.plugin_id,
                     target_id=str(row["id"]),
-                    display_name=row["label"] or f"SST {row['version']}",
+                    display_name=row["label"] or f"SST {version}",
                     framework_name="SST",
-                    framework_version=row["version"],
+                    framework_version=version,
                     is_default=bool(row["is_default"]),
                 )
             )
@@ -295,26 +324,45 @@ class SSTPlugin:
             for row in rows_to_dicts(slots)
         ]
 
-        if bool(component_dict["is_subcomp"]) and (component_dict.get("iface") or ""):
+        if bool(component_dict["is_subcomp"]):
             subcomp_connectors.append(
                 SubcompConnectorDefinition(
                     name="interface",
                     role="interface",
-                    description="SubComponent interface connector",
+                    description=(
+                        "SubComponent interface connector"
+                        if component_dict.get("iface")
+                        else "SubComponent interface connector (interface unspecified)"
+                    ),
                     provided_interface=component_dict["iface"] or "",
                     interface=component_dict["iface"] or "",
                 )
             )
 
-        properties = [
-            PropertyDefinition(
-                name=row["name"],
-                description=row["description"] or "",
-                default_value=row["default_val"] or "",
-                required=bool(row["required"]),
+        properties = []
+        component_is_subcomponent = bool(component_dict["is_subcomp"])
+        for row in rows_to_dicts(params_rows):
+            property_definition = {
+                "name": row["name"],
+                "description": row["description"] or "",
+                "default_val": row["default_val"] or "",
+                "required": bool(row["required"]),
+            }
+            required = bool(row["required"])
+            if is_visual_subcomponent_connection_parameter(
+                property_definition,
+                component_is_subcomponent=component_is_subcomponent,
+            ):
+                required = False
+
+            properties.append(
+                PropertyDefinition(
+                    name=row["name"],
+                    description=row["description"] or "",
+                    default_value=row["default_val"] or "",
+                    required=required,
+                )
             )
-            for row in rows_to_dicts(params_rows)
-        ]
 
         return ItemDetails(
             palette_item=palette_item,
@@ -385,14 +433,16 @@ class SSTPlugin:
             return LinkCompatibilityResult()
 
         return LinkCompatibilityResult(
-            can_create=False,
-            severity="error",
+            can_create=True,
+            severity="warning",
             title="SST SubComponent Interface Mismatch",
             code="sst.subcomponent_slot_interface_mismatch",
-            visual_indicator="error",
+            visual_indicator="warning",
             message=(
-                "The selected SST SubComponent does not implement the interface "
-                "required by this slot.\n\n"
+                "The selected SST SubComponent does not declare the exact "
+                "interface required by this slot. SST interface names are not "
+                "always standardized, so this may still be the correct "
+                "assignment.\n\n"
                 f"Slot requires: {slot_iface}\n"
                 f"SubComponent provides: {subcomponent_iface}"
             ),

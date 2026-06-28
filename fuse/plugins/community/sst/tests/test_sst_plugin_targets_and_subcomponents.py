@@ -164,6 +164,7 @@ def test_sst_subcomponent_slot_compatibility_ok_warning_and_error():
     assert warning.can_create is True
     assert warning.severity == "warning"
     assert warning.code == "sst.subcomponent_slot_unknown_interface"
-    assert error.can_create is False
-    assert error.severity == "error"
+    assert error.can_create is True
+    assert error.severity == "warning"
     assert error.code == "sst.subcomponent_slot_interface_mismatch"
+    assert error.visual_indicator == "warning"

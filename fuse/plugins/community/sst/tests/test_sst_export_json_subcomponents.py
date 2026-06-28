@@ -62,7 +62,7 @@ def test_build_sst_json_nests_subcomponents_and_omits_child_from_roots():
         2,
         "mmu0",
         _component("mmu", "simpleMMU", is_subcomp=1),
-        {"page_size": "4096"},
+        {"page_size": "4096", "port": "legacy-lowlink", "port_name": "legacy-linkcontrol"},
     )
     attachment = ModelSubcompAttachment(
         attachment_id=1,

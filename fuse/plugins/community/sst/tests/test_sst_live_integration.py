@@ -13,13 +13,17 @@
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 from __future__ import annotations
 
-import os
 import shutil
 import subprocess
 from types import SimpleNamespace
 
 import pytest
 
+from fuse.plugins.community.sst.tests.sst_version_support import (
+    expected_sst_version,
+    expected_sst_version_policy,
+    require_sst_info,
+)
 
 pytestmark = pytest.mark.sst_live
 
@@ -29,18 +33,6 @@ def require_sst_binary() -> str:
     if path is None:
         pytest.skip("sst is not installed")
     return path
-
-
-def require_sst_info() -> str:
-    path = shutil.which("sst-info")
-    if path is None:
-        pytest.skip("sst-info is not installed")
-    return path
-
-
-def expected_sst_version() -> str:
-    return os.environ.get("FUSE_SST_VERSION", "15.0.0")
-
 
 def prepare_live_sst_database() -> None:
     require_sst_info()
@@ -189,9 +181,10 @@ def test_real_sst_toolchain_validation_accepts_configured_version():
     ok, message, result = validate_sst_toolchain(
         ToolchainSettings(tool_paths={"sstInfo": sst_info_path}),
         expected_version=expected_sst_version(),
+        version_policy=expected_sst_version_policy(),
     )
 
-    assert ok is True
+    assert ok is True, message
     assert result is not None
     assert result.return_code == 0
     assert message.strip()

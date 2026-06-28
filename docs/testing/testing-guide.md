@@ -17,7 +17,7 @@ SST-specific tests belong in the SST plugin. gem5-specific tests belong in the g
 Run the fast dependency-light suite from the FUSE package root, the directory that contains `pytest.ini` and `requirements-dev.txt`:
 
 ```bash
-QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q -m "not sst_live and not gem5_live"
+QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q -m "not sst_live and not gem5_live and not sst_ext"
 ```
 
 This is the same marker expression used by the Core Tests GitHub Actions workflow. It includes core tests, Qt tests that can run headlessly, and dependency-light SST/gem5 unit tests. It intentionally excludes tests that require real simulator installations.
@@ -30,10 +30,29 @@ QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q
 
 Use this only when the local environment can satisfy every selected marker. A normal developer machine usually should not run the unfiltered suite unless SST and gem5 live-test requirements are also configured.
 
-Run SST live tests only:
+Run SST live tests only. Local runs detect the installed SST version when
+`FUSE_SST_VERSION` is not set, then skip any `sst_15` or `sst_16` tests that do
+not match the detected major version:
 
 ```bash
 .venv/bin/python -m pytest -q -m "sst_live"
+```
+
+Force local validation against a specific pinned SST release, matching the
+strict CI behavior:
+
+```bash
+FUSE_SST_VERSION=16.0.0 \
+FUSE_SST_VERSION_POLICY=major_minor_patch \
+.venv/bin/python -m pytest -q -m "sst_live"
+```
+
+Run SST external validation tests only:
+
+```bash
+FUSE_ENABLE_SST_EXT_TESTS=1 \
+SST_EXT_TESTS_ROOT=/path/to/sst-ext-tests \
+.venv/bin/python -m pytest -q -m "sst_ext"
 ```
 
 Run gem5 live tests only:
@@ -54,6 +73,9 @@ Useful local debugging commands:
 
 ```text
 sst_live    Requires real SST Core/SST Elements and working sst-info.
+sst_ext     Requires SST external-validation backend fixtures and explicit enablement.
+sst_15      Requires SST 15.x; skipped locally unless the detected SST major is 15.
+sst_16      Requires SST 16.x; skipped locally unless the detected SST major is 16.
 gem5_live   Requires a real gem5 binary.
 slow        Slower integration tests.
 ```

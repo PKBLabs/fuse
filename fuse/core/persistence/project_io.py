@@ -204,6 +204,9 @@ def build_project_dict(
                 "width": scene.sceneRect().width(),
                 "height": scene.sceneRect().height(),
             },
+            "suppressedCompatibilityWarnings": sorted(
+                getattr(scene, "suppressed_compatibility_warnings", set())
+            ),
             **model_view.editor_state(),
         },
     }
@@ -276,6 +279,17 @@ def load_project_into_scene(project: dict, scene: ModelScene) -> None:
     """Rebuild a model scene from an already-loaded project dictionary."""
     validate_project_dict(project)
     scene.clear_model()
+    editor = project.get("editor", {}) or {}
+    suppressed_warnings = editor.get("suppressedCompatibilityWarnings", [])
+    if isinstance(suppressed_warnings, list):
+        scene.suppressed_compatibility_warnings = {
+            str(code).strip()
+            for code in suppressed_warnings
+            if str(code).strip()
+        }
+    else:
+        scene.suppressed_compatibility_warnings = set()
+
 
     nodes_by_id: dict[int, ComponentNodeItem] = {}
 

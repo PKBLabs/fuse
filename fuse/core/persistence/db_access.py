@@ -29,6 +29,7 @@ from fuse.core.model.composite import (
     COMPOSITE_TARGET_ID,
 )
 from fuse.core.model.models import ComponentDefinition
+from fuse.core.model.subcomponents import mark_visual_subcomponent_connection_parameters_optional
 from fuse.core.persistence.composite_components import (
     get_composite_component_definition,
     list_composite_component_definitions,
@@ -267,15 +268,18 @@ def get_component_details(
             "target_label": details.palette_item.target_label,
             "framework_version": details.palette_item.framework_version,
         },
-        "parameters": [
-            {
-                "name": prop.name,
-                "description": prop.description,
-                "default_val": prop.default_value,
-                "required": prop.required,
-            }
-            for prop in details.properties
-        ],
+        "parameters": mark_visual_subcomponent_connection_parameters_optional(
+            [
+                {
+                    "name": prop.name,
+                    "description": prop.description,
+                    "default_val": prop.default_value,
+                    "required": prop.required,
+                }
+                for prop in details.properties
+            ],
+            component_is_subcomponent=bool(getattr(details.palette_item, "raw_kind", "") == "SubComponent"),
+        ),
         "ports": [
             {
                 "name": conn.name,
