@@ -1583,6 +1583,31 @@ class ProjectSettingsDialog(QDialog):
     def _validate_sst(self, toolchain: ToolchainSettings) -> tuple[bool, str]:
         target_data = self._target_data_for_plugin("sst")
         expected_version = target_data.get("framework_version", "") or ""
+        target_label = (
+            target_data.get("target_label", "")
+            or target_data.get("display_name", "")
+            or f"SST {expected_version}"
+        )
+
+        if not expected_version:
+            return (
+                False,
+                (
+                    "No SST target catalog is selected.\n\n"
+                    "Choose a supported SST target version in Project Settings."
+                ),
+            )
+
+        if not has_policy_catalog(expected_version):
+            return (
+                False,
+                (
+                    f"FUSE does not have a bundled SST policy catalog for "
+                    f"SST {expected_version}.\n\n"
+                    "Choose one of the supported SST versions bundled with this "
+                    "FUSE build."
+                ),
+            )
 
         if not expected_version:
             return (

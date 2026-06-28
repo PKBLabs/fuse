@@ -137,6 +137,7 @@ class SSTPlugin:
             """).fetchall()
 
         targets = []
+        supported_versions = set(available_policy_catalog_versions())
 
         for row in rows_to_dicts(rows):
             version = str(row["version"] or "")
