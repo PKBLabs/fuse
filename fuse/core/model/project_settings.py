@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import uuid
 from typing import Any
 
 
@@ -127,6 +128,7 @@ class PluginProjectSettings:
 @dataclass
 class ProjectSettings:
     """Aggregate project settings for all enabled simulator plugins."""
+    project_uid: str = field(default_factory=lambda: uuid.uuid4().hex)
     project_name: str = "Untitled FUSE Project"
     active_plugin_id: str = ""
     preferred_component_sorting_mode: str = "Alphabetical"
@@ -147,6 +149,7 @@ class ProjectSettings:
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            "projectUid": self.project_uid,
             "projectName": self.project_name,
             "activePluginId": self.active_plugin_id,
             "preferredComponentSortingMode": self.preferred_component_sorting_mode,
@@ -170,6 +173,7 @@ class ProjectSettings:
         }
 
         return ProjectSettings(
+            project_uid=data.get("projectUid", data.get("project_uid", "")) or uuid.uuid4().hex,
             project_name=data.get("projectName", data.get("project_name", "Untitled FUSE Project"))
             or "Untitled FUSE Project",
             active_plugin_id=data.get("activePluginId", data.get("active_plugin_id", "")) or "",
@@ -207,6 +211,7 @@ class ProjectSettings:
         target_id = active_target.get("targetId", "") or ""
 
         settings = ProjectSettings(
+            project_uid=(project.get("project", {}) or {}).get("uid", "") or uuid.uuid4().hex,
             project_name=(project.get("project", {}) or {}).get("name", "Untitled FUSE Project"),
             active_plugin_id=plugin_id,
         )

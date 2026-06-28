@@ -38,11 +38,12 @@ from fuse.plugin_api.interfaces import (
 )
 from fuse.core.model.subcomponents import is_visual_subcomponent_connection_parameter
 from fuse.core.persistence.database import get_connection, rows_to_dicts
-from fuse.plugins.community.sst.component_catalog import import_bundled_component_catalogs
 from fuse.plugins.community.sst.initialize_db import (
     get_or_create_sst_framework_version,
     initialize_sst_schema,
 )
+from fuse.plugins.community.sst.get_sstinfo import sync_sstinfo_to_database
+from fuse.plugins.community.sst.component_catalog import import_bundled_component_catalogs
 from fuse.plugins.community.sst.policy.loader import (
     available_policy_catalog_versions,
     has_policy_catalog,
@@ -90,9 +91,9 @@ class SSTPlugin:
                     conn=conn,
                     version=version,
                     label=f"SST {version}",
-                    source_kind="sst-info",
+                    source_kind="bundled-component-catalog",
                     source_path="",
-                    command="bundled FUSE SST policy catalog",
+                    command="bundled FUSE SST policy/component catalogs",
                     is_default=(
                         existing_default is None
                         and version == default_version
@@ -102,21 +103,37 @@ class SSTPlugin:
     def bootstrap_database(self) -> None:
         """Bootstrap SST plugin metadata that ships with FUSE.
 
-        This intentionally does not run sst-info. Bundled JSON component
-        catalogs populate the database for the palette/list panels, and users
-        later validate local/remote tools from Project Settings.
+        This intentionally does not run sst-info. Users configure and validate
+        local/remote SST tools from Project Settings. Bundled component catalogs
+        are imported into the database so the palette remains DB-driven.
         """
 
         self.register_bundled_policy_targets()
         import_bundled_component_catalogs()
 
+        if shutil.which("sst-info") is None:
+            print(
+                "SST plugin: sst-info not found; using bundled SST component catalogs. "
+                "Configure local or remote SST tools in Project Settings to refresh metadata."
+            )
+
     def list_targets(self) -> list[FrameworkTarget]:
         """Return SST versions available in the local metadata database."""
         with get_connection() as conn:
             rows = conn.execute("""
-                SELECT id, version, label, is_default
-                FROM sst_framework_versions
-                ORDER BY is_default DESC, version DESC, id DESC
+                SELECT
+                    fv.id,
+                    fv.version,
+                    fv.label,
+                    fv.is_default,
+                    fv.source_kind,
+                    (
+                        SELECT COUNT(*)
+                        FROM sst_components c
+                        WHERE c.framework_version_id = fv.id
+                    ) AS component_count
+                FROM sst_framework_versions fv
+                ORDER BY fv.is_default DESC, fv.version DESC, fv.id DESC
             """).fetchall()
 
         targets = []
@@ -125,7 +142,7 @@ class SSTPlugin:
         for row in rows_to_dicts(rows):
             version = str(row["version"] or "")
 
-            if version not in supported_versions:
+            if int(row.get("component_count", 0) or 0) <= 0:
                 continue
 
             targets.append(

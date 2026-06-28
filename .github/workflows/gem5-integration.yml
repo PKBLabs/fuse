@@ -1,4 +1,4 @@
-name: gem5 Integration Tests
+name: gem5 Live Integration Tests
 
 on:
   workflow_dispatch:

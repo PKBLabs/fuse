@@ -464,6 +464,31 @@ def node_is_subcomponent(node) -> bool:
     return bool(int(getattr(node.component, "is_subcomp", 0) or 0))
 
 
+def add_export_policy_diagnostics(scene, add_issue) -> None:
+    """Add grouped custom/changed SST export-policy diagnostics, if any."""
+
+    try:
+        from fuse.plugins.community.sst.component_catalog import (
+            export_policy_diagnostics_for_scene,
+        )
+
+        diagnostics = export_policy_diagnostics_for_scene(scene)
+    except Exception:
+        # Export validation must not fail merely because diagnostic metadata is
+        # unavailable. Structural/type validation below still protects export.
+        return
+
+    for message in diagnostics.warning_messages():
+        add_issue(
+            validation_issue(
+                "sst_export_policy",
+                "Project",
+                message,
+                severity="warning",
+            )
+        )
+
+
 def validate_sst_json_export(scene) -> SSTExportReport:
     """Validate that a scene can be exported to SST JSON without repair."""
     from fuse.core.model.composite_flattening import flatten_scene_for_export
@@ -511,6 +536,8 @@ def validate_sst_json_export(scene) -> SSTExportReport:
                 f"found {', '.join(sorted(target_ids))}.",
             )
         )
+    else:
+        add_export_policy_diagnostics(scene, add_issue)
 
     seen_names: dict[str, int] = {}
     for node in nodes:

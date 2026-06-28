@@ -22,6 +22,8 @@ of project files and relies on the user's system SSH configuration instead.
 from __future__ import annotations
 
 from copy import deepcopy
+
+from PySide6.QtCore import Qt
 import shutil
 
 from PySide6.QtWidgets import (
@@ -36,10 +38,13 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMessageBox,
+    QPlainTextEdit,
     QPushButton,
     QRadioButton,
     QScrollArea,
     QSpinBox,
+    QTreeWidget,
+    QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
 )
@@ -57,8 +62,357 @@ from fuse.core.toolchains.discovery import (
 )
 from fuse.core.toolchains.providers import provider_from_toolchain
 from fuse.core.toolchains.version_match import compare_version_prefix
+from fuse.plugins.community.sst.component_catalog import (
+    DiscoveredComponentEntry,
+    SSTComponentDiscovery,
+    catalog_source_summary_for_target,
+    delete_custom_catalog_target,
+    describe_component_metadata_diff,
+    discover_sst_components_for_toolchain,
+    has_component_catalog,
+    import_custom_component_selection,
+    revert_target_to_bundled_baseline,
+    verify_project_sst_runtime,
+    used_sst_component_keys_for_scene,
+)
 from fuse.plugins.community.sst.get_sstinfo import validate_sst_toolchain
 from fuse.plugins.community.sst.policy.loader import has_policy_catalog
+
+
+
+class SSTComponentManagerDialog(QDialog):
+    """Dialog for enabling custom/changed SST components discovered by sst-info."""
+
+    ROLE_COMPONENT_KEY = Qt.UserRole + 100
+    ROLE_STATUS = Qt.UserRole + 101
+    ROLE_DIFF_TEXT = Qt.UserRole + 102
+
+    def __init__(
+        self,
+        discovery: SSTComponentDiscovery,
+        parent=None,
+        used_component_keys: set[str] | None = None,
+    ):
+        super().__init__(parent)
+
+        self.discovery = discovery
+        self.used_component_keys = set(used_component_keys or set())
+        self.setWindowTitle("Manage SST Components")
+        self.setMinimumWidth(1100)
+        self.setMinimumHeight(760)
+
+        layout = QVBoxLayout(self)
+
+        baseline_count = sum(1 for entry in discovery.entries if entry.status == "baseline")
+        custom_count = sum(1 for entry in discovery.entries if entry.status == "custom")
+        changed_count = sum(1 for entry in discovery.entries if entry.status == "changed")
+        missing_count = sum(1 for entry in discovery.entries if entry.status == "missing")
+
+        summary = QLabel(
+            (
+                f"Source: {discovery.source_label}\n"
+                f"SST version: {discovery.version}\n"
+                f"Baseline: {baseline_count}  "
+                f"Custom: {custom_count}  "
+                f"Changed: {changed_count}  "
+                f"Missing from target: {missing_count}"
+            ),
+            self,
+        )
+        summary.setWordWrap(True)
+        layout.addWidget(summary)
+
+        filter_row = QHBoxLayout()
+        filter_row.addWidget(QLabel("Show:", self))
+
+        self.status_filter = QComboBox(self)
+        self.status_filter.addItem("Custom and changed", "actionable")
+        self.status_filter.addItem("Custom only", "custom")
+        self.status_filter.addItem("Changed only", "changed")
+        self.status_filter.addItem("Missing baseline components", "missing")
+        self.status_filter.addItem("All discovered/baseline", "all")
+        self.status_filter.currentIndexChanged.connect(self.populate_tree)
+        filter_row.addWidget(self.status_filter)
+
+        enable_all_button = QPushButton("Enable All Custom", self)
+        enable_all_button.clicked.connect(self.enable_all_custom)
+        filter_row.addWidget(enable_all_button)
+
+        enable_changed_button = QPushButton("Enable All Changed", self)
+        enable_changed_button.clicked.connect(self.enable_all_changed)
+        filter_row.addWidget(enable_changed_button)
+
+        disable_custom_button = QPushButton("Disable Custom/Changed", self)
+        disable_custom_button.clicked.connect(self.disable_actionable)
+        filter_row.addWidget(disable_custom_button)
+
+        filter_row.addStretch(1)
+        layout.addLayout(filter_row)
+
+        self.tree = QTreeWidget(self)
+        self.tree.setColumnCount(9)
+        self.tree.setHeaderLabels([
+            "Component",
+            "Status",
+            "Changes",
+            "Kind",
+            "Used",
+            "Params",
+            "Ports",
+            "Slots",
+            "Stats",
+        ])
+        self.tree.setAlternatingRowColors(True)
+        self.tree.itemChanged.connect(self._on_item_changed)
+        self.tree.currentItemChanged.connect(self._on_current_item_changed)
+        layout.addWidget(self.tree, stretch=1)
+
+        self.detail_view = QPlainTextEdit(self)
+        self.detail_view.setReadOnly(True)
+        self.detail_view.setPlaceholderText("Select a component to see metadata differences.")
+        self.detail_view.setMinimumHeight(140)
+        layout.addWidget(self.detail_view)
+
+        self._populating_tree = False
+        self._checked_keys = {
+            entry.key
+            for entry in discovery.entries
+            if entry.enabled_by_default and entry.status in {"custom", "changed"}
+        }
+
+        help_label = QLabel(
+            (
+                "Baseline components remain enabled automatically. Select custom "
+                "components to add to this project/toolchain target. For changed "
+                "baseline components, checking the row uses the metadata discovered "
+                "from the configured SST installation; leaving it unchecked keeps "
+                "the bundled baseline metadata. Select a row to review the exact "
+                "parameter, port, slot, and statistic differences."
+            ),
+            self,
+        )
+        help_label.setWordWrap(True)
+        layout.addWidget(help_label)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel,
+            self,
+        )
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+        self.populate_tree()
+
+    def _visible_entries(self) -> list[DiscoveredComponentEntry]:
+        mode = self.status_filter.currentData() or "actionable"
+
+        if mode == "all":
+            return list(self.discovery.entries)
+
+        if mode == "actionable":
+            return [
+                entry
+                for entry in self.discovery.entries
+                if entry.status in {"custom", "changed"}
+            ]
+
+        return [
+            entry
+            for entry in self.discovery.entries
+            if entry.status == mode
+        ]
+
+    def populate_tree(self) -> None:
+        self._populating_tree = True
+        checked_keys = set(self._checked_keys)
+
+        self.tree.clear()
+
+        entries_by_element: dict[str, list[DiscoveredComponentEntry]] = {}
+        for entry in self._visible_entries():
+            entries_by_element.setdefault(entry.element_name or "Unknown", []).append(entry)
+
+        for element_name in sorted(entries_by_element):
+            entries = sorted(
+                entries_by_element[element_name],
+                key=lambda item: (item.status, item.kind, item.name),
+            )
+
+            element_item = QTreeWidgetItem([element_name])
+            element_item.setFlags(element_item.flags() & ~Qt.ItemIsSelectable)
+            self.tree.addTopLevelItem(element_item)
+
+            for entry in entries:
+                diff = describe_component_metadata_diff(
+                    key=entry.key,
+                    baseline_catalog=self.discovery.baseline_catalog,
+                    discovered_catalog=self.discovery.discovered_catalog,
+                )
+                item = QTreeWidgetItem([
+                    entry.display_name,
+                    entry.status,
+                    diff.summary(),
+                    entry.kind,
+                    "Yes" if entry.key in self.used_component_keys else "",
+                    str(entry.parameter_count),
+                    str(entry.port_count),
+                    str(entry.subcomponent_slot_count),
+                    str(entry.statistic_count),
+                ])
+                item.setData(0, self.ROLE_COMPONENT_KEY, entry.key)
+                item.setData(0, self.ROLE_STATUS, entry.status)
+                item.setData(0, self.ROLE_DIFF_TEXT, "\n".join(diff.lines))
+
+                if entry.status in {"custom", "changed"}:
+                    item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+                    item.setCheckState(
+                        0,
+                        Qt.Checked if entry.key in checked_keys else Qt.Unchecked,
+                    )
+                else:
+                    item.setFlags(item.flags() & ~Qt.ItemIsUserCheckable)
+
+                element_item.addChild(item)
+
+        self.tree.expandAll()
+        for index in range(self.tree.columnCount()):
+            self.tree.resizeColumnToContents(index)
+
+        self._populating_tree = False
+
+        current = self.tree.currentItem()
+        if current is not None:
+            self._show_item_diff(current)
+        else:
+            self.detail_view.clear()
+
+    def _show_item_diff(self, item: QTreeWidgetItem | None) -> None:
+        if item is None:
+            self.detail_view.clear()
+            return
+
+        key = item.data(0, self.ROLE_COMPONENT_KEY)
+        if not key:
+            self.detail_view.setPlainText(
+                "Select a component or subcomponent row to review metadata differences."
+            )
+            return
+
+        diff_text = str(item.data(0, self.ROLE_DIFF_TEXT) or "")
+        if not diff_text:
+            diff_text = "No metadata difference details are available for this row."
+
+        self.detail_view.setPlainText(diff_text)
+
+    def _on_current_item_changed(
+        self,
+        current: QTreeWidgetItem | None,
+        previous: QTreeWidgetItem | None,
+    ) -> None:
+        self._show_item_diff(current)
+
+    def _on_item_changed(self, item: QTreeWidgetItem, column: int) -> None:
+        if self._populating_tree or column != 0:
+            return
+
+        key = item.data(0, self.ROLE_COMPONENT_KEY)
+
+        if not key:
+            return
+
+        key = str(key)
+
+        if item.checkState(0) == Qt.Checked:
+            self._checked_keys.add(key)
+        else:
+            if key in self.used_component_keys:
+                response = QMessageBox.warning(
+                    self,
+                    "Disable Used SST Component",
+                    (
+                        "This project already uses this SST component. Disabling "
+                        "its discovered metadata can make the current model fail "
+                        "validation or export. Disable it anyway?"
+                    ),
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.No,
+                )
+
+                if response != QMessageBox.Yes:
+                    self._populating_tree = True
+                    item.setCheckState(0, Qt.Checked)
+                    self._populating_tree = False
+                    self._checked_keys.add(key)
+                    return
+
+            self._checked_keys.discard(key)
+
+    def _set_status_checked(self, statuses: set[str], checked: bool) -> None:
+        if not checked:
+            used_to_disable = [
+                entry.display_name
+                for entry in self.discovery.entries
+                if entry.status in statuses
+                and entry.key in self._checked_keys
+                and entry.key in self.used_component_keys
+            ]
+
+            if used_to_disable:
+                preview = "\n".join(f"- {name}" for name in used_to_disable[:10])
+                extra = "" if len(used_to_disable) <= 10 else f"\n...and {len(used_to_disable) - 10} more"
+                response = QMessageBox.warning(
+                    self,
+                    "Disable Used SST Components",
+                    (
+                        "This project already uses one or more selected SST "
+                        "components. Disabling their discovered metadata can make "
+                        "the current model fail validation or export.\n\n"
+                        f"{preview}{extra}\n\nDisable them anyway?"
+                    ),
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.No,
+                )
+
+                if response != QMessageBox.Yes:
+                    return
+
+        for top_index in range(self.tree.topLevelItemCount()):
+            top_item = self.tree.topLevelItem(top_index)
+
+            for child_index in range(top_item.childCount()):
+                item = top_item.child(child_index)
+                status = item.data(0, self.ROLE_STATUS)
+
+                if status in statuses:
+                    key = item.data(0, self.ROLE_COMPONENT_KEY)
+                    if key:
+                        if checked:
+                            self._checked_keys.add(str(key))
+                        else:
+                            self._checked_keys.discard(str(key))
+                    item.setCheckState(0, Qt.Checked if checked else Qt.Unchecked)
+
+        # Also update rows hidden by the active filter.
+        for entry in self.discovery.entries:
+            if entry.status in statuses:
+                if checked:
+                    self._checked_keys.add(entry.key)
+                else:
+                    self._checked_keys.discard(entry.key)
+
+    def enable_all_custom(self) -> None:
+        self._set_status_checked({"custom"}, True)
+
+    def enable_all_changed(self) -> None:
+        self._set_status_checked({"changed"}, True)
+
+    def disable_actionable(self) -> None:
+        self._set_status_checked({"custom", "changed"}, False)
+
+    def enabled_component_keys(self) -> set[str]:
+        return set(self._checked_keys)
+
 
 
 class ProjectSettingsDialog(QDialog):
@@ -123,8 +477,15 @@ class ProjectSettingsDialog(QDialog):
         outer_layout.addWidget(buttons)
 
         self.populate_targets()
+        self.sst_target_combo.currentIndexChanged.connect(
+            self.update_sst_catalog_source_summary
+        )
+        self.sst_enabled.toggled.connect(self.update_sst_catalog_source_summary)
+        self.backend_local.toggled.connect(self.update_sst_catalog_source_summary)
+        self.backend_ssh.toggled.connect(self.update_sst_catalog_source_summary)
         self.load_from_settings(self._settings)
         self.update_visibility()
+        self.update_sst_catalog_source_summary()
 
     def _build_general_group(self, root: QVBoxLayout) -> None:
         general_group = QGroupBox("General", self)
@@ -235,8 +596,47 @@ class ProjectSettingsDialog(QDialog):
         validate_button.clicked.connect(self.validate_enabled_toolchains)
         actions_row.addWidget(validate_button)
 
+        manage_sst_button = QPushButton("Manage SST Components...", self)
+        manage_sst_button.clicked.connect(self.manage_sst_components)
+        actions_row.addWidget(manage_sst_button)
+
+        verify_sst_runtime_button = QPushButton("Verify SST Runtime", self)
+        verify_sst_runtime_button.clicked.connect(self.verify_sst_runtime)
+        actions_row.addWidget(verify_sst_runtime_button)
+
         actions_row.addStretch(1)
         environment_layout.addLayout(actions_row)
+
+        self.sst_catalog_source_group = QGroupBox("SST Catalog Source", self)
+        catalog_source_layout = QVBoxLayout(self.sst_catalog_source_group)
+
+        self.sst_catalog_source_summary = QLabel(
+            "No SST catalog target is selected.",
+            self,
+        )
+        self.sst_catalog_source_summary.setWordWrap(True)
+        self.sst_catalog_source_summary.setTextInteractionFlags(
+            Qt.TextSelectableByMouse
+        )
+        catalog_source_layout.addWidget(self.sst_catalog_source_summary)
+
+        catalog_actions_row = QHBoxLayout()
+
+        self.refresh_sst_catalog_button = QPushButton("Refresh Catalog", self)
+        self.refresh_sst_catalog_button.clicked.connect(self.manage_sst_components)
+        catalog_actions_row.addWidget(self.refresh_sst_catalog_button)
+
+        self.revert_sst_catalog_button = QPushButton("Revert to Bundled Baseline", self)
+        self.revert_sst_catalog_button.clicked.connect(self.revert_sst_catalog_to_baseline)
+        catalog_actions_row.addWidget(self.revert_sst_catalog_button)
+
+        self.delete_sst_catalog_button = QPushButton("Delete Custom Catalog", self)
+        self.delete_sst_catalog_button.clicked.connect(self.delete_sst_custom_catalog)
+        catalog_actions_row.addWidget(self.delete_sst_catalog_button)
+
+        catalog_actions_row.addStretch(1)
+        catalog_source_layout.addLayout(catalog_actions_row)
+        environment_layout.addWidget(self.sst_catalog_source_group)
 
         root.addWidget(environment_group, stretch=1)
 
@@ -475,6 +875,8 @@ class ProjectSettingsDialog(QDialog):
         if remote_isa_index >= 0:
             self.remote_gem5_build_isa.setCurrentIndex(remote_isa_index)
 
+        self.update_sst_catalog_source_summary()
+
     def _initial_shared_toolchain(self, settings: ProjectSettings) -> ToolchainSettings:
         active = settings.active_plugin_settings()
 
@@ -528,6 +930,9 @@ class ProjectSettingsDialog(QDialog):
 
         self.local_gem5_paths_widget.setVisible(local_enabled and gem5_enabled)
         self.remote_gem5_paths_widget.setVisible(ssh_enabled and gem5_enabled)
+
+        if hasattr(self, "sst_catalog_source_group"):
+            self.sst_catalog_source_group.setVisible(sst_enabled)
 
     def browse_local_sst_info(self) -> None:
         path, _ = QFileDialog.getOpenFileName(self, "Select sst-info executable")
@@ -704,6 +1109,444 @@ class ProjectSettingsDialog(QDialog):
     def settings(self) -> ProjectSettings:
         return self.apply_to_internal_settings()
 
+    def _prepare_sst_toolchain_for_validation(
+        self,
+        toolchain: ToolchainSettings,
+    ) -> tuple[bool, str]:
+        """Resolve/check sst-info path fields before validation/discovery."""
+
+        sst_info_path = toolchain.tool_paths.get("sstInfo", "").strip()
+
+        if toolchain.backend == "local":
+            resolved = sst_info_path or shutil.which("sst-info") or ""
+
+            if not resolved:
+                return (
+                    False,
+                    (
+                        "No local sst-info executable is configured or available on PATH.\n\n"
+                        "Use Discover Local Tools, enter the full path to sst-info, "
+                        "or switch the execution environment to Remote over SSH."
+                    ),
+                )
+
+            toolchain.tool_paths["sstInfo"] = resolved
+            return True, ""
+
+        if not sst_info_path:
+            return (
+                False,
+                (
+                    "No remote sst-info path is configured.\n\n"
+                    "Enter the remote path to sst-info, for example:\n"
+                    "/opt/sst/bin/sst-info"
+                ),
+            )
+
+        return True, ""
+
+    def update_sst_catalog_source_summary(self) -> None:
+        """Refresh the Project Settings SST catalog lifecycle summary."""
+
+        if not hasattr(self, "sst_catalog_source_summary"):
+            return
+
+        if not self.sst_enabled.isChecked():
+            self.sst_catalog_source_group.setVisible(False)
+            return
+
+        self.sst_catalog_source_group.setVisible(True)
+
+        target_data = self._target_data_for_plugin("sst")
+        target_id = str(target_data.get("target_id", "") or "")
+
+        try:
+            summary = catalog_source_summary_for_target(
+                target_id,
+                toolchain=self.build_shared_toolchain_settings(),
+                project_uid=getattr(self._settings, "project_uid", ""),
+            )
+        except Exception as exc:
+            self.sst_catalog_source_summary.setText(
+                f"Could not load SST catalog source information: {exc}"
+            )
+            self.revert_sst_catalog_button.setEnabled(False)
+            self.delete_sst_catalog_button.setEnabled(False)
+            self.refresh_sst_catalog_button.setEnabled(self.sst_enabled.isChecked())
+            return
+
+        self.sst_catalog_source_summary.setText(summary.message())
+
+        self.refresh_sst_catalog_button.setEnabled(self.sst_enabled.isChecked())
+        self.revert_sst_catalog_button.setEnabled(summary.is_custom)
+        self.delete_sst_catalog_button.setEnabled(summary.is_custom)
+
+        if summary.fingerprint_stale:
+            self.sst_catalog_source_summary.setStyleSheet(
+                "color: #b45309; font-weight: 500;"
+            )
+        else:
+            self.sst_catalog_source_summary.setStyleSheet("color: #475569;")
+
+    def _select_sst_target_id(self, target_id: str) -> bool:
+        for index in range(self.sst_target_combo.count()):
+            data = self.sst_target_combo.itemData(index) or {}
+
+            if str(data.get("target_id", "")) == str(target_id):
+                self.sst_target_combo.setCurrentIndex(index)
+                self.update_sst_catalog_source_summary()
+                return True
+
+        return False
+
+    def revert_sst_catalog_to_baseline(self) -> None:
+        """Switch the project back to the bundled SST baseline for this version."""
+
+        target_data = self._target_data_for_plugin("sst")
+        current_target_id = str(target_data.get("target_id", "") or "")
+
+        baseline = revert_target_to_bundled_baseline(current_target_id)
+
+        if baseline is None:
+            QMessageBox.information(
+                self,
+                "Revert to Bundled Baseline",
+                "No bundled baseline SST target was found for the selected target.",
+            )
+            return
+
+        baseline_target_id, baseline_label = baseline
+
+        if not self._select_sst_target_id(baseline_target_id):
+            self._targets = load_framework_targets()
+            self.populate_targets()
+            self._select_sst_target_id(baseline_target_id)
+
+        QMessageBox.information(
+            self,
+            "Reverted to Bundled Baseline",
+            (
+                f"This project is now set to use:\n{baseline_label}\n\n"
+                "The custom catalog target was not deleted and can still be used "
+                "by other projects."
+            ),
+        )
+
+    def delete_sst_custom_catalog(self) -> None:
+        """Delete the selected custom SST catalog target after confirmation."""
+
+        target_data = self._target_data_for_plugin("sst")
+        current_target_id = str(target_data.get("target_id", "") or "")
+
+        try:
+            summary = catalog_source_summary_for_target(
+                current_target_id,
+                toolchain=self.build_shared_toolchain_settings(),
+                project_uid=getattr(self._settings, "project_uid", ""),
+            )
+        except Exception as exc:
+            QMessageBox.warning(
+                self,
+                "Delete Custom Catalog",
+                f"Could not inspect the selected SST target.\n\n{exc}",
+            )
+            return
+
+        if not summary.is_custom:
+            QMessageBox.information(
+                self,
+                "Delete Custom Catalog",
+                "The selected SST target is a bundled baseline catalog and cannot be deleted.",
+            )
+            return
+
+        baseline = revert_target_to_bundled_baseline(current_target_id)
+
+        if baseline is None:
+            QMessageBox.warning(
+                self,
+                "Delete Custom Catalog",
+                (
+                    "FUSE could not find a bundled baseline target for this custom "
+                    "catalog's SST version. Revert is unavailable, so the custom "
+                    "target was not deleted."
+                ),
+            )
+            return
+
+        preview = summary.message()
+        response = QMessageBox.warning(
+            self,
+            "Delete Custom SST Catalog",
+            (
+                "Delete this custom SST catalog target?\n\n"
+                f"{preview}\n\n"
+                "This removes the database metadata and local discovery snapshot "
+                "for this custom target. Existing model instances will remain in "
+                "the scene, but this target will no longer appear in Project Settings."
+            ),
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+
+        if response != QMessageBox.Yes:
+            return
+
+        ok, message = delete_custom_catalog_target(
+            current_target_id,
+            force=True,
+        )
+
+        if not ok:
+            QMessageBox.warning(self, "Delete Custom Catalog", message)
+            return
+
+        baseline_target_id, baseline_label = baseline
+        current_gem5_target = (
+            self.gem5_target_combo.currentData() or {}
+        ).get("target_id", "")
+
+        self._targets = load_framework_targets()
+        self.populate_targets()
+        self._select_sst_target_id(baseline_target_id)
+        self._select_target(self.gem5_target_combo, str(current_gem5_target))
+
+        QMessageBox.information(
+            self,
+            "Custom Catalog Deleted",
+            (
+                f"{message}\n\n"
+                f"This project has been switched back to:\n{baseline_label}"
+            ),
+        )
+
+
+    def manage_sst_components(self) -> None:
+        """Discover and enable custom SST components for the configured toolchain."""
+
+        if not self.sst_enabled.isChecked():
+            QMessageBox.information(
+                self,
+                "Manage SST Components",
+                "Enable SST for this project before managing SST components.",
+            )
+            return
+
+        target_data = self._target_data_for_plugin("sst")
+        expected_version = target_data.get("framework_version", "") or ""
+
+        if not expected_version:
+            QMessageBox.warning(
+                self,
+                "Manage SST Components",
+                "Choose an SST target catalog/version before discovering components.",
+            )
+            return
+
+        if not has_policy_catalog(expected_version):
+            QMessageBox.warning(
+                self,
+                "Manage SST Components",
+                (
+                    f"FUSE does not have an SST export policy catalog for "
+                    f"SST {expected_version}."
+                ),
+            )
+            return
+
+        if not has_component_catalog(expected_version):
+            QMessageBox.warning(
+                self,
+                "Manage SST Components",
+                (
+                    f"FUSE does not have a bundled SST component catalog for "
+                    f"SST {expected_version}. Generate and install "
+                    f"fuse/plugins/community/sst/component_catalogs/"
+                    f"sst-{expected_version}.json first."
+                ),
+            )
+            return
+
+        toolchain = self.build_shared_toolchain_settings()
+        ok, message = self._prepare_sst_toolchain_for_validation(toolchain)
+
+        if not ok:
+            QMessageBox.warning(self, "Manage SST Components", message)
+            return
+
+        ok, message, _ = validate_sst_toolchain(
+            toolchain=toolchain,
+            expected_version=expected_version,
+            timeout_seconds=60,
+        )
+
+        if not ok:
+            QMessageBox.warning(self, "Manage SST Components", message)
+            return
+
+        try:
+            discovery = discover_sst_components_for_toolchain(
+                version=expected_version,
+                toolchain=toolchain,
+                timeout_seconds=120,
+                project_uid=getattr(self._settings, "project_uid", ""),
+            )
+        except Exception as exc:
+            QMessageBox.warning(
+                self,
+                "Manage SST Components",
+                (
+                    "FUSE could not discover SST components from the configured "
+                    "toolchain.\n\n"
+                    f"{exc}"
+                ),
+            )
+            return
+
+        scene = self._active_scene_for_runtime_verification()
+        used_component_keys = (
+            used_sst_component_keys_for_scene(scene)
+            if scene is not None
+            else set()
+        )
+
+        dialog = SSTComponentManagerDialog(
+            discovery,
+            self,
+            used_component_keys=used_component_keys,
+        )
+
+        if dialog.exec() != QDialog.Accepted:
+            return
+
+        try:
+            target_id, label, catalog_path = import_custom_component_selection(
+                discovery=discovery,
+                enabled_keys=dialog.enabled_component_keys(),
+                project_uid=getattr(self._settings, "project_uid", ""),
+            )
+        except Exception as exc:
+            QMessageBox.warning(
+                self,
+                "Manage SST Components",
+                (
+                    "FUSE could not import the selected SST components into the "
+                    "database.\n\n"
+                    f"{exc}"
+                ),
+            )
+            return
+
+        current_gem5_target = (
+            self.gem5_target_combo.currentData() or {}
+        ).get("target_id", "")
+
+        self._targets = load_framework_targets()
+        self.populate_targets()
+        self._select_sst_target_id(str(target_id))
+        self._select_target(self.gem5_target_combo, str(current_gem5_target))
+        self.update_sst_catalog_source_summary()
+
+        QMessageBox.information(
+            self,
+            "SST Components Updated",
+            (
+                f"Created/updated target:\n{label}\n\n"
+                f"Snapshot:\n{catalog_path}\n\n"
+                "The SST component panel will use this database-backed target "
+                "after you apply the Project Settings."
+            ),
+        )
+
+    def _active_scene_for_runtime_verification(self):
+        parent = self.parent()
+
+        if parent is not None and hasattr(parent, "active_model_scene"):
+            try:
+                return parent.active_model_scene()
+            except Exception:
+                pass
+
+        if parent is not None and hasattr(parent, "scene"):
+            return getattr(parent, "scene")
+
+        return None
+
+    def verify_sst_runtime(self) -> None:
+        """Verify that the configured SST runtime exposes the active model's components."""
+
+        if not self.sst_enabled.isChecked():
+            QMessageBox.information(
+                self,
+                "Verify SST Runtime",
+                "Enable SST for this project before verifying the SST runtime.",
+            )
+            return
+
+        target_data = self._target_data_for_plugin("sst")
+        expected_version = target_data.get("framework_version", "") or ""
+
+        if not expected_version:
+            QMessageBox.warning(
+                self,
+                "Verify SST Runtime",
+                "Choose an SST target catalog/version before verifying the runtime.",
+            )
+            return
+
+        toolchain = self.build_shared_toolchain_settings()
+        ok, message = self._prepare_sst_toolchain_for_validation(toolchain)
+
+        if not ok:
+            QMessageBox.warning(self, "Verify SST Runtime", message)
+            return
+
+        scene = self._active_scene_for_runtime_verification()
+
+        if scene is None:
+            QMessageBox.warning(
+                self,
+                "Verify SST Runtime",
+                "FUSE could not find the active model scene to verify.",
+            )
+            return
+
+        try:
+            report = verify_project_sst_runtime(
+                scene=scene,
+                framework_version_id=str(target_data.get("target_id", "") or ""),
+                expected_version=expected_version,
+                target_label=(
+                    target_data.get("target_label", "")
+                    or target_data.get("display_name", "")
+                    or f"SST {expected_version}"
+                ),
+                toolchain=toolchain,
+                timeout_seconds=120,
+            )
+        except Exception as exc:
+            QMessageBox.warning(
+                self,
+                "Verify SST Runtime",
+                f"FUSE could not verify the configured SST runtime.\n\n{exc}",
+            )
+            return
+
+        plugin_settings = self._settings.plugin_settings("sst")
+        plugin_settings.options["lastRuntimeVerification"] = {
+            "ok": report.ok,
+            "targetId": str(target_data.get("target_id", "") or ""),
+            "frameworkVersion": expected_version,
+            "message": report.message(),
+        }
+
+        if report.ok and not report.warnings:
+            QMessageBox.information(self, "SST Runtime Verified", report.message())
+        elif report.ok:
+            QMessageBox.warning(self, "SST Runtime Verified with Warnings", report.message())
+        else:
+            QMessageBox.critical(self, "SST Runtime Verification Failed", report.message())
+
     def validate_enabled_toolchains(self) -> None:
         toolchain = self.build_shared_toolchain_settings()
         messages: list[str] = []
@@ -766,32 +1609,30 @@ class ProjectSettingsDialog(QDialog):
                 ),
             )
 
-        sst_info_path = toolchain.tool_paths.get("sstInfo", "").strip()
-
-        if toolchain.backend == "local":
-            resolved = sst_info_path or shutil.which("sst-info") or ""
-
-            if not resolved:
-                return (
-                    False,
-                    (
-                        "No local sst-info executable is configured or available on PATH.\n\n"
-                        "Use Discover Local Tools, enter the full path to sst-info, "
-                        "or switch the execution environment to Remote over SSH."
-                    ),
-                )
-
-            toolchain.tool_paths["sstInfo"] = resolved
-
-        elif not sst_info_path:
+        if not expected_version:
             return (
                 False,
                 (
-                    "No remote sst-info path is configured.\n\n"
-                    "Enter the remote path to sst-info, for example:\n"
-                    "/opt/sst/bin/sst-info"
+                    "No SST target catalog is selected.\n\n"
+                    "Choose a supported SST target version in Project Settings."
                 ),
             )
+
+        if not has_policy_catalog(expected_version):
+            return (
+                False,
+                (
+                    f"FUSE does not have a bundled SST policy catalog for "
+                    f"SST {expected_version}.\n\n"
+                    "Choose one of the supported SST versions bundled with this "
+                    "FUSE build."
+                ),
+            )
+
+        ok, message = self._prepare_sst_toolchain_for_validation(toolchain)
+
+        if not ok:
+            return ok, message
 
         ok, message, _ = validate_sst_toolchain(
             toolchain=toolchain,
@@ -806,8 +1647,9 @@ class ProjectSettingsDialog(QDialog):
             True,
             (
                 f"{message}\n\n"
-                f"FUSE will use the bundled SST component metadata and policy "
-                f"catalogs for {target_label}."
+                "The selected SST toolchain version matches this project target. "
+                "Use Manage SST Components if this installation exposes custom "
+                "SST element libraries that should appear in FUSE."
             ),
         )
 

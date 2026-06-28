@@ -398,7 +398,6 @@ class ComponentPalette(QWidget):
                 )
 
                 default_components = load_component_definitions()
-
                 self.components = active_components + [
                     component
                     for component in default_components

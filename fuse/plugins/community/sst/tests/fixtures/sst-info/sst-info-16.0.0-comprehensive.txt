@@ -1,0 +1,66 @@
+ELEMENT LIBRARY 0 = memHierarchy (Synthetic memHierarchy fixture)
+Components (2 total)
+Component 0: Cache
+Description: Synthetic cache component
+Category: MEMORY COMPONENT
+Checkpointable: true
+Parameters (3 total)
+cache_line_size: Cache line size [64]
+cache_size: Cache capacity [32KiB]
+replacement_policy: Replacement policy [lru]
+Ports (2 total)
+highlink: CPU-side link
+lowlink: Memory-side link
+SubComponent Slots (1 total)
+replacement: Replacement slot [SST::MemHierarchy::ReplacementPolicy]
+Statistics (1 total)
+hits: Cache hits, (units="events") Enable level = 1
+
+Component 1: MemController
+Description: Synthetic memory controller component
+Category: MEMORY COMPONENT
+Checkpointable: false
+Parameters (3 total)
+clock: Clock frequency [<required>]
+addr_range_start: Starting address [0]
+num_ports: Number of high ports [2]
+Ports (2 total)
+direct_link: Direct link
+highlink%(num_ports)d: Variable high-side link
+SubComponent Slots (1 total)
+backend: Memory backend slot [SST::MemHierarchy::MemBackend]
+Statistics (1 total)
+requests: Memory requests, (units="requests") Enable level = 1
+
+SubComponents (1 total)
+SubComponent 0: simpleMemBackend
+Description: Synthetic simple backend
+Interface: SST::MemHierarchy::MemBackend
+Parameters (2 total)
+access_time: Access latency [10ns]
+mem_size: Memory size [1GiB]
+Ports (1 total)
+unused_port: Synthetic backend port
+
+ELEMENT LIBRARY 1 = customElement (Synthetic custom SST element)
+Components (1 total)
+Component 0: CustomCPU
+Description: Synthetic custom processor
+Category: PROCESSOR COMPONENT
+Checkpointable: false
+Parameters (2 total)
+clock: CPU clock [2GHz]
+custom_width: Custom issue width [4]
+Ports (1 total)
+memory: Memory link
+Statistics (1 total)
+instructions: Retired instructions, (units="instructions") Enable level = 1
+
+SubComponents (1 total)
+SubComponent 0: CustomMMU
+Description: Synthetic custom MMU
+Interface: SST::MMU
+Parameters (1 total)
+page_size: Page size [4096]
+Ports (1 total)
+walk_port: Page table walk port

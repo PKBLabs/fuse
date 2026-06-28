@@ -165,7 +165,7 @@ def resolve_param_policy(
 
     metadata = metadata or {}
     version = framework_version_for_node(node) if node is not None else ""
-    override = param_policy_override(version, component_type, param_name)
+    override = param_policy_override(version, component_type, param_name) if version else {}
 
     inferred_kind = infer_kind_from_description(metadata.get("description", ""))
     kind = _override_kind(override.get("kind"), inferred_kind)
@@ -244,6 +244,9 @@ def normalize_param_value(
 ) -> Any:
     """Normalize one parameter value according to resolved SST policy."""
 
+    if node is not None and not framework_version_for_node(node) and not (metadata or {}):
+        return value
+
     policy = resolve_param_policy(component_type, param_name, metadata, node=node)
 
     if not policy.validate_user_value:
@@ -293,7 +296,16 @@ def default_params_for_node(
     defaults: dict[str, Any] = {}
     metadata_by_name = parameter_metadata_for_node(node)
     version = framework_version_for_node(node)
-    catalog_params = component_policy(version, component_type).get("params", {})
+
+    # Do not inject catalog-derived defaults into synthetic/unversioned nodes.
+    # Unit tests and some legacy/editor-only objects may identify an SST
+    # component type without carrying a target/catalog version or imported
+    # database metadata. In that case user-entered params should pass through
+    # unchanged instead of inheriting defaults from the newest bundled catalog.
+    if not version and not metadata_by_name:
+        return {}
+
+    catalog_params = component_policy(version, component_type).get("params", {}) if version else {}
 
     if not isinstance(catalog_params, dict):
         catalog_params = {}

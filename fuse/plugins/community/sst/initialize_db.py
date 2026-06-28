@@ -219,6 +219,63 @@ def initialize_sst_schema(conn) -> None:
 
     ensure_sst_port_variable_columns(conn)
 
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS sst_component_catalog_sources (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            framework_version_id INTEGER,
+            base_version TEXT NOT NULL DEFAULT '',
+            source_kind TEXT NOT NULL DEFAULT '',
+            source_label TEXT NOT NULL DEFAULT '',
+            source_fingerprint TEXT NOT NULL DEFAULT '',
+            catalog_path TEXT NOT NULL DEFAULT '',
+            discovered_at TEXT DEFAULT CURRENT_TIMESTAMP,
+
+            UNIQUE(base_version, source_fingerprint),
+
+            FOREIGN KEY (framework_version_id)
+                REFERENCES sst_framework_versions(id)
+                ON DELETE SET NULL
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS sst_component_enablement (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_id INTEGER NOT NULL,
+            component_key TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT '',
+            enabled INTEGER NOT NULL DEFAULT 0 CHECK (enabled IN (0, 1)),
+
+            UNIQUE(source_id, component_key),
+
+            FOREIGN KEY (source_id)
+                REFERENCES sst_component_catalog_sources(id)
+                ON DELETE CASCADE
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS sst_project_component_enablement (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_key TEXT NOT NULL,
+            framework_version_id INTEGER,
+            base_version TEXT NOT NULL DEFAULT '',
+            source_fingerprint TEXT NOT NULL DEFAULT '',
+            component_key TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT '',
+            enabled INTEGER NOT NULL DEFAULT 0 CHECK (enabled IN (0, 1)),
+            reason TEXT NOT NULL DEFAULT '',
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+
+            UNIQUE(project_key, base_version, source_fingerprint, component_key),
+
+            FOREIGN KEY (framework_version_id)
+                REFERENCES sst_framework_versions(id)
+                ON DELETE SET NULL
+        )
+    """)
+
 
 def initialize_database() -> None:
     """Initialize the core database and then ensure SST-specific tables exist."""

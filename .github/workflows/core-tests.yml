@@ -1,4 +1,4 @@
-name: Core Test Suite
+name: Tiered Core and Plugin Test Suite
 
 on:
   workflow_dispatch:
@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   core-tests:
-    name: Tier 1 / Core and dependency-light tests
+    name: Tier 1 / Core tests only
     runs-on: ubuntu-24.04
 
     defaults:
@@ -24,6 +24,7 @@ jobs:
         working-directory: fuse
 
     env:
+      PYTHONPATH: ${{ github.workspace }}/fuse
       QT_QPA_PLATFORM: offscreen
       FUSE_SPLASH_MS: "0"
       FUSE_TEST_AUTOCLOSE_MS: "100"
@@ -57,33 +58,47 @@ jobs:
 
       - name: Show pytest configuration
         run: |
-          python -m pytest --markers | grep -E "sst_live|gem5_live|sst_ext"
+          python -m pytest --markers | grep -E "sst_live|sst_remote|sst_external|sst_ext|gem5_live|slow"
           python -m pytest --trace-config -q 2>&1 | grep -E "rootdir|configfile" || true
 
-      - name: Run fast test suite
+      - name: Collect core tests only
         run: |
-          python -m pytest -q -m "not sst_live and not gem5_live and not sst_ext"
+          python -m pytest --collect-only -q tests
 
-  gem5-live:
-    name: Tier 2 / gem5 ${{ matrix.gem5.version }} live integration tests
+      - name: Run core tests only
+        run: |
+          python -m pytest -q tests
+
+      - name: Run core coverage
+        run: |
+          python -m pytest -q tests \
+            --cov=fuse.core \
+            --cov=fuse.app \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage-core.xml
+
+      - name: Upload core coverage XML
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-core
+          path: fuse/coverage-core.xml
+          if-no-files-found: error
+
+  plugin-deterministic-tests:
+    name: Tier 2 / ${{ matrix.plugin.name }} deterministic plugin tests
     needs: core-tests
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
 
     strategy:
       fail-fast: false
       matrix:
-        gem5:
-          - version: "25.1.0.1"
-            image: "ghcr.io/pkblabs/fuse-gem5-ci:gem5-v25.1.0.1"
-          - version: "24.1.0.3"
-            image: "ghcr.io/pkblabs/fuse-gem5-ci:gem5-v24.1.0.3"
-
-    container:
-      image: ${{ matrix.gem5.image }}
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+        plugin:
+          - name: SST
+            path: plugins/community/sst/tests
+            markers: not sst_live and not sst_remote and not sst_ext and not sst_external and not slow
+          - name: gem5
+            path: plugins/community/gem5/tests
+            markers: not gem5_live and not slow
 
     defaults:
       run:
@@ -91,69 +106,7 @@ jobs:
         working-directory: fuse
 
     env:
-      QT_QPA_PLATFORM: offscreen
-      FUSE_SPLASH_MS: "0"
-      FUSE_TEST_AUTOCLOSE_MS: "100"
-      FUSE_GEM5_VERSION: ${{ matrix.gem5.version }}
-      GEM5_ROOT: /opt/gem5
-      GEM5_BINARY: /opt/gem5/build/X86/gem5.opt
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v6
-
-      - name: Verify gem5 installation
-        run: |
-          echo "$GEM5_ROOT"
-          echo "$GEM5_BINARY"
-          test -x "$GEM5_BINARY"
-          ldd "$GEM5_BINARY" | tee /tmp/gem5-ldd.txt
-          if grep -q "not found" /tmp/gem5-ldd.txt; then
-            echo "Missing gem5 runtime shared libraries:"
-            grep "not found" /tmp/gem5-ldd.txt
-            exit 1
-          fi
-          "$GEM5_BINARY" --help > /tmp/gem5-help.txt 2>&1
-          head -40 /tmp/gem5-help.txt
-
-      - name: Create Python virtual environment
-        run: |
-          rm -rf /tmp/fuse-venv
-          python3 -m venv /tmp/fuse-venv
-          /tmp/fuse-venv/bin/python -m pip install --upgrade pip
-          /tmp/fuse-venv/bin/python -m pip install -r requirements-dev.txt
-
-      - name: Run live gem5 tests
-        run: |
-          /tmp/fuse-venv/bin/python -m pytest -q -m "gem5_live"
-
-  sst-live:
-    name: Tier 2 / SST ${{ matrix.sst.version }} live integration tests
-    needs: core-tests
-    runs-on: ubuntu-24.04
-    timeout-minutes: 60
-
-    strategy:
-      fail-fast: false
-      matrix:
-        sst:
-          - version: "15.1.2"
-            image: "ghcr.io/pkblabs/fuse-sst-ci:sst-15.1.2"
-          - version: "16.0.0"
-            image: "ghcr.io/pkblabs/fuse-sst-ci:sst-16.0.0"
-
-    container:
-      image: ${{ matrix.sst.image }}
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-
-    defaults:
-      run:
-        shell: bash
-        working-directory: fuse
-
-    env:
+      PYTHONPATH: ${{ github.workspace }}/fuse
       QT_QPA_PLATFORM: offscreen
       FUSE_SPLASH_MS: "0"
       FUSE_TEST_AUTOCLOSE_MS: "100"
@@ -164,46 +117,41 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
 
-      - name: Verify SST installation
-        run: |
-          which sst
-          which sst-info
-          sst --version || true
-          sst-info --version || true
-          sst-info > /tmp/sst-info.txt
-          head -100 /tmp/sst-info.txt
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: |
+            fuse/requirements.txt
+            fuse/requirements-dev.txt
 
-      - name: Create Python virtual environment
+      - name: Install Qt runtime packages
         run: |
-          rm -rf /tmp/fuse-venv
-          python3 -m venv /tmp/fuse-venv
-          /tmp/fuse-venv/bin/python -m pip install --upgrade pip
-          /tmp/fuse-venv/bin/python -m pip install -r requirements-dev.txt
+          sudo apt-get update
+          sudo apt-get install -y \
+            libegl1 \
+            libgl1 \
+            libxkbcommon-x11-0 \
+            xvfb
 
-      - name: Run live SST tests
+      - name: Install Python dependencies
         run: |
-          /tmp/fuse-venv/bin/python -m pytest -q -m "sst_live"
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
 
-  sst-external-validation:
-    name: Tier 2 / SST ${{ matrix.sst.version }} external validation tests
-    needs: core-tests
+      - name: Collect ${{ matrix.plugin.name }} deterministic plugin tests
+        run: |
+          python -m pytest --collect-only -q "${{ matrix.plugin.path }}" -m "${{ matrix.plugin.markers }}"
+
+      - name: Run ${{ matrix.plugin.name }} deterministic plugin tests
+        run: |
+          python -m pytest -q "${{ matrix.plugin.path }}" -m "${{ matrix.plugin.markers }}"
+
+  sst-external-fixture-tests:
+    name: Tier 3 / SST external fixture tests
+    needs: plugin-deterministic-tests
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
-
-    strategy:
-      fail-fast: false
-      matrix:
-        sst:
-          - version: "15.1.2"
-            image: "ghcr.io/pkblabs/fuse-sst-ext-ci:sst-15.1.2"
-          - version: "16.0.0"
-            image: "ghcr.io/pkblabs/fuse-sst-ext-ci:sst-16.0.0"
-
-    container:
-      image: ${{ matrix.sst.image }}
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
 
     defaults:
       run:
@@ -211,37 +159,43 @@ jobs:
         working-directory: fuse
 
     env:
+      PYTHONPATH: ${{ github.workspace }}/fuse
       QT_QPA_PLATFORM: offscreen
       FUSE_SPLASH_MS: "0"
       FUSE_TEST_AUTOCLOSE_MS: "100"
-      FUSE_SST_VERSION: ${{ matrix.sst.version }}
-      FUSE_SST_VERSION_POLICY: major_minor_patch
-      FUSE_ENABLE_SST_EXT_TESTS: "1"
-      SST_EXT_TESTS_ROOT: /opt/sst-ext-tests
+      SST_EXTERNAL_FIXTURE_MARKERS: sst_external and not sst_live and not sst_remote and not sst_ext and not slow
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
 
-      - name: Verify SST external validation image
-        run: |
-          which sst
-          which sst-info
-          sst --version || true
-          sst-info --version || true
-          test -d "$SST_EXT_TESTS_ROOT"
-          test -f /opt/sst-ext-tests-revision.txt
-          echo "sst-ext-tests revision: $(cat /opt/sst-ext-tests-revision.txt)"
-          sst-info simpleElementExample > /tmp/simpleElementExample-info.txt
-          head -80 /tmp/simpleElementExample-info.txt
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: |
+            fuse/requirements.txt
+            fuse/requirements-dev.txt
 
-      - name: Create Python virtual environment
+      - name: Install Qt runtime packages
         run: |
-          rm -rf /tmp/fuse-venv
-          python3 -m venv /tmp/fuse-venv
-          /tmp/fuse-venv/bin/python -m pip install --upgrade pip
-          /tmp/fuse-venv/bin/python -m pip install -r requirements-dev.txt
+          sudo apt-get update
+          sudo apt-get install -y \
+            libegl1 \
+            libgl1 \
+            libxkbcommon-x11-0 \
+            xvfb
 
-      - name: Run SST external validation tests
+      - name: Install Python dependencies
         run: |
-          /tmp/fuse-venv/bin/python -m pytest -q -m "sst_ext"
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+
+      - name: Collect deterministic SST external fixture tests
+        run: |
+          python -m pytest --collect-only -q plugins/community/sst/tests -m "$SST_EXTERNAL_FIXTURE_MARKERS"
+
+      - name: Run deterministic SST external fixture tests
+        run: |
+          python -m pytest -q plugins/community/sst/tests -m "$SST_EXTERNAL_FIXTURE_MARKERS"

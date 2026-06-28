@@ -26,6 +26,8 @@ pip-wheel-metadata/
 .vscode/
 
 # Runtime database
+app_data/
+fuse/app_data/
 app_data/*.db
 app_data/*.db-journal
 app_data/*.db-wal
@@ -46,3 +48,6 @@ fuse/app_data/*.sqlite3
 # OS junk
 .DS_Store
 Thumbs.db
+
+# Plugin-generated runtime metadata
+fuse/plugins/community/sst/component_catalogs/toolchains/*.json
