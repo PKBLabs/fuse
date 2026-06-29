@@ -42,27 +42,25 @@ def test_core_coverage_suite_is_core_only():
     assert "--cov=fuse.plugins.community.gem5" not in args
 
 
-def test_core_workflow_runs_core_tests_first(repo_root: Path):
+def test_core_workflow_is_core_only(repo_root: Path):
     text = (repo_root / ".github" / "workflows" / "core-tests.yml").read_text(
         encoding="utf-8"
     )
 
-    assert "name: Tiered Core and Plugin Test Suite" in text
+    assert "name: Tier 1 / Core Tests" in text
     assert "core-tests:" in text
-    assert "plugin-deterministic-tests:" in text
-    assert "needs: core-tests" in text
-
-
-def test_core_workflow_core_job_uses_only_core_test_path(repo_root: Path):
-    text = (repo_root / ".github" / "workflows" / "core-tests.yml").read_text(
-        encoding="utf-8"
-    )
-
-    core_section = text.split("  plugin-deterministic-tests:", 1)[0]
-
     assert "PYTHONPATH: ${{ github.workspace }}" in text
     assert "working-directory: fuse" not in text
-    assert "python -m pytest --collect-only -q fuse/tests" in core_section
-    assert "python -m pytest -q fuse/tests" in core_section
-    assert "fuse/plugins/community/sst/tests" not in core_section
-    assert "fuse/plugins/community/gem5/tests" not in core_section
+    assert "python -m pytest --collect-only -q fuse/tests" in text
+    assert "python -m pytest -q fuse/tests" in text
+    assert "fuse/plugins/community/sst/tests" not in text
+    assert "fuse/plugins/community/gem5/tests" not in text
+    assert "plugin-deterministic-tests:" not in text
+
+
+def test_deterministic_plugin_workflows_are_separate_files(repo_root: Path):
+    workflows = repo_root / ".github" / "workflows"
+
+    assert (workflows / "gem5-deterministic-tests.yml").exists()
+    assert (workflows / "sst-deterministic-tests.yml").exists()
+    assert (workflows / "sst-external-fixture-tests.yml").exists()

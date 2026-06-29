@@ -27,19 +27,29 @@ Useful documentation:
 
 ## Testing status
 
-[![Core Tests](https://github.com/PKBLabs/fuse/actions/workflows/core-tests.yml/badge.svg?branch=develop)](https://github.com/PKBLabs/fuse/actions/workflows/core-tests.yml)
+[![Core tests](https://github.com/PKBLabs/fuse/actions/workflows/core-tests.yml/badge.svg?branch=develop&event=push)](https://github.com/PKBLabs/fuse/actions/workflows/core-tests.yml)
+[![gem5 deterministic tests](https://github.com/PKBLabs/fuse/actions/workflows/gem5-deterministic-tests.yml/badge.svg?branch=develop&event=workflow_run)](https://github.com/PKBLabs/fuse/actions/workflows/gem5-deterministic-tests.yml)
+[![SST deterministic tests](https://github.com/PKBLabs/fuse/actions/workflows/sst-deterministic-tests.yml/badge.svg?branch=develop&event=workflow_run)](https://github.com/PKBLabs/fuse/actions/workflows/sst-deterministic-tests.yml)
+[![SST external fixture tests](https://github.com/PKBLabs/fuse/actions/workflows/sst-external-fixture-tests.yml/badge.svg?branch=develop&event=workflow_run)](https://github.com/PKBLabs/fuse/actions/workflows/sst-external-fixture-tests.yml)
 
-[![gem5 Integration Tests](https://github.com/PKBLabs/fuse/actions/workflows/gem5-integration.yml/badge.svg?branch=develop&event=workflow_dispatch)](https://github.com/PKBLabs/fuse/actions/workflows/gem5-integration.yml)
+[![gem5 live integration tests](https://github.com/PKBLabs/fuse/actions/workflows/gem5-integration.yml/badge.svg?branch=develop&event=workflow_dispatch)](https://github.com/PKBLabs/fuse/actions/workflows/gem5-integration.yml)
+[![SST live integration tests](https://github.com/PKBLabs/fuse/actions/workflows/sst-integration.yml/badge.svg?branch=develop&event=workflow_dispatch)](https://github.com/PKBLabs/fuse/actions/workflows/sst-integration.yml)
+[![SST external live validation tests](https://github.com/PKBLabs/fuse/actions/workflows/sst-external-validation.yml/badge.svg?branch=develop&event=workflow_dispatch)](https://github.com/PKBLabs/fuse/actions/workflows/sst-external-validation.yml)
 
-[![SST Integration Tests](https://github.com/PKBLabs/fuse/actions/workflows/sst-integration.yml/badge.svg?branch=develop&event=workflow_dispatch)](https://github.com/PKBLabs/fuse/actions/workflows/sst-integration.yml)
-[![SST External Validation Tests](https://github.com/PKBLabs/fuse/actions/workflows/sst-external-validation.yml/badge.svg?branch=develop&event=workflow_dispatch)](https://github.com/PKBLabs/fuse/actions/workflows/sst-external-validation.yml)
+The dependency-light deterministic checks are split into separate workflow badges so each tier reports independently while still running as a chain. Tier 1 core tests run on pull requests and pushes to `main` or `develop`. Tier 2 gem5 and SST deterministic plugin workflows start after the Tier 1 core workflow succeeds. Tier 3 deterministic SST external fixture tests start after the Tier 2 SST deterministic workflow succeeds. Live SST/gem5 and external live validation workflows require prebuilt simulator CI images and remain manual/optional.
 
-Core tests run on pull requests and on pushes to `main` or `develop` using the dependency-light marker expression `not sst_live and not gem5_live`. SST and gem5 integration tests require prebuilt simulator CI images and are run manually, weekly, or when relevant plugin/core/toolchain paths change.
-
-For local validation from the FUSE package root, run:
+For local validation from the repository root, run:
 
 ```bash
-QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q -m "not sst_live and not gem5_live"
+make test-fast
+```
+
+This is equivalent to running the deterministic local tiers:
+
+```bash
+make test-core
+make test-plugins
+make test-sst-external-fixtures
 ```
 
 ## Current development status

@@ -10,8 +10,9 @@
 """Core-only tests for repository-level test infrastructure.
 
 Plugin-specific SST/gem5 test-suite assertions belong under the corresponding
-plugin test directories.  This file only verifies that the core suite remains
-core-only and that plugin tiers are ordered after the core tier in CI.
+plugin test directories. This file verifies that the core workflow remains
+core-only and that deterministic plugin tiers live in separate workflow files so
+README badges can report tier status independently.
 """
 
 from __future__ import annotations
@@ -51,27 +52,73 @@ def test_core_coverage_suite_is_registered_and_core_only():
     assert "--cov=fuse.plugins.community.gem5" not in args
 
 
-def test_core_workflow_runs_core_tier_before_plugin_tiers(repo_root: Path):
-    workflow = (repo_root / ".github" / "workflows" / "core-tests.yml").read_text(
-        encoding="utf-8"
-    )
+def test_deterministic_ci_tiers_have_separate_workflow_files(repo_root: Path):
+    workflows = repo_root / ".github" / "workflows"
 
-    assert "core-tests:" in workflow
-    assert "plugin-deterministic-tests:" in workflow
-    assert "sst-external-fixture-tests:" in workflow
-    assert "needs: core-tests" in workflow
-    assert "needs: plugin-deterministic-tests" in workflow
+    assert (workflows / "core-tests.yml").exists()
+    assert (workflows / "gem5-deterministic-tests.yml").exists()
+    assert (workflows / "sst-deterministic-tests.yml").exists()
+    assert (workflows / "sst-external-fixture-tests.yml").exists()
 
 
 def test_core_workflow_core_job_uses_only_core_test_path(repo_root: Path):
     workflow = (repo_root / ".github" / "workflows" / "core-tests.yml").read_text(
         encoding="utf-8"
     )
-    core_job = workflow.split("  plugin-deterministic-tests:", 1)[0]
 
+    assert "name: Tier 1 / Core Tests" in workflow
+    assert "core-tests:" in workflow
     assert "PYTHONPATH: ${{ github.workspace }}" in workflow
     assert "working-directory: fuse" not in workflow
-    assert "python -m pytest --collect-only -q fuse/tests" in core_job
-    assert "python -m pytest -q fuse/tests" in core_job
-    assert "fuse/plugins/community/sst/tests" not in core_job
-    assert "fuse/plugins/community/gem5/tests" not in core_job
+    assert "python -m pytest --collect-only -q fuse/tests" in workflow
+    assert "python -m pytest -q fuse/tests" in workflow
+    assert "fuse/plugins/community/sst/tests" not in workflow
+    assert "fuse/plugins/community/gem5/tests" not in workflow
+    assert "plugin-deterministic-tests:" not in workflow
+    assert "sst-external-fixture-tests:" not in workflow
+
+
+def test_readme_uses_independent_deterministic_workflow_badges(repo_root: Path):
+    readme = (repo_root / "README.md").read_text(encoding="utf-8")
+
+    badge_events = {
+        "core-tests.yml": "push",
+        "gem5-deterministic-tests.yml": "workflow_run",
+        "sst-deterministic-tests.yml": "workflow_run",
+        "sst-external-fixture-tests.yml": "workflow_run",
+    }
+
+    for workflow_name, event_name in badge_events.items():
+        badge = (
+            f"actions/workflows/{workflow_name}/badge.svg?"
+            f"branch=develop&event={event_name}"
+        )
+        link = f"actions/workflows/{workflow_name}"
+        assert badge in readme
+        assert link in readme
+
+
+def test_deterministic_plugin_workflows_are_chained_after_core(repo_root: Path):
+    workflows = repo_root / ".github" / "workflows"
+
+    for workflow_name in (
+        "gem5-deterministic-tests.yml",
+        "sst-deterministic-tests.yml",
+    ):
+        text = (workflows / workflow_name).read_text(encoding="utf-8")
+        assert "workflow_run:" in text
+        assert "- Tier 1 / Core Tests" in text
+        assert "github.event.workflow_run.conclusion == 'success'" in text
+        assert "github.event.workflow_run.head_sha" in text
+        assert "push:" not in text
+        assert "pull_request:" not in text
+
+    text = (workflows / "sst-external-fixture-tests.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "workflow_run:" in text
+    assert "- Tier 2 / SST Deterministic Tests" in text
+    assert "github.event.workflow_run.conclusion == 'success'" in text
+    assert "github.event.workflow_run.head_sha" in text
+    assert "push:" not in text
+    assert "pull_request:" not in text
