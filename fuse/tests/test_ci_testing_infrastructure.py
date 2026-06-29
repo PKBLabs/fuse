@@ -7,12 +7,11 @@
 # terms of the GNU General Public License as published by the Free Software
 # Foundation, either version 3 of the License, or, at your option, any later
 # version.
-"""Core-only tests for repository-level test infrastructure.
+"""Core tests for repository-level test infrastructure.
 
-Plugin-specific SST/gem5 test-suite assertions belong under the corresponding
-plugin test directories. This file verifies that the core workflow remains
-core-only and that deterministic plugin tiers live in separate workflow files so
-README badges can report tier status independently.
+Plugin-specific SST/gem5 suite details belong under the corresponding plugin
+unit tests. This file verifies the core suite remains core-only and that the
+repository-level deterministic workflow preserves the tier dependency shape.
 """
 
 from __future__ import annotations
@@ -52,75 +51,72 @@ def test_core_coverage_suite_is_registered_and_core_only():
     assert "--cov=fuse.plugins.community.gem5" not in args
 
 
-def test_deterministic_ci_tiers_have_separate_workflow_files(repo_root: Path):
-    workflows = repo_root / ".github" / "workflows"
-
-    assert (workflows / "core-tests.yml").exists()
-    assert (workflows / "gem5-deterministic-tests.yml").exists()
-    assert (workflows / "sst-deterministic-tests.yml").exists()
-    assert (workflows / "sst-external-fixture-tests.yml").exists()
-
-
-def test_core_workflow_core_job_uses_only_core_test_path(repo_root: Path):
+def test_deterministic_ci_uses_single_tiered_orchestrator(repo_root: Path):
     workflow = (repo_root / ".github" / "workflows" / "core-tests.yml").read_text(
         encoding="utf-8"
     )
 
-    assert "name: Tier 1 / Core Tests" in workflow
+    assert "name: Tiered Deterministic Test Suite" in workflow
+    assert "pull_request:" in workflow
+    assert "push:" in workflow
     assert "core-tests:" in workflow
+    assert "gem5-deterministic-tests:" in workflow
+    assert "sst-deterministic-tests:" in workflow
+    assert "sst-external-fixture-tests:" in workflow
     assert "PYTHONPATH: ${{ github.workspace }}" in workflow
     assert "working-directory: fuse" not in workflow
-    assert "python -m pytest -c fuse/pytest.ini --markers" in workflow
-    assert "python -m pytest -c fuse/pytest.ini --trace-config -q fuse/tests" in workflow
-    assert "python -m pytest --collect-only -q fuse/tests" in workflow
-    assert "python -m pytest -q fuse/tests" in workflow
-    assert "fuse/plugins/community/sst/tests" not in workflow
-    assert "fuse/plugins/community/gem5/tests" not in workflow
-    assert "plugin-deterministic-tests:" not in workflow
-    assert "sst-external-fixture-tests:" not in workflow
 
 
-def test_readme_uses_independent_deterministic_workflow_badges(repo_root: Path):
-    readme = (repo_root / "README.md").read_text(encoding="utf-8")
+def test_core_job_uses_only_core_test_path(repo_root: Path):
+    workflow = (repo_root / ".github" / "workflows" / "core-tests.yml").read_text(
+        encoding="utf-8"
+    )
 
-    badge_events = {
-        "core-tests.yml": "push",
-        "gem5-deterministic-tests.yml": "workflow_run",
-        "sst-deterministic-tests.yml": "workflow_run",
-        "sst-external-fixture-tests.yml": "workflow_run",
-    }
+    core_start = workflow.index("  core-tests:")
+    gem5_start = workflow.index("  gem5-deterministic-tests:")
+    core_job = workflow[core_start:gem5_start]
 
-    for workflow_name, event_name in badge_events.items():
-        badge = (
-            f"actions/workflows/{workflow_name}/badge.svg?"
-            f"branch=develop&event={event_name}"
-        )
-        link = f"actions/workflows/{workflow_name}"
-        assert badge in readme
-        assert link in readme
+    assert "name: Tier 1 / core tests" in core_job
+    assert "python -m pytest -c fuse/pytest.ini --markers" in core_job
+    assert "python -m pytest -c fuse/pytest.ini --trace-config -q fuse/tests" in core_job
+    assert "python -m pytest --collect-only -q fuse/tests" in core_job
+    assert "python -m pytest -q fuse/tests" in core_job
+    assert "fuse/plugins/community/sst/tests" not in core_job
+    assert "fuse/plugins/community/gem5/tests" not in core_job
 
 
-def test_deterministic_plugin_workflows_are_chained_after_core(repo_root: Path):
+def test_tiered_workflow_preserves_job_dependencies(repo_root: Path):
+    workflow = (repo_root / ".github" / "workflows" / "core-tests.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "needs: core-tests" in workflow
+    assert "needs:\n      - gem5-deterministic-tests\n      - sst-deterministic-tests" in workflow
+    assert "workflow_run:" not in workflow
+
+
+def test_deprecated_split_workflows_are_manual_only(repo_root: Path):
     workflows = repo_root / ".github" / "workflows"
 
     for workflow_name in (
         "gem5-deterministic-tests.yml",
         "sst-deterministic-tests.yml",
+        "sst-external-fixture-tests.yml",
     ):
         text = (workflows / workflow_name).read_text(encoding="utf-8")
-        assert "workflow_run:" in text
-        assert "- Tier 1 / Core Tests" in text
-        assert "github.event.workflow_run.conclusion == 'success'" in text
-        assert "github.event.workflow_run.head_sha" in text
+        assert "workflow_dispatch:" in text
+        assert "workflow_run:" not in text
         assert "push:" not in text
         assert "pull_request:" not in text
+        assert "Use Tiered Deterministic Test Suite" in text
 
-    text = (workflows / "sst-external-fixture-tests.yml").read_text(
-        encoding="utf-8"
-    )
-    assert "workflow_run:" in text
-    assert "- Tier 2 / SST Deterministic Tests" in text
-    assert "github.event.workflow_run.conclusion == 'success'" in text
-    assert "github.event.workflow_run.head_sha" in text
-    assert "push:" not in text
-    assert "pull_request:" not in text
+
+def test_readme_uses_overall_workflow_and_per_tier_check_badges(repo_root: Path):
+    readme = (repo_root / "README.md").read_text(encoding="utf-8")
+
+    assert "actions/workflows/core-tests.yml/badge.svg?branch=develop&event=push" in readme
+    assert "img.shields.io/github/check-runs/PKBLabs/fuse/develop" in readme
+    assert "name=Tier%201%20%2F%20core%20tests" in readme
+    assert "name=Tier%202%20%2F%20gem5%20deterministic%20plugin%20tests" in readme
+    assert "name=Tier%202%20%2F%20SST%20deterministic%20plugin%20tests" in readme
+    assert "name=Tier%203%20%2F%20SST%20external%20fixture%20tests" in readme

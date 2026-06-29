@@ -1,73 +1,17 @@
-name: Tier 2 / SST Deterministic Tests
+name: Deprecated split deterministic tier workflow
 
 on:
   workflow_dispatch:
-  workflow_run:
-    workflows:
-      - Tier 1 / Core Tests
-    types:
-      - completed
 
 permissions:
   contents: read
-  packages: read
 
 jobs:
-  sst-deterministic-tests:
-    name: Tier 2 / SST deterministic plugin tests
+  moved-to-tiered-deterministic-workflow:
+    name: Use Tiered Deterministic Test Suite
     runs-on: ubuntu-24.04
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
-
-    defaults:
-      run:
-        shell: bash
-
-    env:
-      PYTHONPATH: ${{ github.workspace }}
-      QT_QPA_PLATFORM: offscreen
-      FUSE_SPLASH_MS: "0"
-      FUSE_TEST_AUTOCLOSE_MS: "100"
-      SST_PLUGIN_MARKERS: not sst_live and not sst_remote and not sst_ext and not sst_external and not slow
-
     steps:
-      - name: Check out repository from completed core run
-        if: ${{ github.event_name == 'workflow_run' }}
-        uses: actions/checkout@v6
-        with:
-          repository: ${{ github.event.workflow_run.head_repository.full_name }}
-          ref: ${{ github.event.workflow_run.head_sha }}
-
-      - name: Check out repository for manual run
-        if: ${{ github.event_name != 'workflow_run' }}
-        uses: actions/checkout@v6
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-          cache: "pip"
-          cache-dependency-path: |
-            fuse/requirements.txt
-            fuse/requirements-dev.txt
-
-      - name: Install Qt runtime packages
+      - name: Explain replacement workflow
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libegl1 \
-            libgl1 \
-            libxkbcommon-x11-0 \
-            xvfb
-
-      - name: Install Python dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r fuse/requirements-dev.txt
-
-      - name: Collect deterministic SST plugin tests
-        run: |
-          python -m pytest --collect-only -q fuse/plugins/community/sst/tests -m "$SST_PLUGIN_MARKERS"
-
-      - name: Run deterministic SST plugin tests
-        run: |
-          python -m pytest -q fuse/plugins/community/sst/tests -m "$SST_PLUGIN_MARKERS"
+          echo "This split workflow is retained only to avoid dangling workflow-file references."
+          echo "Deterministic CI now runs in .github/workflows/core-tests.yml as the Tiered Deterministic Test Suite."

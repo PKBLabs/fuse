@@ -1,4 +1,4 @@
-name: Tier 1 / Core Tests
+name: Tiered Deterministic Test Suite
 
 on:
   workflow_dispatch:
@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   core-tests:
-    name: Tier 1 / core tests only
+    name: Tier 1 / core tests
     runs-on: ubuntu-24.04
 
     defaults:
@@ -82,3 +82,158 @@ jobs:
           name: coverage-core
           path: coverage-core.xml
           if-no-files-found: error
+
+  gem5-deterministic-tests:
+    name: Tier 2 / gem5 deterministic plugin tests
+    runs-on: ubuntu-24.04
+    needs: core-tests
+
+    defaults:
+      run:
+        shell: bash
+
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      QT_QPA_PLATFORM: offscreen
+      FUSE_SPLASH_MS: "0"
+      FUSE_TEST_AUTOCLOSE_MS: "100"
+      GEM5_PLUGIN_MARKERS: not gem5_live and not slow
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: |
+            fuse/requirements.txt
+            fuse/requirements-dev.txt
+
+      - name: Install Qt runtime packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libegl1 \
+            libgl1 \
+            libxkbcommon-x11-0 \
+            xvfb
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r fuse/requirements-dev.txt
+
+      - name: Collect deterministic gem5 plugin tests
+        run: |
+          python -m pytest --collect-only -q fuse/plugins/community/gem5/tests -m "$GEM5_PLUGIN_MARKERS"
+
+      - name: Run deterministic gem5 plugin tests
+        run: |
+          python -m pytest -q fuse/plugins/community/gem5/tests -m "$GEM5_PLUGIN_MARKERS"
+
+  sst-deterministic-tests:
+    name: Tier 2 / SST deterministic plugin tests
+    runs-on: ubuntu-24.04
+    needs: core-tests
+
+    defaults:
+      run:
+        shell: bash
+
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      QT_QPA_PLATFORM: offscreen
+      FUSE_SPLASH_MS: "0"
+      FUSE_TEST_AUTOCLOSE_MS: "100"
+      SST_PLUGIN_MARKERS: not sst_live and not sst_remote and not sst_ext and not sst_external and not slow
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: |
+            fuse/requirements.txt
+            fuse/requirements-dev.txt
+
+      - name: Install Qt runtime packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libegl1 \
+            libgl1 \
+            libxkbcommon-x11-0 \
+            xvfb
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r fuse/requirements-dev.txt
+
+      - name: Collect deterministic SST plugin tests
+        run: |
+          python -m pytest --collect-only -q fuse/plugins/community/sst/tests -m "$SST_PLUGIN_MARKERS"
+
+      - name: Run deterministic SST plugin tests
+        run: |
+          python -m pytest -q fuse/plugins/community/sst/tests -m "$SST_PLUGIN_MARKERS"
+
+  sst-external-fixture-tests:
+    name: Tier 3 / SST external fixture tests
+    runs-on: ubuntu-24.04
+    needs:
+      - gem5-deterministic-tests
+      - sst-deterministic-tests
+
+    defaults:
+      run:
+        shell: bash
+
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      QT_QPA_PLATFORM: offscreen
+      FUSE_SPLASH_MS: "0"
+      FUSE_TEST_AUTOCLOSE_MS: "100"
+      SST_EXTERNAL_FIXTURE_MARKERS: sst_external and not sst_live and not sst_remote and not sst_ext and not slow
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: |
+            fuse/requirements.txt
+            fuse/requirements-dev.txt
+
+      - name: Install Qt runtime packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libegl1 \
+            libgl1 \
+            libxkbcommon-x11-0 \
+            xvfb
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r fuse/requirements-dev.txt
+
+      - name: Collect deterministic SST external fixture tests
+        run: |
+          python -m pytest --collect-only -q fuse/plugins/community/sst/tests -m "$SST_EXTERNAL_FIXTURE_MARKERS"
+
+      - name: Run deterministic SST external fixture tests
+        run: |
+          python -m pytest -q fuse/plugins/community/sst/tests -m "$SST_EXTERNAL_FIXTURE_MARKERS"

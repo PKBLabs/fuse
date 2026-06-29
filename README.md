@@ -27,16 +27,19 @@ Useful documentation:
 
 ## Testing status
 
-[![Core tests](https://github.com/PKBLabs/fuse/actions/workflows/core-tests.yml/badge.svg?branch=develop&event=push)](https://github.com/PKBLabs/fuse/actions/workflows/core-tests.yml)
-[![gem5 deterministic tests](https://github.com/PKBLabs/fuse/actions/workflows/gem5-deterministic-tests.yml/badge.svg?branch=develop&event=workflow_run)](https://github.com/PKBLabs/fuse/actions/workflows/gem5-deterministic-tests.yml)
-[![SST deterministic tests](https://github.com/PKBLabs/fuse/actions/workflows/sst-deterministic-tests.yml/badge.svg?branch=develop&event=workflow_run)](https://github.com/PKBLabs/fuse/actions/workflows/sst-deterministic-tests.yml)
-[![SST external fixture tests](https://github.com/PKBLabs/fuse/actions/workflows/sst-external-fixture-tests.yml/badge.svg?branch=develop&event=workflow_run)](https://github.com/PKBLabs/fuse/actions/workflows/sst-external-fixture-tests.yml)
+[![Deterministic CI](https://github.com/PKBLabs/fuse/actions/workflows/core-tests.yml/badge.svg?branch=develop&event=push)](https://github.com/PKBLabs/fuse/actions/workflows/core-tests.yml)
+[![Core tier](https://img.shields.io/github/check-runs/PKBLabs/fuse/develop?name=Tier%201%20%2F%20core%20tests&label=core)](https://github.com/PKBLabs/fuse/actions/workflows/core-tests.yml)
+[![gem5 tier 2](https://img.shields.io/github/check-runs/PKBLabs/fuse/develop?name=Tier%202%20%2F%20gem5%20deterministic%20plugin%20tests&label=gem5%20tier%202)](https://github.com/PKBLabs/fuse/actions/workflows/core-tests.yml)
+[![SST tier 2](https://img.shields.io/github/check-runs/PKBLabs/fuse/develop?name=Tier%202%20%2F%20SST%20deterministic%20plugin%20tests&label=SST%20tier%202)](https://github.com/PKBLabs/fuse/actions/workflows/core-tests.yml)
+[![SST tier 3](https://img.shields.io/github/check-runs/PKBLabs/fuse/develop?name=Tier%203%20%2F%20SST%20external%20fixture%20tests&label=SST%20tier%203)](https://github.com/PKBLabs/fuse/actions/workflows/core-tests.yml)
 
 [![gem5 live integration tests](https://github.com/PKBLabs/fuse/actions/workflows/gem5-integration.yml/badge.svg?branch=develop&event=workflow_dispatch)](https://github.com/PKBLabs/fuse/actions/workflows/gem5-integration.yml)
 [![SST live integration tests](https://github.com/PKBLabs/fuse/actions/workflows/sst-integration.yml/badge.svg?branch=develop&event=workflow_dispatch)](https://github.com/PKBLabs/fuse/actions/workflows/sst-integration.yml)
 [![SST external live validation tests](https://github.com/PKBLabs/fuse/actions/workflows/sst-external-validation.yml/badge.svg?branch=develop&event=workflow_dispatch)](https://github.com/PKBLabs/fuse/actions/workflows/sst-external-validation.yml)
 
-The dependency-light deterministic checks are split into separate workflow badges so each tier reports independently while still running as a chain. Tier 1 core tests run on pull requests and pushes to `main` or `develop`. Tier 2 gem5 and SST deterministic plugin workflows start after the Tier 1 core workflow succeeds. Tier 3 deterministic SST external fixture tests start after the Tier 2 SST deterministic workflow succeeds. Live SST/gem5 and external live validation workflows require prebuilt simulator CI images and remain manual/optional.
+The deterministic CI pipeline runs as one GitHub Actions workflow with real job dependencies: Tier 1 core tests run first; Tier 2 gem5 and SST deterministic plugin tests run only after Tier 1 succeeds; Tier 3 deterministic SST external fixture tests run only after both Tier 2 deterministic plugin jobs succeed. The first badge reports the overall deterministic workflow. The per-tier badges report the named GitHub check runs for the `develop` branch, so an individual tier can show red even when another tier is green.
+
+Live SST/gem5 and external live validation workflows require prebuilt simulator CI images and remain manual/optional.
 
 For local validation from the repository root, run:
 

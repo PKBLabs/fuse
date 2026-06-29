@@ -110,19 +110,15 @@ def test_makefile_exposes_sst_tiered_test_targets(repo_root: Path):
         assert target in text
 
 
-def test_sst_deterministic_workflow_is_a_dedicated_tier(repo_root: Path):
-    text = (
-        repo_root / ".github" / "workflows" / "sst-deterministic-tests.yml"
-    ).read_text(encoding="utf-8")
+def test_sst_deterministic_job_is_in_tiered_workflow(repo_root: Path):
+    text = (repo_root / ".github" / "workflows" / "core-tests.yml").read_text(
+        encoding="utf-8"
+    )
 
-    assert "name: Tier 2 / SST Deterministic Tests" in text
-    assert "workflow_run:" in text
-    assert "- Tier 1 / Core Tests" in text
-    assert "github.event.workflow_run.conclusion == 'success'" in text
-    assert "github.event.workflow_run.head_sha" in text
-    assert "push:" not in text
-    assert "pull_request:" not in text
+    assert "name: Tiered Deterministic Test Suite" in text
     assert "sst-deterministic-tests:" in text
+    assert "name: Tier 2 / SST deterministic plugin tests" in text
+    assert "needs: core-tests" in text
     assert "PYTHONPATH: ${{ github.workspace }}" in text
     assert "working-directory: fuse" not in text
     assert "fuse/plugins/community/sst/tests" in text
@@ -130,43 +126,49 @@ def test_sst_deterministic_workflow_is_a_dedicated_tier(repo_root: Path):
         "not sst_live and not sst_remote and not sst_ext and not sst_external and not slow"
         in text
     )
-    assert "fuse/plugins/community/gem5/tests" not in text
-    assert "fuse/tests" not in text
 
 
-def test_sst_external_fixture_workflow_is_a_dedicated_deterministic_tier(repo_root: Path):
-    text = (
-        repo_root / ".github" / "workflows" / "sst-external-fixture-tests.yml"
-    ).read_text(encoding="utf-8")
+def test_sst_external_fixture_job_is_tier_3_in_tiered_workflow(repo_root: Path):
+    text = (repo_root / ".github" / "workflows" / "core-tests.yml").read_text(
+        encoding="utf-8"
+    )
 
-    assert "name: Tier 3 / SST External Fixture Tests" in text
-    assert "workflow_run:" in text
-    assert "- Tier 2 / SST Deterministic Tests" in text
-    assert "github.event.workflow_run.conclusion == 'success'" in text
-    assert "github.event.workflow_run.head_sha" in text
-    assert "push:" not in text
-    assert "pull_request:" not in text
     assert "sst-external-fixture-tests:" in text
-    assert "PYTHONPATH: ${{ github.workspace }}" in text
-    assert "working-directory: fuse" not in text
+    assert "name: Tier 3 / SST external fixture tests" in text
+    assert "needs:\n      - gem5-deterministic-tests\n      - sst-deterministic-tests" in text
     assert "fuse/plugins/community/sst/tests" in text
     assert (
         "sst_external and not sst_live and not sst_remote and not sst_ext and not slow"
         in text
     )
-    assert "fuse/plugins/community/gem5/tests" not in text
-    assert "fuse/tests" not in text
 
 
-def test_core_workflow_does_not_run_sst_plugin_or_live_jobs(repo_root: Path):
+def test_deprecated_sst_split_workflows_are_manual_only(repo_root: Path):
+    workflows = repo_root / ".github" / "workflows"
+
+    for workflow_name in (
+        "sst-deterministic-tests.yml",
+        "sst-external-fixture-tests.yml",
+    ):
+        text = (workflows / workflow_name).read_text(encoding="utf-8")
+        assert "workflow_dispatch:" in text
+        assert "workflow_run:" not in text
+        assert "push:" not in text
+        assert "pull_request:" not in text
+        assert "Use Tiered Deterministic Test Suite" in text
+
+
+def test_core_job_does_not_run_sst_plugin_or_live_commands(repo_root: Path):
     text = (repo_root / ".github" / "workflows" / "core-tests.yml").read_text(
         encoding="utf-8"
     )
+    core_start = text.index("  core-tests:")
+    sst_start = text.index("  sst-deterministic-tests:")
+    core_and_gem5_region = text[core_start:sst_start]
 
-    assert "fuse/plugins/community/sst/tests" not in text
-    assert "sst-deterministic-tests:" not in text
-    assert "sst-external-fixture-tests:" not in text
-    assert "sst-live:" not in text
-    assert "sst-external-validation:" not in text
-    assert 'pytest -q -m "sst_live"' not in text
-    assert 'pytest -q -m "sst_ext"' not in text
+    core_job = core_and_gem5_region[: core_and_gem5_region.index("  gem5-deterministic-tests:")]
+    assert "fuse/plugins/community/sst/tests" not in core_job
+    assert "sst-live:" not in core_job
+    assert "sst-external-validation:" not in core_job
+    assert 'pytest -q -m "sst_live"' not in core_job
+    assert 'pytest -q -m "sst_ext"' not in core_job
