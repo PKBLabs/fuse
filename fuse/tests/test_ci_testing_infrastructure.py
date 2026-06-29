@@ -70,6 +70,8 @@ def test_core_workflow_core_job_uses_only_core_test_path(repo_root: Path):
     assert "core-tests:" in workflow
     assert "PYTHONPATH: ${{ github.workspace }}" in workflow
     assert "working-directory: fuse" not in workflow
+    assert "python -m pytest -c fuse/pytest.ini --markers" in workflow
+    assert "python -m pytest -c fuse/pytest.ini --trace-config -q fuse/tests" in workflow
     assert "python -m pytest --collect-only -q fuse/tests" in workflow
     assert "python -m pytest -q fuse/tests" in workflow
     assert "fuse/plugins/community/sst/tests" not in workflow

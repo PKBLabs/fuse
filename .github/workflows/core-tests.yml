@@ -57,8 +57,8 @@ jobs:
 
       - name: Show pytest configuration
         run: |
-          python -m pytest --markers | grep -E "sst_live|sst_remote|sst_external|sst_ext|gem5_live|slow"
-          python -m pytest --trace-config -q 2>&1 | grep -E "rootdir|configfile" || true
+          python -m pytest -c fuse/pytest.ini --markers | grep -E "sst_live|sst_remote|sst_external|sst_ext|gem5_live|slow"
+          python -m pytest -c fuse/pytest.ini --trace-config -q fuse/tests 2>&1 | grep -E "rootdir|configfile" || true
 
       - name: Collect core tests only
         run: |
