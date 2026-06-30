@@ -24,7 +24,7 @@
 APP_NAME = "FUSE"
 APP_FULL_NAME = "Flexible User-extensible Simulation Model Editor"
 APP_EDITION = "Community Edition"
-APP_VERSION = "0.9.2-dev"
+APP_VERSION = "0.9.2"
 
 ORG_NAME = "PKB Research Labs, LLC"
 COPYRIGHT_TEXT = "Copyright © 2026 PKB Research Labs, LLC."
