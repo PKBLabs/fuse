@@ -126,11 +126,12 @@ class SSTComponentManagerDialog(QDialog):
         filter_row.addWidget(QLabel("Show:", self))
 
         self.status_filter = QComboBox(self)
+        self.status_filter.addItem("All detected components", "detected")
         self.status_filter.addItem("Custom and changed", "actionable")
         self.status_filter.addItem("Custom only", "custom")
         self.status_filter.addItem("Changed only", "changed")
         self.status_filter.addItem("Missing baseline components", "missing")
-        self.status_filter.addItem("All discovered/baseline", "all")
+        self.status_filter.addItem("All detected and missing", "all")
         self.status_filter.currentIndexChanged.connect(self.populate_tree)
         filter_row.addWidget(self.status_filter)
 
@@ -182,12 +183,15 @@ class SSTComponentManagerDialog(QDialog):
 
         help_label = QLabel(
             (
-                "Baseline components remain enabled automatically. Select custom "
-                "components to add to this project/toolchain target. For changed "
-                "baseline components, checking the row uses the metadata discovered "
-                "from the configured SST installation; leaving it unchecked keeps "
-                "the bundled baseline metadata. Select a row to review the exact "
-                "parameter, port, slot, and statistic differences."
+                "This window opens with all components detected from the configured "
+                "SST installation, including baseline matches, custom components, "
+                "and changed baseline components. Baseline components remain enabled "
+                "automatically. Select custom components to add to this "
+                "project/toolchain target. For changed baseline components, checking "
+                "the row uses the metadata discovered from the configured SST "
+                "installation; leaving it unchecked keeps the bundled baseline "
+                "metadata. Select a row to review the exact parameter, port, slot, "
+                "and statistic differences."
             ),
             self,
         )
@@ -209,6 +213,13 @@ class SSTComponentManagerDialog(QDialog):
 
         if mode == "all":
             return list(self.discovery.entries)
+
+        if mode == "detected":
+            return [
+                entry
+                for entry in self.discovery.entries
+                if entry.status != "missing"
+            ]
 
         if mode == "actionable":
             return [

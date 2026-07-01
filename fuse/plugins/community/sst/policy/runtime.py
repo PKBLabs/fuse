@@ -12,6 +12,8 @@ from fuse.plugins.community.sst.policy.default_classifier import (
     classify_default,
     infer_kind_from_description,
     looks_like_untyped_number,
+    metadata_default_is_internal_type,
+    metadata_default_is_symbolic,
     normalize_value,
 )
 from fuse.plugins.community.sst.policy.loader import component_policy, normalize_sst_version, param_policy_override
@@ -82,6 +84,17 @@ def framework_version_for_node(node) -> str:
             pass
 
     return ""
+
+
+def _is_suppressed_slot_param(param_name: Any, suppress_prefixed_slots: set[str]) -> bool:
+    """Return true when a param belongs to an attached subcomponent slot."""
+
+    name = str(param_name)
+
+    return any(
+        name == slot or name.startswith(f"{slot}.")
+        for slot in suppress_prefixed_slots
+    )
 
 
 def parameter_metadata_for_node(node) -> dict[str, dict[str, Any]]:
@@ -188,6 +201,18 @@ def resolve_param_policy(
 
     if "export_default" in override:
         export_default = bool(override.get("export_default"))
+
+    # Bundled/generated catalogs are intentionally conservative, but older
+    # catalog entries can still mark SST-internal extension-point defaults or
+    # symbolic C/C++ expressions as literal. Treat those entries as non-runtime
+    # defaults at export time so stale policy data cannot leak invalid SST JSON.
+    if metadata_default_is_internal_type(default_value, kind):
+        default_kind = DefaultKind.INTERNAL
+        export_default = False
+
+    if metadata_default_is_symbolic(default_value):
+        default_kind = DefaultKind.SYMBOLIC
+        export_default = False
 
     required_context = RequiredContext.UNKNOWN
     if required:
@@ -313,7 +338,7 @@ def default_params_for_node(
     names = set(metadata_by_name) | set(catalog_params)
 
     for name in sorted(names):
-        if any(str(name).startswith(f"{slot}.") for slot in suppress_prefixed_slots):
+        if _is_suppressed_slot_param(name, suppress_prefixed_slots):
             continue
 
         metadata = metadata_by_name.get(name, {})
@@ -358,7 +383,7 @@ def should_require_metadata_param_for_export(
     if param_name in params:
         return False
 
-    if any(str(param_name).startswith(f"{slot}.") for slot in attached_slot_names):
+    if _is_suppressed_slot_param(param_name, attached_slot_names):
         return False
 
     if node_is_subcomponent(node):

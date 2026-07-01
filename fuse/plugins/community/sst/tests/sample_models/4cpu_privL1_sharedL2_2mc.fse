@@ -1,0 +1,1443 @@
+{
+  "schemaVersion": "0.1.0",
+  "project": {
+    "name": "4cpu_privL1_sharedL2_2mc",
+    "updatedAt": "2026-06-30T21:35:02.134852+00:00"
+  },
+  "projectSettings": {
+    "projectUid": "3b818877ce2e4274ab19550b04e752fb",
+    "projectName": "4cpu_privL1_sharedL2_2mc",
+    "activePluginId": "sst",
+    "preferredComponentSortingMode": "Alphabetical",
+    "preferredComponentGroupingMode": "Element",
+    "autoExpandAllComponentTree": false,
+    "componentCatalogExpanded": false,
+    "plugins": {
+      "sst": {
+        "enabled": true,
+        "targetId": "5",
+        "targetLabel": "SST 16.0.0 \u2014 Local custom (/opt/sst/16.0.0/core/bin)",
+        "frameworkVersion": "16.0.0",
+        "toolchain": {
+          "backend": "local",
+          "toolPaths": {
+            "sstInfo": "/opt/sst/16.0.0/core/bin/sst-info",
+            "sst": "/opt/sst/16.0.0/core/bin/sst",
+            "gem5Root": "",
+            "gem5Binary": "",
+            "gem5BuildIsa": "X86"
+          },
+          "environment": {},
+          "options": {},
+          "host": "",
+          "port": 22,
+          "username": "",
+          "hostAlias": "",
+          "authMethod": "ssh-agent",
+          "remoteSetupCommand": ""
+        },
+        "options": {
+          "lastRuntimeVerification": {
+            "ok": true,
+            "targetId": "4",
+            "frameworkVersion": "16.0.0",
+            "message": "SST runtime verified.\nTarget: SST 16.0.0 \u2014 Local custom (/opt/sst/16.0.0/core/bin)\nExpected SST version: 16.0.0\nCommand: /opt/sst/16.0.0/core/bin/sst-info\nComponents used by model: 0\nComponents exposed by runtime: 355\n\nInfo:\n- The current model does not use any enabled custom/changed SST components."
+          }
+        }
+      },
+      "gem5": {
+        "enabled": false,
+        "targetId": "1",
+        "targetLabel": "gem5 25.1.0.1",
+        "frameworkVersion": "25.1.0.1",
+        "toolchain": {
+          "backend": "local",
+          "toolPaths": {
+            "sstInfo": "/opt/sst/16.0.0/core/bin/sst-info",
+            "sst": "/opt/sst/16.0.0/core/bin/sst",
+            "gem5Root": "",
+            "gem5Binary": "",
+            "gem5BuildIsa": "X86"
+          },
+          "environment": {},
+          "options": {},
+          "host": "",
+          "port": 22,
+          "username": "",
+          "hostAlias": "",
+          "authMethod": "ssh-agent",
+          "remoteSetupCommand": ""
+        },
+        "options": {}
+      }
+    }
+  },
+  "pluginSettings": {
+    "sst": {
+      "enabled": true,
+      "targetId": "5",
+      "targetLabel": "SST 16.0.0 \u2014 Local custom (/opt/sst/16.0.0/core/bin)",
+      "frameworkVersion": "16.0.0",
+      "toolchain": {
+        "backend": "local",
+        "toolPaths": {
+          "sstInfo": "/opt/sst/16.0.0/core/bin/sst-info",
+          "sst": "/opt/sst/16.0.0/core/bin/sst",
+          "gem5Root": "",
+          "gem5Binary": "",
+          "gem5BuildIsa": "X86"
+        },
+        "environment": {},
+        "options": {},
+        "host": "",
+        "port": 22,
+        "username": "",
+        "hostAlias": "",
+        "authMethod": "ssh-agent",
+        "remoteSetupCommand": ""
+      },
+      "options": {
+        "lastRuntimeVerification": {
+          "ok": true,
+          "targetId": "4",
+          "frameworkVersion": "16.0.0",
+          "message": "SST runtime verified.\nTarget: SST 16.0.0 \u2014 Local custom (/opt/sst/16.0.0/core/bin)\nExpected SST version: 16.0.0\nCommand: /opt/sst/16.0.0/core/bin/sst-info\nComponents used by model: 0\nComponents exposed by runtime: 355\n\nInfo:\n- The current model does not use any enabled custom/changed SST components."
+        }
+      }
+    },
+    "gem5": {
+      "enabled": false,
+      "targetId": "1",
+      "targetLabel": "gem5 25.1.0.1",
+      "frameworkVersion": "25.1.0.1",
+      "toolchain": {
+        "backend": "local",
+        "toolPaths": {
+          "sstInfo": "/opt/sst/16.0.0/core/bin/sst-info",
+          "sst": "/opt/sst/16.0.0/core/bin/sst",
+          "gem5Root": "",
+          "gem5Binary": "",
+          "gem5BuildIsa": "X86"
+        },
+        "environment": {},
+        "options": {},
+        "host": "",
+        "port": 22,
+        "username": "",
+        "hostAlias": "",
+        "authMethod": "ssh-agent",
+        "remoteSetupCommand": ""
+      },
+      "options": {}
+    }
+  },
+  "activeTarget": {
+    "pluginId": "sst",
+    "targetId": "5"
+  },
+  "components": [
+    {
+      "id": 1,
+      "element": "memHierarchy",
+      "name": "MemController",
+      "pluginId": "sst",
+      "targetId": "5",
+      "targetLabel": "SST 16.0.0 \u2014 Local custom (/opt/sst/16.0.0/core/bin)",
+      "frameworkVersion": "16.0.0",
+      "componentId": "1989",
+      "isSubcomponent": 0,
+      "category": "MEMORY COMPONENT",
+      "functionality": "Memory controller, interfaces to a main memory model for timing",
+      "description": "Memory controller, interfaces to a main memory model for timing",
+      "iconPath": "mem_controller.png",
+      "interface": "",
+      "displayNameOverride": "memHierarchy.MemController (Component)",
+      "isComposite": 0,
+      "compositeId": "",
+      "instanceName": "mc1",
+      "parameters": {
+        "backend.mem_size": "2GiB",
+        "clock": "1GHz",
+        "addr_range_end": "4294967295",
+        "addr_range_start": "2147483648"
+      },
+      "variablePortCounts": {},
+      "position": {
+        "x": 1620.0,
+        "y": 1360.0
+      }
+    },
+    {
+      "id": 2,
+      "element": "memHierarchy",
+      "name": "MemController",
+      "pluginId": "sst",
+      "targetId": "5",
+      "targetLabel": "SST 16.0.0 \u2014 Local custom (/opt/sst/16.0.0/core/bin)",
+      "frameworkVersion": "16.0.0",
+      "componentId": "1989",
+      "isSubcomponent": 0,
+      "category": "MEMORY COMPONENT",
+      "functionality": "Memory controller, interfaces to a main memory model for timing",
+      "description": "Memory controller, interfaces to a main memory model for timing",
+      "iconPath": "mem_controller.png",
+      "interface": "",
+      "displayNameOverride": "memHierarchy.MemController (Component)",
+      "isComposite": 0,
+      "compositeId": "",
+      "instanceName": "mc0",
+      "parameters": {
+        "backend.mem_size": "2GiB",
+        "clock": "1GHz",
+        "addr_range_end": "2147483647"
+      },
+      "variablePortCounts": {},
+      "position": {
+        "x": 1620.0,
+        "y": 340.0
+      }
+    },
+    {
+      "id": 3,
+      "element": "memHierarchy",
+      "name": "simpleMem",
+      "pluginId": "sst",
+      "targetId": "5",
+      "targetLabel": "SST 16.0.0 \u2014 Local custom (/opt/sst/16.0.0/core/bin)",
+      "frameworkVersion": "16.0.0",
+      "componentId": "2033",
+      "isSubcomponent": 1,
+      "category": "SUBCOMPONENT",
+      "functionality": "Basic constant-access-time memory timing model",
+      "description": "Basic constant-access-time memory timing model",
+      "iconPath": "mem_backend.png",
+      "interface": "SST::MemHierarchy::SimpleMemBackend",
+      "displayNameOverride": "memHierarchy.simpleMem (SubComponent)",
+      "isComposite": 0,
+      "compositeId": "",
+      "instanceName": "simpleMem_1",
+      "parameters": {
+        "mem_size": "2GiB"
+      },
+      "variablePortCounts": {},
+      "position": {
+        "x": 1800.0,
+        "y": 1700.0
+      }
+    },
+    {
+      "id": 4,
+      "element": "memHierarchy",
+      "name": "simpleMem",
+      "pluginId": "sst",
+      "targetId": "5",
+      "targetLabel": "SST 16.0.0 \u2014 Local custom (/opt/sst/16.0.0/core/bin)",
+      "frameworkVersion": "16.0.0",
+      "componentId": "2033",
+      "isSubcomponent": 1,
+      "category": "SUBCOMPONENT",
+      "functionality": "Basic constant-access-time memory timing model",
+      "description": "Basic constant-access-time memory timing model",
+      "iconPath": "mem_backend.png",
+      "interface": "SST::MemHierarchy::SimpleMemBackend",
+      "displayNameOverride": "memHierarchy.simpleMem (SubComponent)",
+      "isComposite": 0,
+      "compositeId": "",
+      "instanceName": "simpleMem_2",
+      "parameters": {
+        "mem_size": "2GiB"
+      },
+      "variablePortCounts": {},
+      "position": {
+        "x": 1800.0,
+        "y": 680.0
+      }
+    },
+    {
+      "id": 5,
+      "element": "memHierarchy",
+      "name": "Bus",
+      "pluginId": "sst",
+      "targetId": "5",
+      "targetLabel": "SST 16.0.0 \u2014 Local custom (/opt/sst/16.0.0/core/bin)",
+      "frameworkVersion": "16.0.0",
+      "componentId": "1984",
+      "isSubcomponent": 0,
+      "category": "MEMORY COMPONENT",
+      "functionality": "Bus model for memHierarchy",
+      "description": "Bus model for memHierarchy",
+      "iconPath": "core/resources/media/arch_component_icons/network_bus.png",
+      "interface": "",
+      "displayNameOverride": "memHierarchy.Bus (Component)",
+      "isComposite": 0,
+      "compositeId": "",
+      "instanceName": "dc_t0_mc_bus",
+      "parameters": {
+        "bus_frequency": "1GHz"
+      },
+      "variablePortCounts": {
+        "high_network_": 1,
+        "highlink": 1,
+        "low_network_": 1,
+        "lowlink": 2
+      },
+      "position": {
+        "x": 1260.0,
+        "y": 850.0
+      }
+    },
+    {
+      "id": 6,
+      "element": "memHierarchy",
+      "name": "DirectoryController",
+      "pluginId": "sst",
+      "targetId": "5",
+      "targetLabel": "SST 16.0.0 \u2014 Local custom (/opt/sst/16.0.0/core/bin)",
+      "frameworkVersion": "16.0.0",
+      "componentId": "1987",
+      "isSubcomponent": 0,
+      "category": "MEMORY COMPONENT",
+      "functionality": "Coherence directory, MSI or MESI",
+      "description": "Coherence directory, MSI or MESI",
+      "iconPath": "core/resources/media/arch_component_icons/memory_directory_controller.png",
+      "interface": "",
+      "displayNameOverride": "memHierarchy.DirectoryController (Component)",
+      "isComposite": 0,
+      "compositeId": "",
+      "instanceName": "dc",
+      "parameters": {
+        "node": "0",
+        "addr_range_end": "4294967295"
+      },
+      "variablePortCounts": {},
+      "position": {
+        "x": 900.0,
+        "y": 850.0
+      }
+    },
+    {
+      "id": 7,
+      "element": "memHierarchy",
+      "name": "Bus",
+      "pluginId": "sst",
+      "targetId": "5",
+      "targetLabel": "SST 16.0.0 \u2014 Local custom (/opt/sst/16.0.0/core/bin)",
+      "frameworkVersion": "16.0.0",
+      "componentId": "1984",
+      "isSubcomponent": 0,
+      "category": "MEMORY COMPONENT",
+      "functionality": "Bus model for memHierarchy",
+      "description": "Bus model for memHierarchy",
+      "iconPath": "core/resources/media/arch_component_icons/network_bus.png",
+      "interface": "",
+      "displayNameOverride": "memHierarchy.Bus (Component)",
+      "isComposite": 0,
+      "compositeId": "",
+      "instanceName": "cg_to_dc_bus",
+      "parameters": {
+        "bus_frequency": "1.5GHz"
+      },
+      "variablePortCounts": {
+        "high_network_": 1,
+        "highlink": 2,
+        "low_network_": 1,
+        "lowlink": 1
+      },
+      "position": {
+        "x": 540.0,
+        "y": 850.0
+      }
+    },
+    {
+      "id": 8,
+      "element": "memHierarchy",
+      "name": "Cache",
+      "pluginId": "sst",
+      "targetId": "5",
+      "targetLabel": "SST 16.0.0 \u2014 Local custom (/opt/sst/16.0.0/core/bin)",
+      "frameworkVersion": "16.0.0",
+      "componentId": "1985",
+      "isSubcomponent": 0,
+      "category": "MEMORY COMPONENT",
+      "functionality": "Cache controller",
+      "description": "Cache controller",
+      "iconPath": "core/resources/media/arch_component_icons/memory_cache_controller.png",
+      "interface": "",
+      "displayNameOverride": "memHierarchy.Cache (Component)",
+      "isComposite": 0,
+      "compositeId": "",
+      "instanceName": "cg0_shared_L2",
+      "parameters": {
+        "associativity": "16",
+        "access_latency_cycles": "8",
+        "cache_frequency": "1.5GHz",
+        "cache_size": "512KiB"
+      },
+      "variablePortCounts": {},
+      "position": {
+        "x": 180.0,
+        "y": 170.0
+      }
+    },
+    {
+      "id": 10,
+      "element": "memHierarchy",
+      "name": "Bus",
+      "pluginId": "sst",
+      "targetId": "5",
+      "targetLabel": "SST 16.0.0 \u2014 Local custom (/opt/sst/16.0.0/core/bin)",
+      "frameworkVersion": "16.0.0",
+      "componentId": "1984",
+      "isSubcomponent": 0,
+      "category": "MEMORY COMPONENT",
+      "functionality": "Bus model for memHierarchy",
+      "description": "Bus model for memHierarchy",
+      "iconPath": "core/resources/media/arch_component_icons/network_bus.png",
+      "interface": "",
+      "displayNameOverride": "memHierarchy.Bus (Component)",
+      "isComposite": 0,
+      "compositeId": "",
+      "instanceName": "cg0_cache_bus",
+      "parameters": {
+        "bus_frequency": "2GHz"
+      },
+      "variablePortCounts": {
+        "high_network_": 1,
+        "highlink": 2,
+        "low_network_": 1,
+        "lowlink": 1
+      },
+      "position": {
+        "x": -360.0,
+        "y": 170.0
+      }
+    },
+    {
+      "id": 11,
+      "element": "memHierarchy",
+      "name": "Bus",
+      "pluginId": "sst",
+      "targetId": "5",
+      "targetLabel": "SST 16.0.0 \u2014 Local custom (/opt/sst/16.0.0/core/bin)",
+      "frameworkVersion": "16.0.0",
+      "componentId": "1984",
+      "isSubcomponent": 0,
+      "category": "MEMORY COMPONENT",
+      "functionality": "Bus model for memHierarchy",
+      "description": "Bus model for memHierarchy",
+      "iconPath": "core/resources/media/arch_component_icons/network_bus.png",
+      "interface": "",
+      "displayNameOverride": "memHierarchy.Bus (Component)",
+      "isComposite": 0,
+      "compositeId": "",
+      "instanceName": "cg1_cache_bus",
+      "parameters": {
+        "bus_frequency": "2GHz"
+      },
+      "variablePortCounts": {
+        "high_network_": 1,
+        "highlink": 2,
+        "low_network_": 1,
+        "lowlink": 1
+      },
+      "position": {
+        "x": -360.0,
+        "y": 1530.0
+      }
+    },
+    {
+      "id": 12,
+      "element": "memHierarchy",
+      "name": "Cache",
+      "pluginId": "sst",
+      "targetId": "5",
+      "targetLabel": "SST 16.0.0 \u2014 Local custom (/opt/sst/16.0.0/core/bin)",
+      "frameworkVersion": "16.0.0",
+      "componentId": "1985",
+      "isSubcomponent": 0,
+      "category": "MEMORY COMPONENT",
+      "functionality": "Cache controller",
+      "description": "Cache controller",
+      "iconPath": "core/resources/media/arch_component_icons/memory_cache_controller.png",
+      "interface": "",
+      "displayNameOverride": "memHierarchy.Cache (Component)",
+      "isComposite": 0,
+      "compositeId": "",
+      "instanceName": "cpu0_l1",
+      "parameters": {
+        "L1": "1",
+        "access_latency_cycles": "2",
+        "associativity": "8",
+        "cache_frequency": "2GHz",
+        "cache_size": "32KiB"
+      },
+      "variablePortCounts": {},
+      "position": {
+        "x": -720.0,
+        "y": -170.0
+      }
+    },
+    {
+      "id": 19,
+      "element": "memHierarchy",
+      "name": "standardInterface",
+      "pluginId": "sst",
+      "targetId": "5",
+      "targetLabel": "SST 16.0.0 \u2014 Local custom (/opt/sst/16.0.0/core/bin)",
+      "frameworkVersion": "16.0.0",
+      "componentId": "2037",
+      "isSubcomponent": 1,
+      "category": "SUBCOMPONENT",
+      "functionality": "Interface to memory hierarchy between endpoint and cache. Converts StandardMem requests into MemEventBases.",
+      "description": "Interface to memory hierarchy between endpoint and cache. Converts StandardMem requests into MemEventBases.",
+      "iconPath": "memory_link.png",
+      "interface": "SST::Interfaces::StandardMem",
+      "displayNameOverride": "memHierarchy.standardInterface (SubComponent)",
+      "isComposite": 0,
+      "compositeId": "",
+      "instanceName": "cpu0_iface",
+      "parameters": {},
+      "variablePortCounts": {},
+      "position": {
+        "x": -1080.0,
+        "y": -170.0
+      }
+    },
+    {
+      "id": 21,
+      "element": "memHierarchy",
+      "name": "standardCPU",
+      "pluginId": "sst",
+      "targetId": "5",
+      "targetLabel": "SST 16.0.0 \u2014 Local custom (/opt/sst/16.0.0/core/bin)",
+      "frameworkVersion": "16.0.0",
+      "componentId": "1995",
+      "isSubcomponent": 0,
+      "category": "PROCESSOR COMPONENT",
+      "functionality": "Simple demo CPU for testing",
+      "description": "Simple demo CPU for testing",
+      "iconPath": "core/resources/media/arch_component_icons/cpu1.png",
+      "interface": "",
+      "displayNameOverride": "memHierarchy.standardCPU (Component)",
+      "isComposite": 0,
+      "compositeId": "",
+      "instanceName": "cpu0",
+      "parameters": {
+        "clock": "2GHz",
+        "memSize": "4GiB",
+        "memFreq": "2",
+        "flush_freq": "5",
+        "flushcache_freq": "1",
+        "flushinv_freq": "3",
+        "llsc_freq": "9",
+        "maxOutstanding": "32",
+        "opCount": "20000",
+        "read_freq": "88",
+        "reqsPerIssue": "2",
+        "rngseed": "1000",
+        "write_freq": "30"
+      },
+      "variablePortCounts": {},
+      "position": {
+        "x": -1260.0,
+        "y": -340.0
+      }
+    },
+    {
+      "id": 25,
+      "element": "memHierarchy",
+      "name": "standardCPU",
+      "pluginId": "sst",
+      "targetId": "5",
+      "targetLabel": "SST 16.0.0 \u2014 Local custom (/opt/sst/16.0.0/core/bin)",
+      "frameworkVersion": "16.0.0",
+      "componentId": "1995",
+      "isSubcomponent": 0,
+      "category": "PROCESSOR COMPONENT",
+      "functionality": "Simple demo CPU for testing",
+      "description": "Simple demo CPU for testing",
+      "iconPath": "core/resources/media/arch_component_icons/cpu1.png",
+      "interface": "",
+      "displayNameOverride": "memHierarchy.standardCPU (Component)",
+      "isComposite": 0,
+      "compositeId": "",
+      "instanceName": "cpu1",
+      "parameters": {
+        "clock": "2GHz",
+        "memSize": "4GiB",
+        "memFreq": "2",
+        "flush_freq": "5",
+        "flushcache_freq": "1",
+        "flushinv_freq": "3",
+        "llsc_freq": "9",
+        "maxOutstanding": "32",
+        "opCount": "20000",
+        "read_freq": "88",
+        "reqsPerIssue": "2",
+        "rngseed": "1001",
+        "write_freq": "30"
+      },
+      "variablePortCounts": {},
+      "position": {
+        "x": -1260.0,
+        "y": 340.0
+      }
+    },
+    {
+      "id": 26,
+      "element": "memHierarchy",
+      "name": "standardCPU",
+      "pluginId": "sst",
+      "targetId": "5",
+      "targetLabel": "SST 16.0.0 \u2014 Local custom (/opt/sst/16.0.0/core/bin)",
+      "frameworkVersion": "16.0.0",
+      "componentId": "1995",
+      "isSubcomponent": 0,
+      "category": "PROCESSOR COMPONENT",
+      "functionality": "Simple demo CPU for testing",
+      "description": "Simple demo CPU for testing",
+      "iconPath": "core/resources/media/arch_component_icons/cpu1.png",
+      "interface": "",
+      "displayNameOverride": "memHierarchy.standardCPU (Component)",
+      "isComposite": 0,
+      "compositeId": "",
+      "instanceName": "cpu2",
+      "parameters": {
+        "clock": "2GHz",
+        "memSize": "4GiB",
+        "memFreq": "2",
+        "flush_freq": "5",
+        "flushcache_freq": "1",
+        "flushinv_freq": "3",
+        "llsc_freq": "9",
+        "maxOutstanding": "32",
+        "opCount": "20000",
+        "read_freq": "88",
+        "reqsPerIssue": "2",
+        "rngseed": "1002",
+        "write_freq": "30"
+      },
+      "variablePortCounts": {},
+      "position": {
+        "x": -1260.0,
+        "y": 1020.0
+      }
+    },
+    {
+      "id": 27,
+      "element": "memHierarchy",
+      "name": "standardCPU",
+      "pluginId": "sst",
+      "targetId": "5",
+      "targetLabel": "SST 16.0.0 \u2014 Local custom (/opt/sst/16.0.0/core/bin)",
+      "frameworkVersion": "16.0.0",
+      "componentId": "1995",
+      "isSubcomponent": 0,
+      "category": "PROCESSOR COMPONENT",
+      "functionality": "Simple demo CPU for testing",
+      "description": "Simple demo CPU for testing",
+      "iconPath": "core/resources/media/arch_component_icons/cpu1.png",
+      "interface": "",
+      "displayNameOverride": "memHierarchy.standardCPU (Component)",
+      "isComposite": 0,
+      "compositeId": "",
+      "instanceName": "cpu3",
+      "parameters": {
+        "clock": "2GHz",
+        "memSize": "4GiB",
+        "memFreq": "2",
+        "flush_freq": "5",
+        "flushcache_freq": "1",
+        "flushinv_freq": "3",
+        "llsc_freq": "9",
+        "maxOutstanding": "32",
+        "opCount": "20000",
+        "read_freq": "88",
+        "reqsPerIssue": "2",
+        "rngseed": "1003",
+        "write_freq": "30"
+      },
+      "variablePortCounts": {},
+      "position": {
+        "x": -1260.0,
+        "y": 1700.0
+      }
+    },
+    {
+      "id": 28,
+      "element": "memHierarchy",
+      "name": "standardInterface",
+      "pluginId": "sst",
+      "targetId": "5",
+      "targetLabel": "SST 16.0.0 \u2014 Local custom (/opt/sst/16.0.0/core/bin)",
+      "frameworkVersion": "16.0.0",
+      "componentId": "2037",
+      "isSubcomponent": 1,
+      "category": "SUBCOMPONENT",
+      "functionality": "Interface to memory hierarchy between endpoint and cache. Converts StandardMem requests into MemEventBases.",
+      "description": "Interface to memory hierarchy between endpoint and cache. Converts StandardMem requests into MemEventBases.",
+      "iconPath": "memory_link.png",
+      "interface": "SST::Interfaces::StandardMem",
+      "displayNameOverride": "memHierarchy.standardInterface (SubComponent)",
+      "isComposite": 0,
+      "compositeId": "",
+      "instanceName": "cpu1_iface",
+      "parameters": {},
+      "variablePortCounts": {},
+      "position": {
+        "x": -1080.0,
+        "y": 510.0
+      }
+    },
+    {
+      "id": 29,
+      "element": "memHierarchy",
+      "name": "standardInterface",
+      "pluginId": "sst",
+      "targetId": "5",
+      "targetLabel": "SST 16.0.0 \u2014 Local custom (/opt/sst/16.0.0/core/bin)",
+      "frameworkVersion": "16.0.0",
+      "componentId": "2037",
+      "isSubcomponent": 1,
+      "category": "SUBCOMPONENT",
+      "functionality": "Interface to memory hierarchy between endpoint and cache. Converts StandardMem requests into MemEventBases.",
+      "description": "Interface to memory hierarchy between endpoint and cache. Converts StandardMem requests into MemEventBases.",
+      "iconPath": "memory_link.png",
+      "interface": "SST::Interfaces::StandardMem",
+      "displayNameOverride": "memHierarchy.standardInterface (SubComponent)",
+      "isComposite": 0,
+      "compositeId": "",
+      "instanceName": "cpu2_iface",
+      "parameters": {},
+      "variablePortCounts": {},
+      "position": {
+        "x": -1080.0,
+        "y": 1190.0
+      }
+    },
+    {
+      "id": 30,
+      "element": "memHierarchy",
+      "name": "standardInterface",
+      "pluginId": "sst",
+      "targetId": "5",
+      "targetLabel": "SST 16.0.0 \u2014 Local custom (/opt/sst/16.0.0/core/bin)",
+      "frameworkVersion": "16.0.0",
+      "componentId": "2037",
+      "isSubcomponent": 1,
+      "category": "SUBCOMPONENT",
+      "functionality": "Interface to memory hierarchy between endpoint and cache. Converts StandardMem requests into MemEventBases.",
+      "description": "Interface to memory hierarchy between endpoint and cache. Converts StandardMem requests into MemEventBases.",
+      "iconPath": "memory_link.png",
+      "interface": "SST::Interfaces::StandardMem",
+      "displayNameOverride": "memHierarchy.standardInterface (SubComponent)",
+      "isComposite": 0,
+      "compositeId": "",
+      "instanceName": "cpu3_iface",
+      "parameters": {},
+      "variablePortCounts": {},
+      "position": {
+        "x": -1080.0,
+        "y": 1870.0
+      }
+    },
+    {
+      "id": 31,
+      "element": "memHierarchy",
+      "name": "Cache",
+      "pluginId": "sst",
+      "targetId": "5",
+      "targetLabel": "SST 16.0.0 \u2014 Local custom (/opt/sst/16.0.0/core/bin)",
+      "frameworkVersion": "16.0.0",
+      "componentId": "1985",
+      "isSubcomponent": 0,
+      "category": "MEMORY COMPONENT",
+      "functionality": "Cache controller",
+      "description": "Cache controller",
+      "iconPath": "core/resources/media/arch_component_icons/memory_cache_controller.png",
+      "interface": "",
+      "displayNameOverride": "memHierarchy.Cache (Component)",
+      "isComposite": 0,
+      "compositeId": "",
+      "instanceName": "cpu1_l1",
+      "parameters": {
+        "L1": "1",
+        "access_latency_cycles": "2",
+        "associativity": "8",
+        "cache_frequency": "2GHz",
+        "cache_size": "32KiB"
+      },
+      "variablePortCounts": {},
+      "position": {
+        "x": -720.0,
+        "y": 510.0
+      }
+    },
+    {
+      "id": 32,
+      "element": "memHierarchy",
+      "name": "Cache",
+      "pluginId": "sst",
+      "targetId": "5",
+      "targetLabel": "SST 16.0.0 \u2014 Local custom (/opt/sst/16.0.0/core/bin)",
+      "frameworkVersion": "16.0.0",
+      "componentId": "1985",
+      "isSubcomponent": 0,
+      "category": "MEMORY COMPONENT",
+      "functionality": "Cache controller",
+      "description": "Cache controller",
+      "iconPath": "core/resources/media/arch_component_icons/memory_cache_controller.png",
+      "interface": "",
+      "displayNameOverride": "memHierarchy.Cache (Component)",
+      "isComposite": 0,
+      "compositeId": "",
+      "instanceName": "cpu2_l1",
+      "parameters": {
+        "L1": "1",
+        "access_latency_cycles": "2",
+        "associativity": "8",
+        "cache_frequency": "2GHz",
+        "cache_size": "32KiB"
+      },
+      "variablePortCounts": {},
+      "position": {
+        "x": -720.0,
+        "y": 1190.0
+      }
+    },
+    {
+      "id": 33,
+      "element": "memHierarchy",
+      "name": "Cache",
+      "pluginId": "sst",
+      "targetId": "5",
+      "targetLabel": "SST 16.0.0 \u2014 Local custom (/opt/sst/16.0.0/core/bin)",
+      "frameworkVersion": "16.0.0",
+      "componentId": "1985",
+      "isSubcomponent": 0,
+      "category": "MEMORY COMPONENT",
+      "functionality": "Cache controller",
+      "description": "Cache controller",
+      "iconPath": "core/resources/media/arch_component_icons/memory_cache_controller.png",
+      "interface": "",
+      "displayNameOverride": "memHierarchy.Cache (Component)",
+      "isComposite": 0,
+      "compositeId": "",
+      "instanceName": "cpu3_l1",
+      "parameters": {
+        "L1": "1",
+        "access_latency_cycles": "2",
+        "associativity": "8",
+        "cache_frequency": "2GHz",
+        "cache_size": "32KiB"
+      },
+      "variablePortCounts": {},
+      "position": {
+        "x": -720.0,
+        "y": 1870.0
+      }
+    },
+    {
+      "id": 34,
+      "element": "memHierarchy",
+      "name": "Cache",
+      "pluginId": "sst",
+      "targetId": "5",
+      "targetLabel": "SST 16.0.0 \u2014 Local custom (/opt/sst/16.0.0/core/bin)",
+      "frameworkVersion": "16.0.0",
+      "componentId": "1985",
+      "isSubcomponent": 0,
+      "category": "MEMORY COMPONENT",
+      "functionality": "Cache controller",
+      "description": "Cache controller",
+      "iconPath": "core/resources/media/arch_component_icons/memory_cache_controller.png",
+      "interface": "",
+      "displayNameOverride": "memHierarchy.Cache (Component)",
+      "isComposite": 0,
+      "compositeId": "",
+      "instanceName": "cg1_shared_L2",
+      "parameters": {
+        "associativity": "16",
+        "access_latency_cycles": "8",
+        "cache_frequency": "1.5GHz",
+        "cache_size": "512KiB"
+      },
+      "variablePortCounts": {},
+      "position": {
+        "x": 180.0,
+        "y": 1530.0
+      }
+    }
+  ],
+  "links": [
+    {
+      "id": 1,
+      "name": "lnk_standardInterface_4_Cache_3",
+      "latency": "1ns",
+      "sourceLatency": "1ns",
+      "targetLatency": "1ns",
+      "pluginId": "sst",
+      "compatibility": {
+        "severity": "ok",
+        "code": "",
+        "message": ""
+      },
+      "pluginMetadata": {},
+      "type": "point_to_point",
+      "source": {
+        "nodeId": 19,
+        "componentName": "cpu0_iface",
+        "port": "lowlink"
+      },
+      "target": {
+        "nodeId": 12,
+        "componentName": "cpu0_l1",
+        "port": "highlink"
+      }
+    },
+    {
+      "id": 2,
+      "name": "lnk_Bus_3_Cache_3",
+      "latency": "1ns",
+      "sourceLatency": "1ns",
+      "targetLatency": "1ns",
+      "pluginId": "sst",
+      "compatibility": {
+        "severity": "ok",
+        "code": "",
+        "message": ""
+      },
+      "pluginMetadata": {},
+      "type": "point_to_point",
+      "source": {
+        "nodeId": 10,
+        "componentName": "cg0_cache_bus",
+        "port": "highlink0"
+      },
+      "target": {
+        "nodeId": 12,
+        "componentName": "cpu0_l1",
+        "port": "lowlink"
+      }
+    },
+    {
+      "id": 5,
+      "name": "lnk_Bus_3_Cache_1",
+      "latency": "1ns",
+      "sourceLatency": "1ns",
+      "targetLatency": "1ns",
+      "pluginId": "sst",
+      "compatibility": {
+        "severity": "ok",
+        "code": "",
+        "message": ""
+      },
+      "pluginMetadata": {},
+      "type": "point_to_point",
+      "source": {
+        "nodeId": 10,
+        "componentName": "cg0_cache_bus",
+        "port": "lowlink0"
+      },
+      "target": {
+        "nodeId": 8,
+        "componentName": "cg0_shared_L2",
+        "port": "highlink"
+      }
+    },
+    {
+      "id": 6,
+      "name": "lnk_Cache_1_Bus_2",
+      "latency": "1ns",
+      "sourceLatency": "1ns",
+      "targetLatency": "1ns",
+      "pluginId": "sst",
+      "compatibility": {
+        "severity": "ok",
+        "code": "",
+        "message": ""
+      },
+      "pluginMetadata": {},
+      "type": "point_to_point",
+      "source": {
+        "nodeId": 8,
+        "componentName": "cg0_shared_L2",
+        "port": "lowlink"
+      },
+      "target": {
+        "nodeId": 7,
+        "componentName": "cg_to_dc_bus",
+        "port": "highlink0"
+      }
+    },
+    {
+      "id": 7,
+      "name": "lnk_DirectoryController_1_Bus_2",
+      "latency": "1ns",
+      "sourceLatency": "1ns",
+      "targetLatency": "1ns",
+      "pluginId": "sst",
+      "compatibility": {
+        "severity": "ok",
+        "code": "",
+        "message": ""
+      },
+      "pluginMetadata": {},
+      "type": "point_to_point",
+      "source": {
+        "nodeId": 6,
+        "componentName": "dc",
+        "port": "highlink"
+      },
+      "target": {
+        "nodeId": 7,
+        "componentName": "cg_to_dc_bus",
+        "port": "lowlink0"
+      }
+    },
+    {
+      "id": 13,
+      "name": "lnk_Bus_1_MemController_1",
+      "latency": "1ns",
+      "sourceLatency": "1ns",
+      "targetLatency": "1ns",
+      "pluginId": "sst",
+      "compatibility": {
+        "severity": "ok",
+        "code": "",
+        "message": ""
+      },
+      "pluginMetadata": {},
+      "type": "point_to_point",
+      "source": {
+        "nodeId": 5,
+        "componentName": "dc_t0_mc_bus",
+        "port": "lowlink1"
+      },
+      "target": {
+        "nodeId": 1,
+        "componentName": "mc1",
+        "port": "highlink"
+      }
+    },
+    {
+      "id": 14,
+      "name": "lnk_MemController_2_Bus_1",
+      "latency": "1ns",
+      "sourceLatency": "1ns",
+      "targetLatency": "1ns",
+      "pluginId": "sst",
+      "compatibility": {
+        "severity": "ok",
+        "code": "",
+        "message": ""
+      },
+      "pluginMetadata": {},
+      "type": "point_to_point",
+      "source": {
+        "nodeId": 2,
+        "componentName": "mc0",
+        "port": "highlink"
+      },
+      "target": {
+        "nodeId": 5,
+        "componentName": "dc_t0_mc_bus",
+        "port": "lowlink0"
+      }
+    },
+    {
+      "id": 15,
+      "name": "lnk_DirectoryController_1_Bus_1",
+      "latency": "1ns",
+      "sourceLatency": "1ns",
+      "targetLatency": "1ns",
+      "pluginId": "sst",
+      "compatibility": {
+        "severity": "ok",
+        "code": "",
+        "message": ""
+      },
+      "pluginMetadata": {},
+      "type": "point_to_point",
+      "source": {
+        "nodeId": 6,
+        "componentName": "dc",
+        "port": "lowlink"
+      },
+      "target": {
+        "nodeId": 5,
+        "componentName": "dc_t0_mc_bus",
+        "port": "highlink0"
+      }
+    },
+    {
+      "id": 16,
+      "name": "lnk_cg_to_dc_bus_cg1_shared_L2",
+      "latency": "1ns",
+      "sourceLatency": "1ns",
+      "targetLatency": "1ns",
+      "pluginId": "sst",
+      "compatibility": {
+        "severity": "ok",
+        "code": "",
+        "message": ""
+      },
+      "pluginMetadata": {},
+      "type": "point_to_point",
+      "source": {
+        "nodeId": 7,
+        "componentName": "cg_to_dc_bus",
+        "port": "highlink1"
+      },
+      "target": {
+        "nodeId": 34,
+        "componentName": "cg1_shared_L2",
+        "port": "lowlink"
+      }
+    },
+    {
+      "id": 17,
+      "name": "lnk_cg1_shared_L2_cg1_cache_bus",
+      "latency": "1ns",
+      "sourceLatency": "1ns",
+      "targetLatency": "1ns",
+      "pluginId": "sst",
+      "compatibility": {
+        "severity": "ok",
+        "code": "",
+        "message": ""
+      },
+      "pluginMetadata": {},
+      "type": "point_to_point",
+      "source": {
+        "nodeId": 34,
+        "componentName": "cg1_shared_L2",
+        "port": "highlink"
+      },
+      "target": {
+        "nodeId": 11,
+        "componentName": "cg1_cache_bus",
+        "port": "lowlink0"
+      }
+    },
+    {
+      "id": 18,
+      "name": "lnk_cg1_cache_bus_cpu2_l1",
+      "latency": "1ns",
+      "sourceLatency": "1ns",
+      "targetLatency": "1ns",
+      "pluginId": "sst",
+      "compatibility": {
+        "severity": "ok",
+        "code": "",
+        "message": ""
+      },
+      "pluginMetadata": {},
+      "type": "point_to_point",
+      "source": {
+        "nodeId": 11,
+        "componentName": "cg1_cache_bus",
+        "port": "highlink0"
+      },
+      "target": {
+        "nodeId": 32,
+        "componentName": "cpu2_l1",
+        "port": "lowlink"
+      }
+    },
+    {
+      "id": 19,
+      "name": "lnk_cpu2_l1_cpu2_iface",
+      "latency": "1ns",
+      "sourceLatency": "1ns",
+      "targetLatency": "1ns",
+      "pluginId": "sst",
+      "compatibility": {
+        "severity": "ok",
+        "code": "",
+        "message": ""
+      },
+      "pluginMetadata": {},
+      "type": "point_to_point",
+      "source": {
+        "nodeId": 32,
+        "componentName": "cpu2_l1",
+        "port": "highlink"
+      },
+      "target": {
+        "nodeId": 29,
+        "componentName": "cpu2_iface",
+        "port": "lowlink"
+      }
+    },
+    {
+      "id": 20,
+      "name": "lnk_cpu1_l1_cpu1_iface",
+      "latency": "1ns",
+      "sourceLatency": "1ns",
+      "targetLatency": "1ns",
+      "pluginId": "sst",
+      "compatibility": {
+        "severity": "ok",
+        "code": "",
+        "message": ""
+      },
+      "pluginMetadata": {},
+      "type": "point_to_point",
+      "source": {
+        "nodeId": 31,
+        "componentName": "cpu1_l1",
+        "port": "highlink"
+      },
+      "target": {
+        "nodeId": 28,
+        "componentName": "cpu1_iface",
+        "port": "lowlink"
+      }
+    },
+    {
+      "id": 21,
+      "name": "lnk_cpu1_l1_cg0_cache_bus",
+      "latency": "1ns",
+      "sourceLatency": "1ns",
+      "targetLatency": "1ns",
+      "pluginId": "sst",
+      "compatibility": {
+        "severity": "ok",
+        "code": "",
+        "message": ""
+      },
+      "pluginMetadata": {},
+      "type": "point_to_point",
+      "source": {
+        "nodeId": 31,
+        "componentName": "cpu1_l1",
+        "port": "lowlink"
+      },
+      "target": {
+        "nodeId": 10,
+        "componentName": "cg0_cache_bus",
+        "port": "highlink1"
+      }
+    },
+    {
+      "id": 22,
+      "name": "lnk_cg1_cache_bus_cpu3_l1",
+      "latency": "1ns",
+      "sourceLatency": "1ns",
+      "targetLatency": "1ns",
+      "pluginId": "sst",
+      "compatibility": {
+        "severity": "ok",
+        "code": "",
+        "message": ""
+      },
+      "pluginMetadata": {},
+      "type": "point_to_point",
+      "source": {
+        "nodeId": 11,
+        "componentName": "cg1_cache_bus",
+        "port": "highlink1"
+      },
+      "target": {
+        "nodeId": 33,
+        "componentName": "cpu3_l1",
+        "port": "lowlink"
+      }
+    },
+    {
+      "id": 23,
+      "name": "lnk_cpu3_l1_cpu3_iface",
+      "latency": "1ns",
+      "sourceLatency": "1ns",
+      "targetLatency": "1ns",
+      "pluginId": "sst",
+      "compatibility": {
+        "severity": "ok",
+        "code": "",
+        "message": ""
+      },
+      "pluginMetadata": {},
+      "type": "point_to_point",
+      "source": {
+        "nodeId": 33,
+        "componentName": "cpu3_l1",
+        "port": "highlink"
+      },
+      "target": {
+        "nodeId": 30,
+        "componentName": "cpu3_iface",
+        "port": "lowlink"
+      }
+    }
+  ],
+  "subcompAttachments": [
+    {
+      "id": 4,
+      "name": "subcomp_standardCPU_2_memory_standardInterface_4",
+      "pluginId": "sst",
+      "parent": {
+        "nodeId": 21,
+        "componentName": "cpu0",
+        "slotName": "memory"
+      },
+      "child": {
+        "nodeId": 19,
+        "componentName": "cpu0_iface"
+      },
+      "requiredInterface": "SST::Interfaces::StandardMem",
+      "providedInterface": "SST::Interfaces::StandardMem",
+      "compatibility": {
+        "severity": "ok",
+        "code": "",
+        "message": ""
+      },
+      "pluginMetadata": {}
+    },
+    {
+      "id": 5,
+      "name": "subcomp_MemController_1_backend_simpleMem_1",
+      "pluginId": "sst",
+      "parent": {
+        "nodeId": 1,
+        "componentName": "mc1",
+        "slotName": "backend"
+      },
+      "child": {
+        "nodeId": 3,
+        "componentName": "simpleMem_1"
+      },
+      "requiredInterface": "SST::MemHierarchy::MemBackend",
+      "providedInterface": "SST::MemHierarchy::SimpleMemBackend",
+      "compatibility": {
+        "severity": "warning",
+        "code": "sst.subcomponent_slot_interface_mismatch",
+        "message": "The selected SST SubComponent does not declare the exact interface required by this slot. SST interface names are not always standardized, so this may still be the correct assignment.\n\nSlot requires: SST::MemHierarchy::MemBackend\nSubComponent provides: SST::MemHierarchy::SimpleMemBackend"
+      },
+      "pluginMetadata": {}
+    },
+    {
+      "id": 6,
+      "name": "subcomp_MemController_2_backend_simpleMem_2",
+      "pluginId": "sst",
+      "parent": {
+        "nodeId": 2,
+        "componentName": "mc0",
+        "slotName": "backend"
+      },
+      "child": {
+        "nodeId": 4,
+        "componentName": "simpleMem_2"
+      },
+      "requiredInterface": "SST::MemHierarchy::MemBackend",
+      "providedInterface": "SST::MemHierarchy::SimpleMemBackend",
+      "compatibility": {
+        "severity": "warning",
+        "code": "sst.subcomponent_slot_interface_mismatch",
+        "message": "The selected SST SubComponent does not declare the exact interface required by this slot. SST interface names are not always standardized, so this may still be the correct assignment.\n\nSlot requires: SST::MemHierarchy::MemBackend\nSubComponent provides: SST::MemHierarchy::SimpleMemBackend"
+      },
+      "pluginMetadata": {}
+    },
+    {
+      "id": 7,
+      "name": "subcomp_cpu3_memory_cpu3_iface",
+      "pluginId": "sst",
+      "parent": {
+        "nodeId": 27,
+        "componentName": "cpu3",
+        "slotName": "memory"
+      },
+      "child": {
+        "nodeId": 30,
+        "componentName": "cpu3_iface"
+      },
+      "requiredInterface": "SST::Interfaces::StandardMem",
+      "providedInterface": "SST::Interfaces::StandardMem",
+      "compatibility": {
+        "severity": "ok",
+        "code": "",
+        "message": ""
+      },
+      "pluginMetadata": {}
+    },
+    {
+      "id": 8,
+      "name": "subcomp_cpu2_memory_cpu2_iface",
+      "pluginId": "sst",
+      "parent": {
+        "nodeId": 26,
+        "componentName": "cpu2",
+        "slotName": "memory"
+      },
+      "child": {
+        "nodeId": 29,
+        "componentName": "cpu2_iface"
+      },
+      "requiredInterface": "SST::Interfaces::StandardMem",
+      "providedInterface": "SST::Interfaces::StandardMem",
+      "compatibility": {
+        "severity": "ok",
+        "code": "",
+        "message": ""
+      },
+      "pluginMetadata": {}
+    },
+    {
+      "id": 9,
+      "name": "subcomp_cpu1_memory_cpu1_iface",
+      "pluginId": "sst",
+      "parent": {
+        "nodeId": 25,
+        "componentName": "cpu1",
+        "slotName": "memory"
+      },
+      "child": {
+        "nodeId": 28,
+        "componentName": "cpu1_iface"
+      },
+      "requiredInterface": "SST::Interfaces::StandardMem",
+      "providedInterface": "SST::Interfaces::StandardMem",
+      "compatibility": {
+        "severity": "ok",
+        "code": "",
+        "message": ""
+      },
+      "pluginMetadata": {}
+    }
+  ],
+  "editor": {
+    "sceneRect": {
+      "x": 0.0,
+      "y": 0.0,
+      "width": 2000.0,
+      "height": 1500.0
+    },
+    "suppressedCompatibilityWarnings": [],
+    "viewCenter": {
+      "x": 1769,
+      "y": 1614
+    },
+    "zoomPercent": 100.0,
+    "mode": "select",
+    "snapToGrid": true,
+    "toolbarPosition": {
+      "x": 12,
+      "y": 12
+    }
+  },
+  "serialization": {
+    "format": "fuse.project",
+    "schemaVersion": "0.1.0",
+    "serializerVersion": 1,
+    "generatedBy": "FUSE",
+    "generatedAt": "2026-06-30T21:35:02.135293+00:00",
+    "modelCounts": {
+      "components": 23,
+      "links": 16,
+      "subcompAttachments": 6
+    },
+    "plugins": [
+      "sst"
+    ]
+  }
+}

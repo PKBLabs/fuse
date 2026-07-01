@@ -518,13 +518,12 @@ def test_full_sst_export_model_matches_golden_json_contract():
             {
                 "name": "cpu_auto_1",
                 "type": "prospero.prosperoCPU",
-                "params": {"clock": "2GHz", "verbose": False},
+                "params": {"clock": "2GHz", "verbose": "false"},
                 "subcomponents": [
                     {
-                        "name": "cpu_mmu",
+                        "slot_name": "mmu",
                         "type": "mmu.simpleMMU",
                         "params": {"page_size": "4096"},
-                        "slot_name": "mmu",
                     }
                 ],
             },
@@ -569,3 +568,39 @@ def test_full_sst_export_model_matches_golden_json_contract():
             },
         ],
     }
+
+
+def test_component_params_are_stringified_for_sst_json_parser_compatibility():
+    from types import SimpleNamespace
+
+    from fuse.core.model.models import ComponentDefinition
+    from fuse.plugins.community.sst.export_json import build_sst_json_dict
+
+    component = ComponentDefinition(
+        plugin_id="sst",
+        element="memHierarchy",
+        name="Bus",
+    )
+    node = SimpleNamespace(
+        node_id=1,
+        instance_name="bus0",
+        component=component,
+        parameters={
+            "broadcast": False,
+            "idle_max": 6,
+            "bus_frequency": "2GHz",
+            "nested": ["x", 1],
+        },
+        ports=[],
+    )
+
+    data = build_sst_json_dict(_FakeScene([node]))
+    params = data["components"][0]["params"]
+
+    assert params == {
+        "broadcast": "false",
+        "bus_frequency": "2GHz",
+        "idle_max": "6",
+        "nested": '["x",1]',
+    }
+    assert all(isinstance(value, str) for value in params.values())

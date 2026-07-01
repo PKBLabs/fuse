@@ -27,6 +27,10 @@ PARAM_ENTRY_RE = re.compile(
     re.DOTALL,
 )
 STRING_RE = re.compile(r'"((?:[^"\\]|\\.)*)"')
+SST_NAMESPACED_TYPE_DEFAULT_RE = re.compile(r"^SST::[A-Za-z_][A-Za-z0-9_:.]*$")
+SST_ELEMENT_TYPE_DEFAULT_RE = re.compile(
+    r"^[A-Za-z_][A-Za-z0-9_]*\.([A-Za-z_][A-Za-z0-9_]*)$"
+)
 
 
 def _strings_from_macro_body(body: str) -> list[str]:
@@ -55,6 +59,28 @@ def _infer_kind(description: str) -> str:
     if text.startswith("(string") or text.startswith("(comma separated"):
         return "string"
     return "unknown"
+
+
+def _is_internal_type_default(value: Any, kind: str) -> bool:
+    if kind not in {"unknown", "any"}:
+        return False
+
+    if not isinstance(value, str):
+        return False
+
+    text = value.strip()
+
+    if not text:
+        return False
+
+    if "::" in text or text.startswith("SST::"):
+        return bool(SST_NAMESPACED_TYPE_DEFAULT_RE.fullmatch(text))
+
+    if "." in text and "/" not in text and " " not in text:
+        match = SST_ELEMENT_TYPE_DEFAULT_RE.fullmatch(text)
+        return bool(match and any(char.isupper() for char in match.group(1)))
+
+    return False
 
 
 def _is_symbolic(value: Any) -> bool:
@@ -135,6 +161,8 @@ def extract_catalog(source_root: Path, version: str) -> dict[str, Any]:
                     missing_severity = "silent"
                     if default_value in (None, ""):
                         default_kind = "empty"
+                    elif _is_internal_type_default(default_value, kind):
+                        default_kind = "internal"
                     elif _is_symbolic(default_value):
                         default_kind = "symbolic"
                     else:

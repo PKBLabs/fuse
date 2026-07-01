@@ -84,10 +84,9 @@ def test_build_sst_json_nests_subcomponents_and_omits_child_from_roots():
     assert data["components"][0]["params"] == {"clock": "2GHz"}
     assert data["components"][0]["subcomponents"] == [
         {
-            "name": "mmu0",
+            "slot_name": "mmu",
             "type": "mmu.simpleMMU",
             "params": {"page_size": "4096"},
-            "slot_name": "mmu",
         }
     ]
 
@@ -107,6 +106,147 @@ def test_build_sst_json_raises_when_subcomponent_attachment_child_is_missing():
     with pytest.raises(SSTJsonExportError, match="missing child node 99"):
         build_sst_json_dict(FakeScene([cpu], attachments=[attachment]))
 
+
+
+def test_build_sst_json_rewrites_links_to_attached_subcomponent_slot_ports():
+    from fuse.core.model.models import ModelLink
+
+    cpu = FakeNode(
+        1,
+        "cpu0",
+        _component("memHierarchy", "standardCPU"),
+        {"clock": "2GHz"},
+    )
+    iface = FakeNode(
+        2,
+        "cpu0_iface",
+        _component("memHierarchy", "standardInterface", is_subcomp=1),
+        {},
+    )
+    cache = FakeNode(
+        3,
+        "cpu0_l1",
+        _component("memHierarchy", "Cache"),
+        {"cache_size": "32KiB"},
+    )
+    attachment = ModelSubcompAttachment(
+        attachment_id=1,
+        name="subcomp_cpu0_memory_iface",
+        parent_node_id=1,
+        parent_component_name="cpu0",
+        slot_name="memory",
+        child_node_id=2,
+        child_component_name="cpu0_iface",
+        required_interface="SST::Interfaces::StandardMem",
+        provided_interface="SST::Interfaces::StandardMem",
+        plugin_id="sst",
+    )
+    link = ModelLink(
+        1,
+        "link_cpu_iface_cache",
+        2,
+        "cpu0_iface",
+        "lowlink",
+        3,
+        "cpu0_l1",
+        "highlink",
+        source_latency="1ns",
+        target_latency="1ns",
+    )
+
+    data = build_sst_json_dict(FakeScene([cpu, iface, cache], links=[link], attachments=[attachment]))
+
+    assert data["components"][0]["subcomponents"] == [
+        {
+            "slot_name": "memory",
+            "type": "memHierarchy.standardInterface",
+        }
+    ]
+    assert data["links"] == [
+        {
+            "name": "link_cpu_iface_cache",
+            "noCut": False,
+            "nonlocal": False,
+            "left": {"component": "cpu0:memory", "port": "lowlink", "latency": "1ns"},
+            "right": {"component": "cpu0_l1", "port": "highlink", "latency": "1ns"},
+        }
+    ]
+
+
+def test_build_sst_json_uses_nested_subcomponent_references_for_links():
+    cpu = FakeNode(
+        1,
+        "cpu0",
+        _component("example", "CPU"),
+        {},
+    )
+    iface = FakeNode(
+        2,
+        "iface0",
+        _component("example", "Interface", is_subcomp=1),
+        {},
+    )
+    adapter = FakeNode(
+        3,
+        "adapter0",
+        _component("example", "Adapter", is_subcomp=1),
+        {},
+    )
+    cache = FakeNode(
+        4,
+        "cache0",
+        _component("example", "Cache"),
+        {},
+    )
+    attachments = [
+        ModelSubcompAttachment(
+            attachment_id=1,
+            name="cpu_memory_iface",
+            parent_node_id=1,
+            parent_component_name="cpu0",
+            slot_name="memory",
+            child_node_id=2,
+            child_component_name="iface0",
+            plugin_id="sst",
+        ),
+        ModelSubcompAttachment(
+            attachment_id=2,
+            name="iface_adapter",
+            parent_node_id=2,
+            parent_component_name="iface0",
+            slot_name="adapter",
+            child_node_id=3,
+            child_component_name="adapter0",
+            plugin_id="sst",
+        ),
+    ]
+    link = ModelLink(
+        1,
+        "link_adapter_cache",
+        3,
+        "adapter0",
+        "lowlink",
+        4,
+        "cache0",
+        "highlink",
+        source_latency="1ns",
+        target_latency="1ns",
+    )
+
+    data = build_sst_json_dict(
+        FakeScene([cpu, iface, adapter, cache], links=[link], attachments=attachments)
+    )
+
+    assert data["links"][0]["left"] == {
+        "component": "cpu0:memory:adapter",
+        "port": "lowlink",
+        "latency": "1ns",
+    }
+    assert data["links"][0]["right"] == {
+        "component": "cache0",
+        "port": "highlink",
+        "latency": "1ns",
+    }
 
 def test_build_sst_link_emits_independent_endpoint_latencies_and_flags():
     link = ModelLink(

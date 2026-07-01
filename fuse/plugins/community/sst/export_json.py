@@ -34,6 +34,12 @@ from fuse.plugins.community.sst.policy.runtime import (
 DEFAULT_LINK_LATENCY = "1ns"
 SST_EXPORT_FORMAT = "sst.json"
 SST_EXPORT_SCHEMA_VERSION = "0.5.0"
+UINT64_MAX_VALUE = str((1 << 64) - 1)
+_SYMBOLIC_UINT64_MAX_VALUES = {
+    "uint64_t-1",
+    "UINT64_MAX",
+    "std::numeric_limits<uint64_t>::max()",
+}
 
 
 class SSTJsonExportError(RuntimeError):
@@ -98,11 +104,12 @@ def validation_issue(
 
 def clean_value(value: Any) -> Any:
     """
-    Keep SST parameter values simple and JSON-safe.
+    Keep SST parameter values simple and JSON-safe before final export.
 
-    Most SST parameters are strings in practice, but JSON can safely carry
-    booleans, numbers, strings, arrays, and objects if FUSE later supports
-    typed parameter editors.
+    SST component/subcomponent params are ultimately emitted as strings because
+    SST's JSON model parser treats the ``params`` object as string key/value
+    pairs. Typed FUSE values are preserved during policy validation and are
+    stringified only at the final params boundary.
     """
     if value is None:
         return ""
@@ -135,6 +142,216 @@ def non_empty_params(parameters: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+def sst_param_string_value(value: Any) -> str:
+    """
+    Convert one component/subcomponent parameter value to SST JSON's string form.
+
+    SST's JSON model parser accepts structured JSON for the graph itself, but
+    component ``params`` are parsed as string key/value entries. Emitting JSON
+    booleans or numbers in ``params`` can fail before SST reaches simulation
+    initialization, for example at ``"broadcast": false`` on memHierarchy.Bus.
+    """
+
+    if value is None:
+        return ""
+
+    if isinstance(value, bool):
+        return "true" if value else "false"
+
+    if isinstance(value, (list, tuple, dict)):
+        return json.dumps(value, separators=(",", ":"))
+
+    return str(value)
+
+
+def stringify_sst_params(parameters: dict[str, Any]) -> dict[str, str]:
+    """Return SST component/subcomponent params in parser-compatible form."""
+
+    return {
+        str(key): sst_param_string_value(value)
+        for key, value in parameters.items()
+    }
+
+
+def _normalize_sst_runtime_symbolic_values(parameters: dict[str, Any]) -> dict[str, Any]:
+    """
+    Convert SST metadata expressions that are not accepted by Params::find().
+
+    Some SST ELI/catalog defaults are C/C++-style expressions rather than
+    runtime parser literals. For example, DirectoryController metadata can
+    advertise ``uint64_t-1`` for ``addr_range_end`` to mean the maximum address,
+    but SST's runtime parameter parser expects an integer string.
+    """
+
+    result: dict[str, Any] = {}
+
+    for key, value in parameters.items():
+        if isinstance(value, str):
+            compact = "".join(value.strip().split())
+            if compact in _SYMBOLIC_UINT64_MAX_VALUES:
+                result[key] = UINT64_MAX_VALUE
+                continue
+
+        result[key] = value
+
+    return result
+
+
+def _looks_like_zero(value: Any) -> bool:
+    """Return true for common zero spellings used by SST/FUSE params."""
+
+    if value is None:
+        return True
+
+    text = str(value).strip().lower()
+
+    if text in {"", "0", "+0", "0x0", "0.0", "0b", "0 b"}:
+        return True
+
+    try:
+        return float(text) == 0.0
+    except ValueError:
+        return False
+
+
+def _looks_like_sst_no_file_default(value: Any) -> bool:
+    """Return true for empty SST file-parameter sentinels that should not export."""
+
+    if value is None:
+        return True
+
+    text = str(value).strip()
+
+    return text == "" or text.upper() == "N/A"
+
+
+def _drop_sst_runtime_incompatible_default_params(
+    component_type: str,
+    parameters: dict[str, Any],
+) -> dict[str, Any]:
+    """
+    Drop optional defaults that are valid catalog entries but invalid runtime params.
+
+    ``memHierarchy.standardCPU`` treats ``mmio_addr`` as optional. When it is
+    absent and ``mmio_freq`` is zero/absent, no MMIO device is configured. When
+    the exporter writes the UI/catalog default ``mmio_addr=0``, SST 16 treats it
+    as an explicit MMIO address and rejects it because it is inside physical
+    memory. Therefore FUSE should omit the zero default unless MMIO traffic is
+    explicitly requested.
+    """
+
+    result = dict(parameters)
+
+    if component_type == "memHierarchy.standardCPU" and "mmio_addr" in result:
+        mmio_freq = result.get("mmio_freq", 0)
+        if _looks_like_zero(result.get("mmio_addr")) and _looks_like_zero(mmio_freq):
+            result.pop("mmio_addr", None)
+
+    if (
+        component_type == "memHierarchy.MemController"
+        and "memory_file" in result
+        and _looks_like_sst_no_file_default(result.get("memory_file"))
+    ):
+        result.pop("memory_file", None)
+
+    return result
+
+
+def _parse_sst_integer_literal(value: Any) -> int | None:
+    """Parse simple integer strings used by SST address-range parameters."""
+
+    if value is None:
+        return None
+
+    text = str(value).strip()
+    if not text:
+        return None
+
+    compact = "".join(text.split())
+    if compact in _SYMBOLIC_UINT64_MAX_VALUES:
+        return int(UINT64_MAX_VALUE)
+
+    try:
+        return int(text, 0)
+    except ValueError:
+        return None
+
+
+def _is_unbounded_or_default_address_end(value: Any) -> bool:
+    """Return true for address-end values that represent an unsafe broad default."""
+
+    parsed = _parse_sst_integer_literal(value)
+    if parsed is None:
+        return True
+
+    return parsed in {0, int(UINT64_MAX_VALUE)}
+
+
+def _infer_single_directory_controller_address_range(
+    components: list[dict[str, Any]],
+) -> None:
+    """
+    Align a single DirectoryController with the aggregate MemController range.
+
+    In common FUSE-generated memory hierarchies, one DirectoryController fans
+    out to one or more MemControllers. SST can default a missing directory
+    ``addr_range_end`` to a very broad region, but exported runnable JSON is
+    clearer and safer when the directory's region matches the concrete memory
+    span it routes to. When multiple directories exist, the exporter avoids
+    guessing because each directory may intentionally own a subset/interleave.
+    """
+
+    directories = [
+        component
+        for component in components
+        if component.get("type") == "memHierarchy.DirectoryController"
+    ]
+    memories = [
+        component
+        for component in components
+        if component.get("type") == "memHierarchy.MemController"
+    ]
+
+    if len(directories) != 1 or not memories:
+        return
+
+    starts: list[int] = []
+    ends: list[int] = []
+
+    for memory in memories:
+        params = memory.get("params")
+        if not isinstance(params, dict):
+            continue
+
+        end = _parse_sst_integer_literal(params.get("addr_range_end"))
+        if end is None:
+            continue
+
+        start = _parse_sst_integer_literal(params.get("addr_range_start"))
+        starts.append(0 if start is None else start)
+        ends.append(end)
+
+    if not ends:
+        return
+
+    aggregate_start = min(starts or [0])
+    aggregate_end = max(ends)
+
+    directory = directories[0]
+    params = directory.setdefault("params", {})
+    if not isinstance(params, dict):
+        return
+
+    existing_start = _parse_sst_integer_literal(params.get("addr_range_start"))
+    if "addr_range_start" not in params or existing_start is None:
+        params["addr_range_start"] = str(aggregate_start)
+
+    if "addr_range_end" not in params or _is_unbounded_or_default_address_end(
+        params.get("addr_range_end")
+    ):
+        params["addr_range_end"] = str(aggregate_end)
+
+
 def sst_component_type_for_node(node) -> str:
     """
     Convert a FUSE component node into an SST component type.
@@ -163,6 +380,17 @@ def sst_component_type_for_node(node) -> str:
     return f"{element}.{name}"
 
 
+def _is_suppressed_slot_param(param_name: Any, suppress_prefixed_slots: set[str]) -> bool:
+    """Return true when a param belongs to an attached subcomponent slot."""
+
+    name = str(param_name)
+
+    return any(
+        name == slot or name.startswith(f"{slot}.")
+        for slot in suppress_prefixed_slots
+    )
+
+
 def raw_export_params_for_node(
     node,
     *,
@@ -184,10 +412,7 @@ def raw_export_params_for_node(
         raw_params = {
             key: value
             for key, value in raw_params.items()
-            if not any(
-                str(key).startswith(f"{slot}.")
-                for slot in suppress_prefixed_slots
-            )
+            if not _is_suppressed_slot_param(key, suppress_prefixed_slots)
         }
 
     return non_empty_params(raw_params)
@@ -228,16 +453,29 @@ def exportable_params_for_node(
 def normalize_params_for_node(
     node,
     params: dict[str, Any],
-) -> dict[str, Any]:
-    """Normalize a node's parameters to their SST JSON value kinds."""
+) -> dict[str, str]:
+    """
+    Normalize a node's parameters, then stringify them for SST JSON.
+
+    The policy layer still validates booleans, integers, floats, and unit
+    strings so invalid user input is caught before export. The exported
+    ``params`` object itself uses string values because SSTJSONModel parses
+    component/subcomponent params as string key/value pairs.
+    """
 
     component_type = sst_component_type_for_node(node)
-    return normalize_params(
+    params = _normalize_sst_runtime_symbolic_values(params)
+    normalized = normalize_params(
         component_type,
         params,
         parameter_metadata_for_node(node),
         node=node,
     )
+    normalized = _drop_sst_runtime_incompatible_default_params(
+        component_type,
+        normalized,
+    )
+    return stringify_sst_params(normalized)
 
 
 def build_partition(node) -> dict[str, int] | None:
@@ -266,10 +504,10 @@ def build_sst_component(
     suppress_prefixed_slots: set[str] | None = None,
 ) -> dict[str, Any]:
     """
-    Build one SST JSON component object.
+    Build one top-level SST JSON component object.
 
     Field order matters for readability and is also safer for SST's streaming
-    reader behavior: name and type are emitted first.
+    reader behavior: top-level components emit name and type first.
     """
 
     component_type = sst_component_type_for_node(node)
@@ -294,17 +532,12 @@ def build_sst_component(
     return component
 
 
-def build_sst_component_tree(
+def _child_attachments_for_node(
     node,
     attachments_by_parent_id: dict[int, list],
-    nodes_by_id: dict[int, object],
-) -> dict[str, Any]:
-    """
-    Build a component/subcomponent tree for SST JSON export.
+) -> tuple[list, set[str]]:
+    """Return deterministic child attachments and their non-empty slot names."""
 
-    Attached child subcomponents are nested under their parent with the slot
-    name that should be used by SST's subcomponent assignment mechanism.
-    """
     child_attachments = sorted(
         attachments_by_parent_id.get(node.node_id, []),
         key=lambda item: (str(item.slot_name), str(item.name), int(item.attachment_id)),
@@ -314,10 +547,20 @@ def build_sst_component_tree(
         for attachment in child_attachments
         if str(getattr(attachment, "slot_name", "") or "").strip()
     }
+    return child_attachments, attached_slot_names
 
-    component = build_sst_component(
+
+def _attach_child_subcomponents(
+    component: dict[str, Any],
+    node,
+    attachments_by_parent_id: dict[int, list],
+    nodes_by_id: dict[int, object],
+) -> dict[str, Any]:
+    """Attach nested subcomponents to an already-built component/subcomponent."""
+
+    child_attachments, _attached_slot_names = _child_attachments_for_node(
         node,
-        suppress_prefixed_slots=attached_slot_names,
+        attachments_by_parent_id,
     )
     children = []
 
@@ -329,18 +572,88 @@ def build_sst_component_tree(
                 f"missing child node {attachment.child_node_id}."
             )
 
-        child_json = build_sst_component_tree(
-            child,
-            attachments_by_parent_id,
-            nodes_by_id,
+        children.append(
+            build_sst_subcomponent_tree(
+                child,
+                attachment.slot_name,
+                attachments_by_parent_id,
+                nodes_by_id,
+            )
         )
-        child_json["slot_name"] = attachment.slot_name
-        children.append(child_json)
 
     if children:
         component["subcomponents"] = children
 
     return component
+
+
+def build_sst_subcomponent_tree(
+    node,
+    slot_name: str,
+    attachments_by_parent_id: dict[int, list],
+    nodes_by_id: dict[int, object],
+) -> dict[str, Any]:
+    """
+    Build one nested SST JSON subcomponent object.
+
+    SSTJSONModel subcomponent objects are keyed by their parent slot and type;
+    unlike top-level components they do not accept a separate ``name`` field.
+    """
+
+    child_attachments, attached_slot_names = _child_attachments_for_node(
+        node,
+        attachments_by_parent_id,
+    )
+    del child_attachments  # The helper below will rebuild deterministic children.
+
+    subcomponent: dict[str, Any] = {
+        "slot_name": str(slot_name),
+        "type": sst_component_type_for_node(node),
+    }
+
+    params = exportable_params_for_node(
+        node,
+        suppress_prefixed_slots=attached_slot_names,
+    )
+
+    if params:
+        subcomponent["params"] = normalize_params_for_node(node, params)
+
+    return _attach_child_subcomponents(
+        subcomponent,
+        node,
+        attachments_by_parent_id,
+        nodes_by_id,
+    )
+
+
+def build_sst_component_tree(
+    node,
+    attachments_by_parent_id: dict[int, list],
+    nodes_by_id: dict[int, object],
+) -> dict[str, Any]:
+    """
+    Build a component/subcomponent tree for SST JSON export.
+
+    Attached child subcomponents are nested under their parent with the slot
+    name that should be used by SST's subcomponent assignment mechanism.
+    """
+    _child_attachments, attached_slot_names = _child_attachments_for_node(
+        node,
+        attachments_by_parent_id,
+    )
+
+    component = build_sst_component(
+        node,
+        suppress_prefixed_slots=attached_slot_names,
+    )
+
+    return _attach_child_subcomponents(
+        component,
+        node,
+        attachments_by_parent_id,
+        nodes_by_id,
+    )
 
 
 def source_link_latency(link) -> str:
@@ -380,7 +693,94 @@ def current_node_name(nodes_by_id: dict[int, object] | None, node_id: int, fallb
     return getattr(node, "instance_name", "") or fallback
 
 
-def build_sst_link(link, nodes_by_id: dict[int, object] | None = None) -> dict[str, Any]:
+def _attachment_attr(attachment, name: str, fallback: str = "") -> str:
+    return str(getattr(attachment, name, "") or fallback)
+
+
+def _sst_component_reference(
+    *,
+    node_id: int | None,
+    fallback_component: str,
+    nodes_by_id: dict[int, object] | None = None,
+    attachments_by_child_id: dict[int, object] | None = None,
+    _seen: set[int] | None = None,
+) -> str:
+    """
+    Resolve the component reference accepted by SST JSON links.
+
+    SST's JSON loader nests subcomponents under their parent component and
+    then resolves link endpoints with ConfigGraph::findComponentByName().
+    That resolver expects nested subcomponents to be addressed as
+    ``parent:slot`` (or ``parent:slot[index]``), while the endpoint ``port``
+    remains the subcomponent's own port such as ``lowlink``. It does not
+    accept flattened parent ports such as ``memory.lowlink``.
+    """
+
+    attachments_by_child_id = attachments_by_child_id or {}
+
+    if node_id is None:
+        return str(fallback_component or "")
+
+    _seen = _seen or set()
+    if node_id in _seen:
+        return current_node_name(nodes_by_id, node_id, fallback_component)
+    _seen.add(node_id)
+
+    attachment = attachments_by_child_id.get(node_id)
+    if attachment is None:
+        return current_node_name(nodes_by_id, node_id, fallback_component)
+
+    parent_ref = _sst_component_reference(
+        node_id=getattr(attachment, "parent_node_id", None),
+        fallback_component=_attachment_attr(
+            attachment,
+            "parent_component_name",
+            fallback_component,
+        ),
+        nodes_by_id=nodes_by_id,
+        attachments_by_child_id=attachments_by_child_id,
+        _seen=_seen,
+    )
+    slot_name = _attachment_attr(attachment, "slot_name")
+
+    if not parent_ref or not slot_name:
+        return current_node_name(nodes_by_id, node_id, fallback_component)
+
+    return f"{parent_ref}:{slot_name}"
+
+
+def _sst_link_endpoint(
+    *,
+    node_id: int | None,
+    fallback_component: str,
+    port: str,
+    nodes_by_id: dict[int, object] | None = None,
+    attachments_by_child_id: dict[int, object] | None = None,
+) -> tuple[str, str]:
+    """
+    Resolve an SST JSON link endpoint.
+
+    Top-level component endpoints are exported as their component instance
+    names. Attached subcomponent endpoints are exported as ``parent:slot``
+    component references with the original subcomponent port unchanged.
+    """
+
+    return (
+        _sst_component_reference(
+            node_id=node_id,
+            fallback_component=fallback_component,
+            nodes_by_id=nodes_by_id,
+            attachments_by_child_id=attachments_by_child_id,
+        ),
+        str(port or ""),
+    )
+
+
+def build_sst_link(
+    link,
+    nodes_by_id: dict[int, object] | None = None,
+    attachments_by_child_id: dict[int, object] | None = None,
+) -> dict[str, Any]:
     """
     Build one SST JSON link object.
 
@@ -388,23 +788,29 @@ def build_sst_link(link, nodes_by_id: dict[int, object] | None = None) -> dict[s
     current component instances. This prevents stale serialized link endpoint
     names from leaking into the generated SST JSON after a user renames a
     component.
+
+    If an endpoint is an attached SST SubComponent, the exported endpoint uses
+    SST's nested component-reference syntax, for example ``cpu0:memory`` with
+    port ``lowlink``.
     """
     name = getattr(link, "name", "") or f"link_{getattr(link, 'link_id', '')}"
     source_latency = source_link_latency(link)
     target_latency = target_link_latency(link)
 
-    source_component = current_node_name(
-        nodes_by_id,
-        getattr(link, "source_node_id", None),
-        getattr(link, "source_component_name", "") or "",
+    source_component, source_port = _sst_link_endpoint(
+        node_id=getattr(link, "source_node_id", None),
+        fallback_component=getattr(link, "source_component_name", "") or "",
+        port=getattr(link, "source_port", "") or "",
+        nodes_by_id=nodes_by_id,
+        attachments_by_child_id=attachments_by_child_id,
     )
-    source_port = getattr(link, "source_port", "") or ""
-    target_component = current_node_name(
-        nodes_by_id,
-        getattr(link, "target_node_id", None),
-        getattr(link, "target_component_name", "") or "",
+    target_component, target_port = _sst_link_endpoint(
+        node_id=getattr(link, "target_node_id", None),
+        fallback_component=getattr(link, "target_component_name", "") or "",
+        port=getattr(link, "target_port", "") or "",
+        nodes_by_id=nodes_by_id,
+        attachments_by_child_id=attachments_by_child_id,
     )
-    target_port = getattr(link, "target_port", "") or ""
 
     missing = []
 
@@ -437,6 +843,7 @@ def build_sst_link(link, nodes_by_id: dict[int, object] | None = None) -> dict[s
             "latency": target_latency,
         },
     }
+
 
 
 def port_names_for_node(node) -> set[str]:
@@ -908,6 +1315,32 @@ def validate_sst_json_export(scene) -> SSTExportReport:
     return report
 
 
+def normalize_shared_params_for_sst_json(
+    shared_params: list[dict[str, Any]] | None,
+) -> list[dict[str, Any]] | None:
+    """Stringify nested shared-param values without changing caller objects."""
+
+    if not shared_params:
+        return shared_params
+
+    normalized: list[dict[str, Any]] = []
+
+    for group in shared_params:
+        if not isinstance(group, dict):
+            normalized.append(group)
+            continue
+
+        item = dict(group)
+        params = item.get("params")
+
+        if isinstance(params, dict):
+            item["params"] = stringify_sst_params(non_empty_params(params))
+
+        normalized.append(item)
+
+    return normalized
+
+
 def build_sst_json_dict(
     scene,
     program_options: dict[str, Any] | None = None,
@@ -933,6 +1366,7 @@ def build_sst_json_dict(
         key=lambda item: (int(item.parent_node_id), str(item.slot_name), str(item.name), int(item.attachment_id)),
     )
     attached_child_ids = {attachment.child_node_id for attachment in attachments}
+    attachments_by_child_id = {attachment.child_node_id: attachment for attachment in attachments}
     attachments_by_parent_id: dict[int, list] = {}
 
     for attachment in attachments:
@@ -946,9 +1380,14 @@ def build_sst_json_dict(
         for node in nodes
         if node.node_id not in attached_child_ids
     ]
+    _infer_single_directory_controller_address_range(components)
 
     links = [
-        build_sst_link(link, nodes_by_id=nodes_by_id)
+        build_sst_link(
+            link,
+            nodes_by_id=nodes_by_id,
+            attachments_by_child_id=attachments_by_child_id,
+        )
         for link in sorted(getattr(scene, "links", []) or [], key=lambda item: (str(item.name), int(item.link_id)))
     ]
 
@@ -956,8 +1395,10 @@ def build_sst_json_dict(
         "program_options": program_options or {},
     }
 
-    if shared_params:
-        data["shared_params"] = shared_params
+    normalized_shared_params = normalize_shared_params_for_sst_json(shared_params)
+
+    if normalized_shared_params:
+        data["shared_params"] = normalized_shared_params
 
     data.update(
         {

@@ -1,0 +1,760 @@
+{
+  "program_options": {},
+  "statistics_options": {},
+  "components": [
+    {
+      "name": "cg0_cache_bus",
+      "type": "memHierarchy.Bus",
+      "params": {
+        "broadcast": "false",
+        "bus_frequency": "2GHz",
+        "debug": "0",
+        "debug_level": "0",
+        "drain_bus": "false",
+        "idle_max": "6"
+      }
+    },
+    {
+      "name": "cg0_shared_L2",
+      "type": "memHierarchy.Cache",
+      "params": {
+        "L1": "false",
+        "access_latency_cycles": "8",
+        "associativity": "16",
+        "banks": "0",
+        "cache_frequency": "1.5GHz",
+        "cache_line_size": "64",
+        "cache_size": "512KiB",
+        "cache_type": "inclusive",
+        "coherence_protocol": "MESI",
+        "debug": "0",
+        "debug_level": "0",
+        "force_noncacheable_reqs": "false",
+        "llsc_block_cycles": "0",
+        "maxRequestDelay": "0",
+        "max_requests_per_cycle": "-1",
+        "min_packet_size": "8B",
+        "mshr_latency_cycles": "1",
+        "mshr_num_entries": "-1",
+        "node": "0",
+        "noninclusive_directory_associativity": "1",
+        "noninclusive_directory_entries": "0",
+        "num_cache_slices": "1",
+        "prefetch_delay_cycles": "1",
+        "request_link_width": "0B",
+        "response_link_width": "0B",
+        "slice_allocation_policy": "rr",
+        "slice_id": "0",
+        "snoop_l1_invalidations": "false",
+        "verbose": "1"
+      }
+    },
+    {
+      "name": "cg1_cache_bus",
+      "type": "memHierarchy.Bus",
+      "params": {
+        "broadcast": "false",
+        "bus_frequency": "2GHz",
+        "debug": "0",
+        "debug_level": "0",
+        "drain_bus": "false",
+        "idle_max": "6"
+      }
+    },
+    {
+      "name": "cg1_shared_L2",
+      "type": "memHierarchy.Cache",
+      "params": {
+        "L1": "false",
+        "access_latency_cycles": "8",
+        "associativity": "16",
+        "banks": "0",
+        "cache_frequency": "1.5GHz",
+        "cache_line_size": "64",
+        "cache_size": "512KiB",
+        "cache_type": "inclusive",
+        "coherence_protocol": "MESI",
+        "debug": "0",
+        "debug_level": "0",
+        "force_noncacheable_reqs": "false",
+        "llsc_block_cycles": "0",
+        "maxRequestDelay": "0",
+        "max_requests_per_cycle": "-1",
+        "min_packet_size": "8B",
+        "mshr_latency_cycles": "1",
+        "mshr_num_entries": "-1",
+        "node": "0",
+        "noninclusive_directory_associativity": "1",
+        "noninclusive_directory_entries": "0",
+        "num_cache_slices": "1",
+        "prefetch_delay_cycles": "1",
+        "request_link_width": "0B",
+        "response_link_width": "0B",
+        "slice_allocation_policy": "rr",
+        "slice_id": "0",
+        "snoop_l1_invalidations": "false",
+        "verbose": "1"
+      }
+    },
+    {
+      "name": "cg_to_dc_bus",
+      "type": "memHierarchy.Bus",
+      "params": {
+        "broadcast": "false",
+        "bus_frequency": "1.5GHz",
+        "debug": "0",
+        "debug_level": "0",
+        "drain_bus": "false",
+        "idle_max": "6"
+      }
+    },
+    {
+      "name": "cpu0",
+      "type": "memHierarchy.standardCPU",
+      "params": {
+        "addressoffset": "0",
+        "clock": "2GHz",
+        "custom_freq": "0",
+        "flush_freq": "5",
+        "flushcache_freq": "1",
+        "flushinv_freq": "3",
+        "llsc_freq": "9",
+        "maxOutstanding": "32",
+        "memFreq": "2",
+        "memSize": "4GiB",
+        "noncacheableRangeEnd": "0",
+        "noncacheableRangeStart": "0",
+        "opCount": "20000",
+        "read_freq": "88",
+        "reqsPerIssue": "2",
+        "rngseed": "1000",
+        "test_init": "0",
+        "verbose": "1",
+        "write_freq": "30"
+      },
+      "subcomponents": [
+        {
+          "slot_name": "memory",
+          "type": "memHierarchy.standardInterface",
+          "params": {
+            "debug": "0",
+            "debug_level": "0",
+            "noncacheable_regions": "[]",
+            "tlb_exe_permission": "0",
+            "verbose": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "cpu0_l1",
+      "type": "memHierarchy.Cache",
+      "params": {
+        "L1": "true",
+        "access_latency_cycles": "2",
+        "associativity": "8",
+        "banks": "0",
+        "cache_frequency": "2GHz",
+        "cache_line_size": "64",
+        "cache_size": "32KiB",
+        "cache_type": "inclusive",
+        "coherence_protocol": "MESI",
+        "debug": "0",
+        "debug_level": "0",
+        "force_noncacheable_reqs": "false",
+        "llsc_block_cycles": "0",
+        "maxRequestDelay": "0",
+        "max_requests_per_cycle": "-1",
+        "min_packet_size": "8B",
+        "mshr_latency_cycles": "1",
+        "mshr_num_entries": "-1",
+        "node": "0",
+        "noninclusive_directory_associativity": "1",
+        "noninclusive_directory_entries": "0",
+        "num_cache_slices": "1",
+        "prefetch_delay_cycles": "1",
+        "request_link_width": "0B",
+        "response_link_width": "0B",
+        "slice_allocation_policy": "rr",
+        "slice_id": "0",
+        "snoop_l1_invalidations": "false",
+        "verbose": "1"
+      }
+    },
+    {
+      "name": "cpu1",
+      "type": "memHierarchy.standardCPU",
+      "params": {
+        "addressoffset": "0",
+        "clock": "2GHz",
+        "custom_freq": "0",
+        "flush_freq": "5",
+        "flushcache_freq": "1",
+        "flushinv_freq": "3",
+        "llsc_freq": "9",
+        "maxOutstanding": "32",
+        "memFreq": "2",
+        "memSize": "4GiB",
+        "noncacheableRangeEnd": "0",
+        "noncacheableRangeStart": "0",
+        "opCount": "20000",
+        "read_freq": "88",
+        "reqsPerIssue": "2",
+        "rngseed": "1001",
+        "test_init": "0",
+        "verbose": "1",
+        "write_freq": "30"
+      },
+      "subcomponents": [
+        {
+          "slot_name": "memory",
+          "type": "memHierarchy.standardInterface",
+          "params": {
+            "debug": "0",
+            "debug_level": "0",
+            "noncacheable_regions": "[]",
+            "tlb_exe_permission": "0",
+            "verbose": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "cpu1_l1",
+      "type": "memHierarchy.Cache",
+      "params": {
+        "L1": "true",
+        "access_latency_cycles": "2",
+        "associativity": "8",
+        "banks": "0",
+        "cache_frequency": "2GHz",
+        "cache_line_size": "64",
+        "cache_size": "32KiB",
+        "cache_type": "inclusive",
+        "coherence_protocol": "MESI",
+        "debug": "0",
+        "debug_level": "0",
+        "force_noncacheable_reqs": "false",
+        "llsc_block_cycles": "0",
+        "maxRequestDelay": "0",
+        "max_requests_per_cycle": "-1",
+        "min_packet_size": "8B",
+        "mshr_latency_cycles": "1",
+        "mshr_num_entries": "-1",
+        "node": "0",
+        "noninclusive_directory_associativity": "1",
+        "noninclusive_directory_entries": "0",
+        "num_cache_slices": "1",
+        "prefetch_delay_cycles": "1",
+        "request_link_width": "0B",
+        "response_link_width": "0B",
+        "slice_allocation_policy": "rr",
+        "slice_id": "0",
+        "snoop_l1_invalidations": "false",
+        "verbose": "1"
+      }
+    },
+    {
+      "name": "cpu2",
+      "type": "memHierarchy.standardCPU",
+      "params": {
+        "addressoffset": "0",
+        "clock": "2GHz",
+        "custom_freq": "0",
+        "flush_freq": "5",
+        "flushcache_freq": "1",
+        "flushinv_freq": "3",
+        "llsc_freq": "9",
+        "maxOutstanding": "32",
+        "memFreq": "2",
+        "memSize": "4GiB",
+        "noncacheableRangeEnd": "0",
+        "noncacheableRangeStart": "0",
+        "opCount": "20000",
+        "read_freq": "88",
+        "reqsPerIssue": "2",
+        "rngseed": "1002",
+        "test_init": "0",
+        "verbose": "1",
+        "write_freq": "30"
+      },
+      "subcomponents": [
+        {
+          "slot_name": "memory",
+          "type": "memHierarchy.standardInterface",
+          "params": {
+            "debug": "0",
+            "debug_level": "0",
+            "noncacheable_regions": "[]",
+            "tlb_exe_permission": "0",
+            "verbose": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "cpu2_l1",
+      "type": "memHierarchy.Cache",
+      "params": {
+        "L1": "true",
+        "access_latency_cycles": "2",
+        "associativity": "8",
+        "banks": "0",
+        "cache_frequency": "2GHz",
+        "cache_line_size": "64",
+        "cache_size": "32KiB",
+        "cache_type": "inclusive",
+        "coherence_protocol": "MESI",
+        "debug": "0",
+        "debug_level": "0",
+        "force_noncacheable_reqs": "false",
+        "llsc_block_cycles": "0",
+        "maxRequestDelay": "0",
+        "max_requests_per_cycle": "-1",
+        "min_packet_size": "8B",
+        "mshr_latency_cycles": "1",
+        "mshr_num_entries": "-1",
+        "node": "0",
+        "noninclusive_directory_associativity": "1",
+        "noninclusive_directory_entries": "0",
+        "num_cache_slices": "1",
+        "prefetch_delay_cycles": "1",
+        "request_link_width": "0B",
+        "response_link_width": "0B",
+        "slice_allocation_policy": "rr",
+        "slice_id": "0",
+        "snoop_l1_invalidations": "false",
+        "verbose": "1"
+      }
+    },
+    {
+      "name": "cpu3",
+      "type": "memHierarchy.standardCPU",
+      "params": {
+        "addressoffset": "0",
+        "clock": "2GHz",
+        "custom_freq": "0",
+        "flush_freq": "5",
+        "flushcache_freq": "1",
+        "flushinv_freq": "3",
+        "llsc_freq": "9",
+        "maxOutstanding": "32",
+        "memFreq": "2",
+        "memSize": "4GiB",
+        "noncacheableRangeEnd": "0",
+        "noncacheableRangeStart": "0",
+        "opCount": "20000",
+        "read_freq": "88",
+        "reqsPerIssue": "2",
+        "rngseed": "1003",
+        "test_init": "0",
+        "verbose": "1",
+        "write_freq": "30"
+      },
+      "subcomponents": [
+        {
+          "slot_name": "memory",
+          "type": "memHierarchy.standardInterface",
+          "params": {
+            "debug": "0",
+            "debug_level": "0",
+            "noncacheable_regions": "[]",
+            "tlb_exe_permission": "0",
+            "verbose": "1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "cpu3_l1",
+      "type": "memHierarchy.Cache",
+      "params": {
+        "L1": "true",
+        "access_latency_cycles": "2",
+        "associativity": "8",
+        "banks": "0",
+        "cache_frequency": "2GHz",
+        "cache_line_size": "64",
+        "cache_size": "32KiB",
+        "cache_type": "inclusive",
+        "coherence_protocol": "MESI",
+        "debug": "0",
+        "debug_level": "0",
+        "force_noncacheable_reqs": "false",
+        "llsc_block_cycles": "0",
+        "maxRequestDelay": "0",
+        "max_requests_per_cycle": "-1",
+        "min_packet_size": "8B",
+        "mshr_latency_cycles": "1",
+        "mshr_num_entries": "-1",
+        "node": "0",
+        "noninclusive_directory_associativity": "1",
+        "noninclusive_directory_entries": "0",
+        "num_cache_slices": "1",
+        "prefetch_delay_cycles": "1",
+        "request_link_width": "0B",
+        "response_link_width": "0B",
+        "slice_allocation_policy": "rr",
+        "slice_id": "0",
+        "snoop_l1_invalidations": "false",
+        "verbose": "1"
+      }
+    },
+    {
+      "name": "dc",
+      "type": "memHierarchy.DirectoryController",
+      "params": {
+        "access_latency_cycles": "0",
+        "addr_range_end": "4294967295",
+        "addr_range_start": "0",
+        "cache_line_size": "64",
+        "clock": "1GHz",
+        "coherence_protocol": "MESI",
+        "debug": "0",
+        "debug_level": "0",
+        "entry_cache_size": "0",
+        "interleave_size": "0B",
+        "interleave_step": "0B",
+        "max_requests_per_cycle": "0",
+        "mem_addr_start": "0",
+        "mshr_latency_cycles": "0",
+        "mshr_num_entries": "-1",
+        "network_bw": "80GiB/s",
+        "network_input_buffer_size": "1KiB",
+        "network_num_vc": "1",
+        "network_output_buffer_size": "1KiB",
+        "node": "0",
+        "verbose": "1"
+      }
+    },
+    {
+      "name": "dc_t0_mc_bus",
+      "type": "memHierarchy.Bus",
+      "params": {
+        "broadcast": "false",
+        "bus_frequency": "1GHz",
+        "debug": "0",
+        "debug_level": "0",
+        "drain_bus": "false",
+        "idle_max": "6"
+      }
+    },
+    {
+      "name": "mc0",
+      "type": "memHierarchy.MemController",
+      "params": {
+        "addr_range_end": "2147483647",
+        "addr_range_start": "0",
+        "backendConvertor": "memHierarchy.simpleMembackendConvertor",
+        "backing": "mmap",
+        "backing_init_zero": "false",
+        "backing_out_screen": "false",
+        "backing_size_unit": "1MiB",
+        "clock": "1GHz",
+        "debug": "0",
+        "debug_level": "0",
+        "interleave_size": "0B",
+        "interleave_step": "0B",
+        "listenercount": "0",
+        "request_width": "64",
+        "verbose": "1"
+      },
+      "subcomponents": [
+        {
+          "slot_name": "backend",
+          "type": "memHierarchy.simpleMem",
+          "params": {
+            "access_time": "100ns",
+            "debug": "0",
+            "debug_level": "0",
+            "debug_location": "0",
+            "debug_mask": "0",
+            "max_requests_per_cycle": "-1",
+            "mem_size": "2GiB",
+            "request_width": "64"
+          }
+        }
+      ]
+    },
+    {
+      "name": "mc1",
+      "type": "memHierarchy.MemController",
+      "params": {
+        "addr_range_end": "4294967295",
+        "addr_range_start": "2147483648",
+        "backendConvertor": "memHierarchy.simpleMembackendConvertor",
+        "backing": "mmap",
+        "backing_init_zero": "false",
+        "backing_out_screen": "false",
+        "backing_size_unit": "1MiB",
+        "clock": "1GHz",
+        "debug": "0",
+        "debug_level": "0",
+        "interleave_size": "0B",
+        "interleave_step": "0B",
+        "listenercount": "0",
+        "request_width": "64",
+        "verbose": "1"
+      },
+      "subcomponents": [
+        {
+          "slot_name": "backend",
+          "type": "memHierarchy.simpleMem",
+          "params": {
+            "access_time": "100ns",
+            "debug": "0",
+            "debug_level": "0",
+            "debug_location": "0",
+            "debug_mask": "0",
+            "max_requests_per_cycle": "-1",
+            "mem_size": "2GiB",
+            "request_width": "64"
+          }
+        }
+      ]
+    }
+  ],
+  "statistics_group": [],
+  "links": [
+    {
+      "name": "lnk_Bus_1_MemController_1",
+      "noCut": false,
+      "nonlocal": false,
+      "left": {
+        "component": "dc_t0_mc_bus",
+        "port": "lowlink1",
+        "latency": "1ns"
+      },
+      "right": {
+        "component": "mc1",
+        "port": "highlink",
+        "latency": "1ns"
+      }
+    },
+    {
+      "name": "lnk_Bus_3_Cache_1",
+      "noCut": false,
+      "nonlocal": false,
+      "left": {
+        "component": "cg0_cache_bus",
+        "port": "lowlink0",
+        "latency": "1ns"
+      },
+      "right": {
+        "component": "cg0_shared_L2",
+        "port": "highlink",
+        "latency": "1ns"
+      }
+    },
+    {
+      "name": "lnk_Bus_3_Cache_3",
+      "noCut": false,
+      "nonlocal": false,
+      "left": {
+        "component": "cg0_cache_bus",
+        "port": "highlink0",
+        "latency": "1ns"
+      },
+      "right": {
+        "component": "cpu0_l1",
+        "port": "lowlink",
+        "latency": "1ns"
+      }
+    },
+    {
+      "name": "lnk_Cache_1_Bus_2",
+      "noCut": false,
+      "nonlocal": false,
+      "left": {
+        "component": "cg0_shared_L2",
+        "port": "lowlink",
+        "latency": "1ns"
+      },
+      "right": {
+        "component": "cg_to_dc_bus",
+        "port": "highlink0",
+        "latency": "1ns"
+      }
+    },
+    {
+      "name": "lnk_DirectoryController_1_Bus_1",
+      "noCut": false,
+      "nonlocal": false,
+      "left": {
+        "component": "dc",
+        "port": "lowlink",
+        "latency": "1ns"
+      },
+      "right": {
+        "component": "dc_t0_mc_bus",
+        "port": "highlink0",
+        "latency": "1ns"
+      }
+    },
+    {
+      "name": "lnk_DirectoryController_1_Bus_2",
+      "noCut": false,
+      "nonlocal": false,
+      "left": {
+        "component": "dc",
+        "port": "highlink",
+        "latency": "1ns"
+      },
+      "right": {
+        "component": "cg_to_dc_bus",
+        "port": "lowlink0",
+        "latency": "1ns"
+      }
+    },
+    {
+      "name": "lnk_MemController_2_Bus_1",
+      "noCut": false,
+      "nonlocal": false,
+      "left": {
+        "component": "mc0",
+        "port": "highlink",
+        "latency": "1ns"
+      },
+      "right": {
+        "component": "dc_t0_mc_bus",
+        "port": "lowlink0",
+        "latency": "1ns"
+      }
+    },
+    {
+      "name": "lnk_cg1_cache_bus_cpu2_l1",
+      "noCut": false,
+      "nonlocal": false,
+      "left": {
+        "component": "cg1_cache_bus",
+        "port": "highlink0",
+        "latency": "1ns"
+      },
+      "right": {
+        "component": "cpu2_l1",
+        "port": "lowlink",
+        "latency": "1ns"
+      }
+    },
+    {
+      "name": "lnk_cg1_cache_bus_cpu3_l1",
+      "noCut": false,
+      "nonlocal": false,
+      "left": {
+        "component": "cg1_cache_bus",
+        "port": "highlink1",
+        "latency": "1ns"
+      },
+      "right": {
+        "component": "cpu3_l1",
+        "port": "lowlink",
+        "latency": "1ns"
+      }
+    },
+    {
+      "name": "lnk_cg1_shared_L2_cg1_cache_bus",
+      "noCut": false,
+      "nonlocal": false,
+      "left": {
+        "component": "cg1_shared_L2",
+        "port": "highlink",
+        "latency": "1ns"
+      },
+      "right": {
+        "component": "cg1_cache_bus",
+        "port": "lowlink0",
+        "latency": "1ns"
+      }
+    },
+    {
+      "name": "lnk_cg_to_dc_bus_cg1_shared_L2",
+      "noCut": false,
+      "nonlocal": false,
+      "left": {
+        "component": "cg_to_dc_bus",
+        "port": "highlink1",
+        "latency": "1ns"
+      },
+      "right": {
+        "component": "cg1_shared_L2",
+        "port": "lowlink",
+        "latency": "1ns"
+      }
+    },
+    {
+      "name": "lnk_cpu1_l1_cg0_cache_bus",
+      "noCut": false,
+      "nonlocal": false,
+      "left": {
+        "component": "cpu1_l1",
+        "port": "lowlink",
+        "latency": "1ns"
+      },
+      "right": {
+        "component": "cg0_cache_bus",
+        "port": "highlink1",
+        "latency": "1ns"
+      }
+    },
+    {
+      "name": "lnk_cpu1_l1_cpu1_iface",
+      "noCut": false,
+      "nonlocal": false,
+      "left": {
+        "component": "cpu1_l1",
+        "port": "highlink",
+        "latency": "1ns"
+      },
+      "right": {
+        "component": "cpu1:memory",
+        "port": "lowlink",
+        "latency": "1ns"
+      }
+    },
+    {
+      "name": "lnk_cpu2_l1_cpu2_iface",
+      "noCut": false,
+      "nonlocal": false,
+      "left": {
+        "component": "cpu2_l1",
+        "port": "highlink",
+        "latency": "1ns"
+      },
+      "right": {
+        "component": "cpu2:memory",
+        "port": "lowlink",
+        "latency": "1ns"
+      }
+    },
+    {
+      "name": "lnk_cpu3_l1_cpu3_iface",
+      "noCut": false,
+      "nonlocal": false,
+      "left": {
+        "component": "cpu3_l1",
+        "port": "highlink",
+        "latency": "1ns"
+      },
+      "right": {
+        "component": "cpu3:memory",
+        "port": "lowlink",
+        "latency": "1ns"
+      }
+    },
+    {
+      "name": "lnk_standardInterface_4_Cache_3",
+      "noCut": false,
+      "nonlocal": false,
+      "left": {
+        "component": "cpu0:memory",
+        "port": "lowlink",
+        "latency": "1ns"
+      },
+      "right": {
+        "component": "cpu0_l1",
+        "port": "highlink",
+        "latency": "1ns"
+      }
+    }
+  ]
+}

@@ -18,8 +18,15 @@ _TYPE_HINT_RE = re.compile(r"^\s*\(([^)]+)\)")
 _NUMERIC_LITERAL_RE = re.compile(r"^[+-]?(?:0[xX][0-9a-fA-F]+|\d+(?:\.\d+)?)$")
 _UNIT_LITERAL_RE = re.compile(r"^[+-]?\d+(?:\.\d+)?\s*[A-Za-z][A-Za-z0-9_/]*$")
 _PLAIN_STRING_LITERAL_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_:\-./]*$")
+_C_STYLE_INTEGER_EXPR_RE = re.compile(
+    r"^\s*(?:u?int(?:8|16|32|64)_t|size_t)\s*[-+*/()]"
+)
 _SYMBOLIC_DEFAULT_RE = re.compile(
     r"[A-Za-z_][A-Za-z0-9_]*\s*[-+*/()]|[-+*/()]\s*[A-Za-z_][A-Za-z0-9_]*"
+)
+_SST_NAMESPACED_TYPE_DEFAULT_RE = re.compile(r"^SST::[A-Za-z_][A-Za-z0-9_:.]*$")
+_SST_ELEMENT_TYPE_DEFAULT_RE = re.compile(
+    r"^[A-Za-z_][A-Za-z0-9_]*\.([A-Za-z_][A-Za-z0-9_]*)$"
 )
 
 _NUMERIC_STRING_RE = re.compile(r"^[+-]?(?:0[xX][0-9a-fA-F]+|\d+)$")
@@ -91,6 +98,9 @@ def metadata_default_is_symbolic(default_value: Any) -> bool:
     if _UNIT_LITERAL_RE.fullmatch(text):
         return False
 
+    if _C_STYLE_INTEGER_EXPR_RE.search(text):
+        return True
+
     if _PLAIN_STRING_LITERAL_RE.fullmatch(text):
         return False
 
@@ -98,6 +108,43 @@ def metadata_default_is_symbolic(default_value: Any) -> bool:
         return False
 
     return bool(_SYMBOLIC_DEFAULT_RE.search(text))
+
+
+def metadata_default_is_internal_type(default_value: Any, kind: ParamKind = ParamKind.UNKNOWN) -> bool:
+    """
+    Return true when an SST metadata default names an internal class/interface.
+
+    SST ELI metadata often uses concrete C++ class or element type names as
+    defaults for links, slots, listeners, prefetchers, replacement policies,
+    and other extension points. Those values describe SST's internal fallback
+    implementation; they are not useful runtime JSON parameters and can confuse
+    SST JSON import/execution paths when emitted by FUSE.
+    """
+
+    if kind not in {ParamKind.UNKNOWN, ParamKind.ANY}:
+        return False
+
+    if not isinstance(default_value, str):
+        return False
+
+    text = default_value.strip()
+
+    if not text:
+        return False
+
+    if "::" in text or text.startswith("SST::"):
+        return bool(_SST_NAMESPACED_TYPE_DEFAULT_RE.fullmatch(text))
+
+    # Some SST metadata uses an element.component spelling for internal helper
+    # classes instead of a C++ namespace spelling, for example
+    # ``memHierarchy.simpleMembackendConvertor``. Require a CamelCase-ish
+    # component segment so ordinary filenames such as ``mapFile.txt`` or
+    # ``vertices.txt`` remain exportable literals.
+    if "." in text and "/" not in text and " " not in text:
+        match = _SST_ELEMENT_TYPE_DEFAULT_RE.fullmatch(text)
+        return bool(match and any(char.isupper() for char in match.group(1)))
+
+    return False
 
 
 def classify_default(default_value: Any, kind: ParamKind = ParamKind.UNKNOWN) -> DefaultKind:
@@ -114,6 +161,9 @@ def classify_default(default_value: Any, kind: ParamKind = ParamKind.UNKNOWN) ->
 
         if text in {"<required>", "required"}:
             return DefaultKind.NONE
+
+        if metadata_default_is_internal_type(text, kind):
+            return DefaultKind.INTERNAL
 
         if metadata_default_is_symbolic(text):
             return DefaultKind.SYMBOLIC
