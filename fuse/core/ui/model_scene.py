@@ -75,6 +75,7 @@ class ModelScene(QGraphicsScene):
         self.links: list[ModelLink] = []
         self.subcomp_attachments: list[ModelSubcompAttachment] = []
 
+        self._next_node_id = 1
         self._next_link_id = 1
         self._next_subcomp_attachment_id = 1
 
@@ -141,8 +142,29 @@ class ModelScene(QGraphicsScene):
         self.suppressed_compatibility_warnings = set()
         self._next_group_id = 1
         self.node_group_ids = {}
-        ComponentNodeItem._next_node_id = 1
+        self._next_node_id = 1
         self.notify_model_changed()
+
+    def next_component_node_id(self) -> int:
+        """Return the next component id for this scene.
+
+        FUSE can have multiple ModelScene instances alive at once: the main model
+        scene plus composite-template and composite-instance editor scenes. Node
+        ids are only meaningful inside one scene/project fragment, so allocation
+        must be scene-local. A process-global ComponentNodeItem counter lets a
+        nested composite editor reset or advance the main scene's ids, which can
+        make copy/paste create duplicate component ids.
+        """
+        used_ids = {
+            int(getattr(node, "node_id", 0))
+            for node in self.component_items()
+            if int(getattr(node, "node_id", 0)) > 0
+        }
+        candidate = max(1, int(getattr(self, "_next_node_id", 1) or 1))
+        while candidate in used_ids:
+            candidate += 1
+        self._next_node_id = candidate + 1
+        return candidate
 
     def set_snap_grid_size(self, width: float, height: float) -> None:
         self.snap_grid_width = max(1.0, float(width))
@@ -511,6 +533,7 @@ class ModelScene(QGraphicsScene):
 
         node = ComponentNodeItem(
             component,
+            node_id=self.next_component_node_id(),
             instance_name=instance_name or self.generate_unique_component_name(component),
         )
         node.setPos(scene_pos)
@@ -1241,6 +1264,24 @@ class ModelScene(QGraphicsScene):
 
         return False
 
+    @staticmethod
+    def _connector_metadata_truthy(value) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            return value.strip().lower() in {"1", "true", "yes", "on"}
+        return bool(value)
+
+    def subcomp_connector_allows_multiple(self, connector: SubcompConnectorItem) -> bool:
+        metadata = getattr(connector, "metadata", {}) or {}
+        return self._connector_metadata_truthy(metadata.get("allow_multiple", False))
+
+    def subcomp_connector_has_available_capacity(self, connector: SubcompConnectorItem) -> bool:
+        if not self.subcomp_connector_is_connected(connector):
+            return True
+
+        return self.subcomp_connector_allows_multiple(connector)
+
     def warn_mixed_endpoint_types(self):
         if self.suppress_mixed_endpoint_warning:
             return
@@ -1298,7 +1339,7 @@ class ModelScene(QGraphicsScene):
                 if connector is source_connector:
                     continue
 
-                if self.subcomp_connector_is_connected(connector):
+                if not self.subcomp_connector_has_available_capacity(connector):
                     continue
 
                 pair = self.compatible_subcomp_connector_pair(source_connector, connector)
@@ -1388,6 +1429,12 @@ class ModelScene(QGraphicsScene):
         slot_metadata = getattr(slot_connector, "metadata", {}) or {}
         interface_metadata = getattr(interface_connector, "metadata", {}) or {}
 
+        attachment_plugin_metadata = dict(slot_metadata.get("plugin_metadata", {}) or {})
+        if self._connector_metadata_truthy(slot_metadata.get("visual_only", False)):
+            attachment_plugin_metadata["visual_only"] = True
+        if self._connector_metadata_truthy(slot_metadata.get("allow_multiple", False)):
+            attachment_plugin_metadata["allow_multiple"] = True
+
         attachment = ModelSubcompAttachment(
             attachment_id=attachment_id,
             name=self.default_subcomp_attachment_name(slot_connector, interface_connector),
@@ -1415,7 +1462,7 @@ class ModelScene(QGraphicsScene):
                 self.active_plugin_id
                 or getattr(slot_connector.node.component, "plugin_id", "")
             ),
-            plugin_metadata={},
+            plugin_metadata=attachment_plugin_metadata,
         )
 
         self.subcomp_attachments.append(attachment)
@@ -1428,13 +1475,42 @@ class ModelScene(QGraphicsScene):
         self.addItem(item)
         item.update_position()
         self.select_subcomp_attachment(item)
+        self.notify_plugin_subcomp_attachment_created(attachment)
         self.notify_model_changed()
 
         return item
 
+    def plugin_for_subcomp_attachment(self, attachment: ModelSubcompAttachment):
+        plugin_id = (
+            getattr(attachment, "plugin_id", "")
+            or getattr(self, "active_plugin_id", "")
+            or ""
+        )
+        if not plugin_id:
+            return None
+
+        try:
+            return get_plugin_by_id(plugin_id)
+        except Exception:
+            return None
+
+    def notify_plugin_subcomp_attachment_created(self, attachment: ModelSubcompAttachment) -> None:
+        plugin = self.plugin_for_subcomp_attachment(attachment)
+        hook = getattr(plugin, "on_subcomponent_attachment_created", None)
+        if callable(hook):
+            hook(self, attachment)
+
+    def notify_plugin_subcomp_attachment_deleted(self, attachment: ModelSubcompAttachment) -> None:
+        plugin = self.plugin_for_subcomp_attachment(attachment)
+        hook = getattr(plugin, "on_subcomponent_attachment_deleted", None)
+        if callable(hook):
+            hook(self, attachment)
+
     def delete_subcomp_attachment(self, item: SubcompAttachmentItem):
-        if item.attachment in self.subcomp_attachments:
-            self.subcomp_attachments.remove(item.attachment)
+        attachment = item.attachment
+
+        if attachment in self.subcomp_attachments:
+            self.subcomp_attachments.remove(attachment)
 
         self.removeItem(item)
 
@@ -1444,6 +1520,7 @@ class ModelScene(QGraphicsScene):
         if self.properties_panel is not None:
             self.properties_panel.show_empty()
 
+        self.notify_plugin_subcomp_attachment_deleted(attachment)
         self.notify_model_changed()
 
     def subcomp_connector_clicked(self, connector: SubcompConnectorItem):
@@ -1452,7 +1529,7 @@ class ModelScene(QGraphicsScene):
             self.cancel_pending_connection()
             return
 
-        if self.subcomp_connector_is_connected(connector):
+        if not self.subcomp_connector_has_available_capacity(connector):
             return
 
         if self.pending_subcomp_connector is None:
@@ -1489,11 +1566,11 @@ class ModelScene(QGraphicsScene):
 
         slot_connector, interface_connector = pair
 
-        if self.subcomp_connector_is_connected(slot_connector):
+        if not self.subcomp_connector_has_available_capacity(slot_connector):
             self.cancel_pending_subcomp_attachment()
             return
 
-        if self.subcomp_connector_is_connected(interface_connector):
+        if not self.subcomp_connector_has_available_capacity(interface_connector):
             self.cancel_pending_subcomp_attachment()
             return
 

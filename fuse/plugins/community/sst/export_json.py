@@ -46,6 +46,17 @@ _SYMBOLIC_UINT64_MAX_VALUES = {
     "std::numeric_limits<uint64_t>::max()",
 }
 
+EMBER_MOTIF_INTERFACE = "SST::Ember::EmberGenerator"
+EMBER_MOTIF_SLOT = "motif"
+EMBER_MOTIF_ATTACHMENT_KIND = "sst.ember.motif"
+INTERNAL_EMBER_MOTIF_PARAMS = {
+    "primary",
+    "_motifNum",
+    "_jobId",
+    "_enginePtr",
+    "distribModule",
+}
+
 
 class SSTJsonExportError(RuntimeError):
     """Raised when a model cannot be converted to valid SST JSON."""
@@ -572,11 +583,16 @@ def build_sst_component(
 def _child_attachments_for_node(
     node,
     attachments_by_parent_id: dict[int, list],
+    nodes_by_id: dict[int, object] | None = None,
 ) -> tuple[list, set[str]]:
-    """Return deterministic child attachments and their non-empty slot names."""
+    """Return deterministic export-child attachments and their slot names."""
 
     child_attachments = sorted(
-        attachments_by_parent_id.get(node.node_id, []),
+        [
+            attachment
+            for attachment in attachments_by_parent_id.get(node.node_id, [])
+            if not _is_visual_parameter_attachment(node, attachment, nodes_by_id)
+        ],
         key=lambda item: (str(item.slot_name), str(item.name), int(item.attachment_id)),
     )
     attached_slot_names = {
@@ -597,6 +613,8 @@ def _attached_subcomponent_for_slot(
     """Return the child node attached to ``slot_name`` on ``node``, if any."""
 
     for attachment in attachments_by_parent_id.get(getattr(node, "node_id", None), []) or []:
+        if _is_visual_parameter_attachment(node, attachment, nodes_by_id):
+            continue
         if str(getattr(attachment, "slot_name", "") or "").strip() != slot_name:
             continue
 
@@ -616,6 +634,8 @@ def _derived_export_params_for_node(
 
     component_type = sst_component_type_for_node(node)
 
+    derived: dict[str, Any] = {}
+
     if component_type == "merlin.hr_router":
         topology = _attached_subcomponent_for_slot(
             node,
@@ -626,9 +646,18 @@ def _derived_export_params_for_node(
         if topology is not None:
             topology_type = sst_component_type_for_node(topology)
             if topology_type:
-                return {"topology": topology_type}
+                derived["topology"] = topology_type
 
-    return {}
+    if component_type == "ember.EmberEngine":
+        derived.update(
+            _ember_motif_params_for_node(
+                node,
+                attachments_by_parent_id,
+                nodes_by_id,
+            )
+        )
+
+    return derived
 
 
 def _merge_derived_params_into_component(
@@ -727,6 +756,7 @@ def _attach_child_subcomponents(
     child_attachments, _attached_slot_names = _child_attachments_for_node(
         node,
         attachments_by_parent_id,
+        nodes_by_id,
     )
     children = []
 
@@ -771,6 +801,7 @@ def build_sst_subcomponent_tree(
     child_attachments, attached_slot_names = _child_attachments_for_node(
         node,
         attachments_by_parent_id,
+        nodes_by_id,
     )
     del child_attachments  # The helper below will rebuild deterministic children.
 
@@ -809,6 +840,7 @@ def build_sst_component_tree(
     _child_attachments, attached_slot_names = _child_attachments_for_node(
         node,
         attachments_by_parent_id,
+        nodes_by_id,
     )
 
     component = build_sst_component(
@@ -1082,6 +1114,152 @@ def node_is_subcomponent(node) -> bool:
     return bool(int(getattr(node.component, "is_subcomp", 0) or 0))
 
 
+def _attachment_metadata(attachment) -> dict[str, Any]:
+    metadata = getattr(attachment, "plugin_metadata", {}) or {}
+    return dict(metadata) if isinstance(metadata, dict) else {}
+
+
+def _attachment_declares_visual_kind(attachment, kind: str) -> bool:
+    return _attachment_metadata(attachment).get("visual_attachment_kind") == kind
+
+
+def _node_iface(node) -> str:
+    return str(getattr(getattr(node, "component", None), "iface", "") or "").strip()
+
+
+def _is_ember_motif_node(node) -> bool:
+    component = getattr(node, "component", None)
+    return (
+        sst_component_type_for_node(node).startswith("ember.")
+        and bool(int(getattr(component, "is_subcomp", 0) or 0))
+        and _node_iface(node) == EMBER_MOTIF_INTERFACE
+    )
+
+
+def _is_ember_motif_attachment(
+    parent,
+    attachment,
+    nodes_by_id: dict[int, object] | None = None,
+) -> bool:
+    """Return true for visual EmberEngine.motif -> EmberGenerator attachments."""
+
+    if str(getattr(attachment, "slot_name", "") or "").strip() != EMBER_MOTIF_SLOT:
+        return False
+
+    if _attachment_declares_visual_kind(attachment, EMBER_MOTIF_ATTACHMENT_KIND):
+        return True
+
+    if sst_component_type_for_node(parent) != "ember.EmberEngine":
+        return False
+
+    if nodes_by_id is None:
+        return False
+
+    child = nodes_by_id.get(getattr(attachment, "child_node_id", None))
+    return bool(child is not None and _is_ember_motif_node(child))
+
+
+def _is_visual_parameter_attachment(
+    parent,
+    attachment,
+    nodes_by_id: dict[int, object] | None = None,
+) -> bool:
+    """Return true when an attachment is a plugin-owned visual parameter edge."""
+
+    return _is_ember_motif_attachment(parent, attachment, nodes_by_id)
+
+
+def _exported_attachment_slot_names(
+    node,
+    attachments_by_parent_id: dict[int, list],
+    nodes_by_id: dict[int, object] | None = None,
+) -> set[str]:
+    return {
+        str(attachment.slot_name)
+        for attachment in attachments_by_parent_id.get(getattr(node, "node_id", None), [])
+        if str(getattr(attachment, "slot_name", "") or "").strip()
+        and not _is_visual_parameter_attachment(node, attachment, nodes_by_id)
+    }
+
+
+def _visual_parameter_child_node_ids(
+    nodes_by_id: dict[int, object],
+    attachments: list,
+) -> set[int]:
+    result: set[int] = set()
+    for attachment in attachments:
+        parent = nodes_by_id.get(getattr(attachment, "parent_node_id", None))
+        if parent is None:
+            continue
+        if _is_visual_parameter_attachment(parent, attachment, nodes_by_id):
+            child_id = getattr(attachment, "child_node_id", None)
+            if child_id is not None:
+                result.add(child_id)
+    return result
+
+
+def _ordered_ember_motif_attachments_for_engine(
+    node,
+    attachments_by_parent_id: dict[int, list],
+    nodes_by_id: dict[int, object],
+) -> list:
+    attachments = [
+        attachment
+        for attachment in attachments_by_parent_id.get(getattr(node, "node_id", None), []) or []
+        if _is_ember_motif_attachment(node, attachment, nodes_by_id)
+    ]
+    return sorted(
+        attachments,
+        key=lambda item: (int(getattr(item, "attachment_id", 0) or 0), str(getattr(item, "name", "") or "")),
+    )
+
+
+def _non_empty_motif_user_params(node) -> dict[str, Any]:
+    params: dict[str, Any] = {}
+    for key, value in dict(getattr(node, "parameters", {}) or {}).items():
+        name = str(key or "").strip()
+        if not name:
+            continue
+        if name in INTERNAL_EMBER_MOTIF_PARAMS or name.startswith("_"):
+            continue
+        if value in (None, ""):
+            continue
+        params[name] = value
+    return params
+
+
+def _ember_motif_params_for_node(
+    node,
+    attachments_by_parent_id: dict[int, list],
+    nodes_by_id: dict[int, object],
+) -> dict[str, Any]:
+    if sst_component_type_for_node(node) != "ember.EmberEngine":
+        return {}
+
+    motif_attachments = _ordered_ember_motif_attachments_for_engine(
+        node,
+        attachments_by_parent_id,
+        nodes_by_id,
+    )
+    if not motif_attachments:
+        return {}
+
+    derived: dict[str, Any] = {"motif_count": str(len(motif_attachments))}
+    for index, attachment in enumerate(motif_attachments):
+        child = nodes_by_id.get(getattr(attachment, "child_node_id", None))
+        if child is None:
+            continue
+
+        motif_type = sst_component_type_for_node(child)
+        if motif_type:
+            derived[f"motif{index}"] = motif_type
+
+        for param_name, param_value in _non_empty_motif_user_params(child).items():
+            derived[f"motif{index}.{param_name}"] = param_value
+
+    return derived
+
+
 def add_export_policy_diagnostics(scene, add_issue) -> None:
     """Add grouped custom/changed SST export-policy diagnostics, if any."""
 
@@ -1155,11 +1333,11 @@ def _node_export_params_for_validation(
 ) -> dict[str, Any]:
     """Return exportable params plus graph-derived params for validation."""
 
-    attached_slot_names = {
-        str(attachment.slot_name)
-        for attachment in attachments_by_parent_id.get(getattr(node, "node_id", None), [])
-        if str(getattr(attachment, "slot_name", "") or "").strip()
-    }
+    attached_slot_names = _exported_attachment_slot_names(
+        node,
+        attachments_by_parent_id,
+        nodes_by_id,
+    )
     params = exportable_params_for_node(
         node,
         suppress_prefixed_slots=attached_slot_names,
@@ -1546,6 +1724,8 @@ def validate_sst_json_export(scene) -> SSTExportReport:
             [],
         ).append(attachment)
 
+    visual_parameter_child_ids = _visual_parameter_child_node_ids(nodes_by_id, attachments)
+
     def add_issue(issue):
         if getattr(issue, "severity", "error") == "warning":
             report.warnings.append(issue)
@@ -1580,6 +1760,9 @@ def validate_sst_json_export(scene) -> SSTExportReport:
 
     seen_names: dict[str, int] = {}
     for node in nodes:
+        if getattr(node, "node_id", None) in visual_parameter_child_ids:
+            continue
+
         name = str(getattr(node, "instance_name", "") or "").strip()
         if not name:
             add_issue(
@@ -1628,11 +1811,11 @@ def validate_sst_json_export(scene) -> SSTExportReport:
             )
 
         if component_type:
-            attached_slot_names = {
-                str(attachment.slot_name)
-                for attachment in attachments_by_parent_id.get(node.node_id, [])
-                if str(getattr(attachment, "slot_name", "") or "").strip()
-            }
+            attached_slot_names = _exported_attachment_slot_names(
+                node,
+                attachments_by_parent_id,
+                nodes_by_id,
+            )
 
             raw_user_params = raw_export_params_for_node(
                 node,

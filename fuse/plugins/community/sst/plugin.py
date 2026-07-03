@@ -51,6 +51,148 @@ from fuse.plugins.community.sst.policy.loader import (
 from fuse.plugins.community.sst.policy.bootstrap import ensure_sst_policy_catalogs
 from fuse.plugins.community.sst.runtime_overlays import runtime_slots_for_component
 
+
+EMBER_MOTIF_INTERFACE = "SST::Ember::EmberGenerator"
+EMBER_MOTIF_SLOT = "motif"
+EMBER_MOTIF_ATTACHMENT_KIND = "sst.ember.motif"
+INTERNAL_EMBER_MOTIF_PARAMS = {
+    "primary",
+    "_motifNum",
+    "_jobId",
+    "_enginePtr",
+    "distribModule",
+}
+
+
+def sst_component_type_for_component(component) -> str:
+    """Return the canonical SST element.component type for a component definition."""
+
+    element = str(getattr(component, "element", "") or "").strip()
+    name = str(getattr(component, "name", "") or "").strip()
+    if element and name:
+        return f"{element}.{name}"
+    return name
+
+
+def sst_component_type_for_node(node) -> str:
+    """Return the canonical SST element.component type for a scene node."""
+
+    return sst_component_type_for_component(getattr(node, "component", None))
+
+
+def is_ember_engine_node(node) -> bool:
+    return sst_component_type_for_node(node) == "ember.EmberEngine"
+
+
+def is_ember_motif_node(node) -> bool:
+    component = getattr(node, "component", None)
+    return (
+        sst_component_type_for_component(component).startswith("ember.")
+        and bool(int(getattr(component, "is_subcomp", 0) or 0))
+        and str(getattr(component, "iface", "") or "").strip() == EMBER_MOTIF_INTERFACE
+    )
+
+
+def is_ember_motif_attachment(scene, attachment) -> bool:
+    """Return true for visual EmberEngine.motif -> EmberGenerator attachments."""
+
+    if str(getattr(attachment, "slot_name", "") or "").strip() != EMBER_MOTIF_SLOT:
+        return False
+
+    metadata = dict(getattr(attachment, "plugin_metadata", {}) or {})
+    if metadata.get("visual_attachment_kind") == EMBER_MOTIF_ATTACHMENT_KIND:
+        return True
+
+    nodes_by_id = {
+        getattr(node, "node_id", None): node
+        for node in scene.component_items()
+    }
+    parent = nodes_by_id.get(getattr(attachment, "parent_node_id", None))
+    child = nodes_by_id.get(getattr(attachment, "child_node_id", None))
+    return bool(parent is not None and child is not None and is_ember_engine_node(parent) and is_ember_motif_node(child))
+
+
+def ordered_ember_motif_attachments_for_engine(scene, engine_node) -> list:
+    """Return visual motif attachments for an EmberEngine in canvas order."""
+
+    attachments = []
+    for attachment in getattr(scene, "subcomp_attachments", []) or []:
+        if getattr(attachment, "parent_node_id", None) != getattr(engine_node, "node_id", None):
+            continue
+        if is_ember_motif_attachment(scene, attachment):
+            attachments.append(attachment)
+
+    return sorted(
+        attachments,
+        key=lambda item: (int(getattr(item, "attachment_id", 0) or 0), str(getattr(item, "name", "") or "")),
+    )
+
+
+def non_empty_motif_user_params(node) -> dict:
+    """Return motif-node parameters that should become EmberEngine motif args."""
+
+    params = {}
+    for key, value in dict(getattr(node, "parameters", {}) or {}).items():
+        name = str(key or "").strip()
+        if not name:
+            continue
+        if name in INTERNAL_EMBER_MOTIF_PARAMS or name.startswith("_"):
+            continue
+        if value in (None, ""):
+            continue
+        params[name] = value
+    return params
+
+
+def derive_ember_motif_params_for_engine(scene, engine_node) -> dict:
+    """Convert attached visual motif nodes into EmberEngine motif parameters."""
+
+    nodes_by_id = {
+        getattr(node, "node_id", None): node
+        for node in scene.component_items()
+    }
+    motif_attachments = ordered_ember_motif_attachments_for_engine(scene, engine_node)
+    if not motif_attachments:
+        return {}
+
+    derived = {"motif_count": str(len(motif_attachments))}
+
+    for index, attachment in enumerate(motif_attachments):
+        child = nodes_by_id.get(getattr(attachment, "child_node_id", None))
+        if child is None:
+            continue
+
+        motif_type = sst_component_type_for_node(child)
+        if motif_type:
+            derived[f"motif{index}"] = motif_type
+
+        for param_name, param_value in non_empty_motif_user_params(child).items():
+            derived[f"motif{index}.{param_name}"] = param_value
+
+    return derived
+
+
+def remove_generated_ember_motif_params(params: dict) -> dict:
+    """Remove params owned by the visual Ember motif attachment abstraction."""
+
+    cleaned = dict(params or {})
+    for key in list(cleaned):
+        name = str(key or "")
+        if name == "motif_count":
+            cleaned.pop(key, None)
+            continue
+
+        if not name.startswith("motif"):
+            continue
+
+        suffix = name[len("motif"):]
+        index_text = suffix.split(".", 1)[0]
+        if index_text.isdigit():
+            cleaned.pop(key, None)
+
+    return cleaned
+
+
 @dataclass
 class SSTPlugin:
     """FUSE plugin implementation for Structural Simulation Toolkit models."""
@@ -370,6 +512,23 @@ class SSTPlugin:
                 )
             )
 
+        if component_type == "ember.EmberEngine" and EMBER_MOTIF_SLOT not in existing_slot_names:
+            subcomp_connectors.append(
+                SubcompConnectorDefinition(
+                    name=EMBER_MOTIF_SLOT,
+                    role="slot",
+                    description=(
+                        "[Visual attachment] Attach one or more EmberGenerator motifs here. "
+                        "The SST exporter converts these attachments into EmberEngine motif_count/motifN parameters."
+                    ),
+                    required_interface=EMBER_MOTIF_INTERFACE,
+                    interface=EMBER_MOTIF_INTERFACE,
+                    visual_only=True,
+                    allow_multiple=True,
+                    plugin_metadata={"visual_attachment_kind": EMBER_MOTIF_ATTACHMENT_KIND},
+                )
+            )
+
         if bool(component_dict["is_subcomp"]):
             subcomp_connectors.append(
                 SubcompConnectorDefinition(
@@ -416,6 +575,38 @@ class SSTPlugin:
             subcomp_connectors=subcomp_connectors,
             properties=properties,
         )
+
+    def sync_ember_motif_params_for_node(self, scene, engine_node) -> None:
+        """Synchronize EmberEngine params from visual motif attachments."""
+
+        if not is_ember_engine_node(engine_node):
+            return
+
+        params = remove_generated_ember_motif_params(dict(getattr(engine_node, "parameters", {}) or {}))
+        params.update(derive_ember_motif_params_for_engine(scene, engine_node))
+        engine_node.parameters = params
+
+    def on_subcomponent_attachment_created(self, scene, attachment) -> None:
+        """Core hook: update plugin-owned params after a visual attachment is made."""
+
+        if not is_ember_motif_attachment(scene, attachment):
+            return
+
+        for node in scene.component_items():
+            if getattr(node, "node_id", None) == getattr(attachment, "parent_node_id", None):
+                self.sync_ember_motif_params_for_node(scene, node)
+                return
+
+    def on_subcomponent_attachment_deleted(self, scene, attachment) -> None:
+        """Core hook: update plugin-owned params after a visual attachment is deleted."""
+
+        if not is_ember_motif_attachment(scene, attachment):
+            return
+
+        for node in scene.component_items():
+            if getattr(node, "node_id", None) == getattr(attachment, "parent_node_id", None):
+                self.sync_ember_motif_params_for_node(scene, node)
+                return
 
     def check_link_compatibility(
             self,

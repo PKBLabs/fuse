@@ -208,6 +208,9 @@ def load_subcomp_connector_metadata_for_component(
             "provided_interface": getattr(connector, "provided_interface", ""),
             "interface": getattr(connector, "interface", ""),
             "iface": getattr(connector, "interface", ""),
+            "visual_only": bool(getattr(connector, "visual_only", False)),
+            "allow_multiple": bool(getattr(connector, "allow_multiple", False)),
+            "plugin_metadata": dict(getattr(connector, "plugin_metadata", {}) or {}),
         }
         for connector in getattr(details, "subcomp_connectors", [])
     ]

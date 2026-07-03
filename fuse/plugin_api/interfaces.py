@@ -128,7 +128,9 @@ class SubcompConnectorDefinition:
     Plugin-defined endpoint used to attach SubComponents to parent slots.
 
     These connectors are not normal link ports and must not export as
-    Link.connect() endpoints.
+    Link.connect() endpoints. Plugins may mark a connector as visual-only when
+    the attachment is an editor abstraction that should be interpreted by the
+    plugin rather than exported as a literal simulator subcomponent.
     """
 
     name: str
@@ -137,6 +139,9 @@ class SubcompConnectorDefinition:
     required_interface: str = ""
     provided_interface: str = ""
     interface: str = ""
+    visual_only: bool = False
+    allow_multiple: bool = False
+    plugin_metadata: dict = field(default_factory=dict)
 
 
 @dataclass
