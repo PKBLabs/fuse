@@ -2,7 +2,7 @@
   "schemaVersion": "0.1.0",
   "project": {
     "name": "2cpu_networked_memHierarchy",
-    "updatedAt": "2026-07-01T12:55:54.189575+00:00"
+    "updatedAt": "2026-07-02T19:39:08.767660+00:00"
   },
   "projectSettings": {
     "projectUid": "a219102e83d545439e9436727ccdbf40",
@@ -155,7 +155,21 @@
       "isComposite": 0,
       "compositeId": "",
       "instanceName": "cpu0",
-      "parameters": {},
+      "parameters": {
+        "clock": "2GHz",
+        "rngseed": "2000",
+        "opCount": "20000",
+        "read_freq": "60",
+        "write_freq": "40",
+        "memSize": "1GiB",
+        "memFreq": "2",
+        "maxOutstanding": "32",
+        "llsc_freq": "0",
+        "flushinv_freq": "0",
+        "flushcache_freq": "0",
+        "flush_freq": "0",
+        "reqsPerIssue": "2"
+      },
       "variablePortCounts": {},
       "position": {
         "x": -1080.0,
@@ -180,8 +194,22 @@
       "displayNameOverride": "memHierarchy.standardCPU (Component)",
       "isComposite": 0,
       "compositeId": "",
-      "instanceName": "standardCPU_2",
-      "parameters": {},
+      "instanceName": "cpu1",
+      "parameters": {
+        "clock": "2GHz",
+        "memFreq": "2",
+        "opCount": "20000",
+        "maxOutstanding": "32",
+        "reqsPerIssue": "2",
+        "read_freq": "60",
+        "flush_freq": "0",
+        "flushinv_freq": "0",
+        "flushcache_freq": "0",
+        "llsc_freq": "0",
+        "memSize": "1GiB",
+        "write_freq": "40",
+        "rngseed": "2001"
+      },
       "variablePortCounts": {},
       "position": {
         "x": -1080.0,
@@ -259,10 +287,14 @@
       "isComposite": 0,
       "compositeId": "",
       "instanceName": "MemNIC_1",
-      "parameters": {},
+      "parameters": {
+        "group": "0",
+        "sources": "",
+        "destinations": "1"
+      },
       "variablePortCounts": {},
       "position": {
-        "x": -1080.0,
+        "x": -1440.0,
         "y": 510.0
       }
     },
@@ -285,10 +317,14 @@
       "isComposite": 0,
       "compositeId": "",
       "instanceName": "MemNIC_2",
-      "parameters": {},
+      "parameters": {
+        "group": "0",
+        "sources": "",
+        "destinations": "1"
+      },
       "variablePortCounts": {},
       "position": {
-        "x": -1080.0,
+        "x": -1440.0,
         "y": 1360.0
       }
     },
@@ -310,8 +346,21 @@
       "displayNameOverride": "merlin.hr_router (Component)",
       "isComposite": 0,
       "compositeId": "",
-      "instanceName": "hr_router_1",
-      "parameters": {},
+      "instanceName": "rtr",
+      "parameters": {
+        "num_ports": "3",
+        "flit_size": "72B",
+        "id": "0",
+        "input_buf_size": "4KiB",
+        "input_latency": "1ns",
+        "link_bw": "256GB/s",
+        "xbar_bw": "256GB/s",
+        "output_buf_size": "4KiB",
+        "output_latency": "1ns",
+        "num_vns": "1",
+        "topology": "merlin.singlerouter",
+        "vn_remap": "[]"
+      },
       "variablePortCounts": {
         "port": 3
       },
@@ -339,10 +388,14 @@
       "isComposite": 0,
       "compositeId": "",
       "instanceName": "mc_memnic",
-      "parameters": {},
+      "parameters": {
+        "network_bw": "256GB/s",
+        "sources": "0",
+        "destinations": ""
+      },
       "variablePortCounts": {},
       "position": {
-        "x": -180.0,
+        "x": 0.0,
         "y": 850.0
       }
     },
@@ -365,7 +418,11 @@
       "isComposite": 0,
       "compositeId": "",
       "instanceName": "mc",
-      "parameters": {},
+      "parameters": {
+        "backend.mem_size": "1GiB",
+        "clock": "1GHz",
+        "addr_range_end": "1073741823"
+      },
       "variablePortCounts": {},
       "position": {
         "x": -180.0,
@@ -390,12 +447,43 @@
       "displayNameOverride": "memHierarchy.simpleMem (SubComponent)",
       "isComposite": 0,
       "compositeId": "",
-      "instanceName": "mc_",
-      "parameters": {},
+      "instanceName": "mc_backend",
+      "parameters": {
+        "mem_size": "1GiB",
+        "access_time": "80ns"
+      },
       "variablePortCounts": {},
       "position": {
-        "x": -360.0,
-        "y": 680.0
+        "x": -180.0,
+        "y": 850.0
+      }
+    },
+    {
+      "id": 11,
+      "element": "merlin",
+      "name": "singlerouter",
+      "pluginId": "sst",
+      "targetId": "5",
+      "targetLabel": "SST 16.0.0 \u2014 Local custom (/opt/sst/16.0.0/core/bin)",
+      "frameworkVersion": "16.0.0",
+      "componentId": "2065",
+      "isSubcomponent": 1,
+      "category": "SUBCOMPONENT",
+      "functionality": "Simple, single-router topology object",
+      "description": "Simple, single-router topology object",
+      "iconPath": "single_router.png",
+      "interface": "SST::Merlin::Topology",
+      "displayNameOverride": "merlin.singlerouter (SubComponent)",
+      "isComposite": 0,
+      "compositeId": "",
+      "instanceName": "singlerouter_top",
+      "parameters": {
+        "network_name": "network0"
+      },
+      "variablePortCounts": {},
+      "position": {
+        "x": -540.0,
+        "y": 1190.0
       }
     }
   ],
@@ -421,7 +509,7 @@
       },
       "target": {
         "nodeId": 7,
-        "componentName": "hr_router_1",
+        "componentName": "rtr",
         "port": "port2"
       }
     },
@@ -446,7 +534,7 @@
       },
       "target": {
         "nodeId": 7,
-        "componentName": "hr_router_1",
+        "componentName": "rtr",
         "port": "port0"
       }
     },
@@ -471,34 +559,12 @@
       },
       "target": {
         "nodeId": 7,
-        "componentName": "hr_router_1",
+        "componentName": "rtr",
         "port": "port1"
       }
     }
   ],
   "subcompAttachments": [
-    {
-      "id": 1,
-      "name": "subcomp_MemController_1_cpulink_MemNIC_3",
-      "pluginId": "sst",
-      "parent": {
-        "nodeId": 9,
-        "componentName": "mc",
-        "slotName": "cpulink"
-      },
-      "child": {
-        "nodeId": 8,
-        "componentName": "mc_memnic"
-      },
-      "requiredInterface": "SST::MemHierarchy::MemLinkBase",
-      "providedInterface": "SST::MemHierarchy::MemLinkBase",
-      "compatibility": {
-        "severity": "ok",
-        "code": "",
-        "message": ""
-      },
-      "pluginMetadata": {}
-    },
     {
       "id": 2,
       "name": "subcomp_MemController_1_backend_simpleMem_1",
@@ -510,7 +576,7 @@
       },
       "child": {
         "nodeId": 10,
-        "componentName": "mc_"
+        "componentName": "mc_backend"
       },
       "requiredInterface": "SST::MemHierarchy::MemBackend",
       "providedInterface": "SST::MemHierarchy::SimpleMemBackend",
@@ -593,7 +659,7 @@
       "pluginId": "sst",
       "parent": {
         "nodeId": 2,
-        "componentName": "standardCPU_2",
+        "componentName": "cpu1",
         "slotName": "memory"
       },
       "child": {
@@ -608,6 +674,50 @@
         "message": ""
       },
       "pluginMetadata": {}
+    },
+    {
+      "id": 7,
+      "name": "subcomp_hr_router_1_topology_singlerouter_1",
+      "pluginId": "sst",
+      "parent": {
+        "nodeId": 7,
+        "componentName": "rtr",
+        "slotName": "topology"
+      },
+      "child": {
+        "nodeId": 11,
+        "componentName": "singlerouter_top"
+      },
+      "requiredInterface": "SST::Merlin::Topology",
+      "providedInterface": "SST::Merlin::Topology",
+      "compatibility": {
+        "severity": "ok",
+        "code": "",
+        "message": ""
+      },
+      "pluginMetadata": {}
+    },
+    {
+      "id": 8,
+      "name": "subcomp_mc_highlink_mc_memnic",
+      "pluginId": "sst",
+      "parent": {
+        "nodeId": 9,
+        "componentName": "mc",
+        "slotName": "highlink"
+      },
+      "child": {
+        "nodeId": 8,
+        "componentName": "mc_memnic"
+      },
+      "requiredInterface": "SST::MemHierarchy.MemLinkBase",
+      "providedInterface": "SST::MemHierarchy::MemLinkBase",
+      "compatibility": {
+        "severity": "warning",
+        "code": "sst.subcomponent_slot_interface_mismatch",
+        "message": "The selected SST SubComponent does not declare the exact interface required by this slot. SST interface names are not always standardized, so this may still be the correct assignment.\n\nSlot requires: SST::MemHierarchy.MemLinkBase\nSubComponent provides: SST::MemHierarchy::MemLinkBase"
+      },
+      "pluginMetadata": {}
     }
   ],
   "editor": {
@@ -619,8 +729,8 @@
     },
     "suppressedCompatibilityWarnings": [],
     "viewCenter": {
-      "x": -992,
-      "y": 254
+      "x": -122,
+      "y": 764
     },
     "zoomPercent": 50.0,
     "mode": "select",
@@ -635,11 +745,11 @@
     "schemaVersion": "0.1.0",
     "serializerVersion": 1,
     "generatedBy": "FUSE",
-    "generatedAt": "2026-07-01T12:55:54.190162+00:00",
+    "generatedAt": "2026-07-02T19:39:08.767828+00:00",
     "modelCounts": {
-      "components": 10,
+      "components": 11,
       "links": 3,
-      "subcompAttachments": 6
+      "subcompAttachments": 7
     },
     "plugins": [
       "sst"

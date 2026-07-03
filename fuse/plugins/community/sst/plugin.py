@@ -49,6 +49,7 @@ from fuse.plugins.community.sst.policy.loader import (
     has_policy_catalog,
 )
 from fuse.plugins.community.sst.policy.bootstrap import ensure_sst_policy_catalogs
+from fuse.plugins.community.sst.runtime_overlays import runtime_slots_for_component
 
 @dataclass
 class SSTPlugin:
@@ -340,6 +341,34 @@ class SSTPlugin:
             )
             for row in rows_to_dicts(slots)
         ]
+
+        # Keep the DB/catalog rows as raw sst-info metadata, then layer in
+        # version-specific plugin runtime slots that SST loads through code
+        # paths such as loadUserSubComponent() but does not fully declare in
+        # ELI/sst-info.  These are deliberately marked in the description so
+        # the UI can distinguish overlay metadata from catalog metadata.
+        existing_slot_names = {connector.name for connector in subcomp_connectors}
+        component_type = f'{component_dict["element_name"]}.{component_dict["component_name"]}'
+        for slot in runtime_slots_for_component(
+            component_type,
+            component_dict.get("framework_version") or "",
+        ).values():
+            if slot.name in existing_slot_names:
+                continue
+            default_hint = f" Default type: {slot.default_type}." if slot.default_type else ""
+            description = (
+                f"[Runtime overlay] {slot.description}"
+                f"{default_hint}"
+            ).strip()
+            subcomp_connectors.append(
+                SubcompConnectorDefinition(
+                    name=slot.name,
+                    role="slot",
+                    description=description,
+                    required_interface=slot.required_interface,
+                    interface=slot.required_interface,
+                )
+            )
 
         if bool(component_dict["is_subcomp"]):
             subcomp_connectors.append(

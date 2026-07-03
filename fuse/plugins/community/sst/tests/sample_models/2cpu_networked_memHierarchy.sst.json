@@ -1,0 +1,249 @@
+{
+  "program_options": {},
+  "statistics_options": {},
+  "components": [
+    {
+      "name": "cpu0",
+      "type": "memHierarchy.standardCPU",
+      "params": {
+        "addressoffset": "0",
+        "clock": "2GHz",
+        "custom_freq": "0",
+        "flush_freq": "0",
+        "flushcache_freq": "0",
+        "flushinv_freq": "0",
+        "llsc_freq": "0",
+        "maxOutstanding": "32",
+        "memFreq": "2",
+        "memSize": "1GiB",
+        "noncacheableRangeEnd": "0",
+        "noncacheableRangeStart": "0",
+        "opCount": "20000",
+        "read_freq": "60",
+        "reqsPerIssue": "2",
+        "rngseed": "2000",
+        "test_init": "0",
+        "verbose": "1",
+        "write_freq": "40"
+      },
+      "subcomponents": [
+        {
+          "slot_name": "memory",
+          "type": "memHierarchy.standardInterface",
+          "params": {
+            "debug": "0",
+            "debug_level": "0",
+            "noncacheable_regions": "[]",
+            "tlb_exe_permission": "0",
+            "verbose": "1"
+          },
+          "subcomponents": [
+            {
+              "slot_name": "lowlink",
+              "type": "memHierarchy.MemNIC",
+              "params": {
+                "debug": "0",
+                "debug_level": "0",
+                "destinations": "1",
+                "group": "0",
+                "min_packet_size": "8B",
+                "network_bw": "80GiB/s",
+                "network_input_buffer_size": "1KiB",
+                "network_link_control": "merlin.linkcontrol",
+                "network_output_buffer_size": "1KiB",
+                "range_check": "1"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "cpu1",
+      "type": "memHierarchy.standardCPU",
+      "params": {
+        "addressoffset": "0",
+        "clock": "2GHz",
+        "custom_freq": "0",
+        "flush_freq": "0",
+        "flushcache_freq": "0",
+        "flushinv_freq": "0",
+        "llsc_freq": "0",
+        "maxOutstanding": "32",
+        "memFreq": "2",
+        "memSize": "1GiB",
+        "noncacheableRangeEnd": "0",
+        "noncacheableRangeStart": "0",
+        "opCount": "20000",
+        "read_freq": "60",
+        "reqsPerIssue": "2",
+        "rngseed": "2001",
+        "test_init": "0",
+        "verbose": "1",
+        "write_freq": "40"
+      },
+      "subcomponents": [
+        {
+          "slot_name": "memory",
+          "type": "memHierarchy.standardInterface",
+          "params": {
+            "debug": "0",
+            "debug_level": "0",
+            "noncacheable_regions": "[]",
+            "tlb_exe_permission": "0",
+            "verbose": "1"
+          },
+          "subcomponents": [
+            {
+              "slot_name": "lowlink",
+              "type": "memHierarchy.MemNIC",
+              "params": {
+                "debug": "0",
+                "debug_level": "0",
+                "destinations": "1",
+                "group": "0",
+                "min_packet_size": "8B",
+                "network_bw": "80GiB/s",
+                "network_input_buffer_size": "1KiB",
+                "network_link_control": "merlin.linkcontrol",
+                "network_output_buffer_size": "1KiB",
+                "range_check": "1"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "mc",
+      "type": "memHierarchy.MemController",
+      "params": {
+        "addr_range_end": "1073741823",
+        "addr_range_start": "0",
+        "backendConvertor": "memHierarchy.simpleMembackendConvertor",
+        "backing": "mmap",
+        "backing_init_zero": "false",
+        "backing_out_screen": "false",
+        "backing_size_unit": "1MiB",
+        "clock": "1GHz",
+        "debug": "0",
+        "debug_level": "0",
+        "interleave_size": "0B",
+        "interleave_step": "0B",
+        "listenercount": "0",
+        "request_width": "64",
+        "verbose": "1"
+      },
+      "subcomponents": [
+        {
+          "slot_name": "backend",
+          "type": "memHierarchy.simpleMem",
+          "params": {
+            "access_time": "80ns",
+            "debug": "0",
+            "debug_level": "0",
+            "debug_location": "0",
+            "debug_mask": "0",
+            "max_requests_per_cycle": "-1",
+            "mem_size": "1GiB",
+            "request_width": "64"
+          }
+        },
+        {
+          "slot_name": "highlink",
+          "type": "memHierarchy.MemNIC",
+          "params": {
+            "debug": "0",
+            "debug_level": "0",
+            "group": "1",
+            "min_packet_size": "8B",
+            "network_bw": "256GB/s",
+            "network_input_buffer_size": "1KiB",
+            "network_link_control": "merlin.linkcontrol",
+            "network_output_buffer_size": "1KiB",
+            "range_check": "1",
+            "sources": "0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rtr",
+      "type": "merlin.hr_router",
+      "params": {
+        "debug": "0",
+        "flit_size": "72B",
+        "id": "0",
+        "input_buf_size": "4KiB",
+        "input_latency": "1ns",
+        "link_bw": "256GB/s",
+        "num_ports": "3",
+        "num_vns": "1",
+        "oql_track_port": "false",
+        "oql_track_remote": "false",
+        "output_buf_size": "4KiB",
+        "output_latency": "1ns",
+        "vn_remap": "[]",
+        "xbar_arb": "merlin.xbar_arb_lru",
+        "xbar_bw": "256GB/s"
+      },
+      "subcomponents": [
+        {
+          "slot_name": "topology",
+          "type": "merlin.singlerouter",
+          "params": {
+            "network_name": "network0"
+          }
+        }
+      ]
+    }
+  ],
+  "statistics_group": [],
+  "links": [
+    {
+      "name": "lnk_MemNIC_1_hr_router_1",
+      "noCut": false,
+      "nonlocal": false,
+      "left": {
+        "component": "cpu0:memory:lowlink",
+        "port": "port",
+        "latency": "1ns"
+      },
+      "right": {
+        "component": "rtr",
+        "port": "port0",
+        "latency": "1ns"
+      }
+    },
+    {
+      "name": "lnk_MemNIC_2_hr_router_1",
+      "noCut": false,
+      "nonlocal": false,
+      "left": {
+        "component": "cpu1:memory:lowlink",
+        "port": "port",
+        "latency": "1ns"
+      },
+      "right": {
+        "component": "rtr",
+        "port": "port1",
+        "latency": "1ns"
+      }
+    },
+    {
+      "name": "lnk_MemNIC_3_hr_router_1",
+      "noCut": false,
+      "nonlocal": false,
+      "left": {
+        "component": "mc:highlink",
+        "port": "port",
+        "latency": "1ns"
+      },
+      "right": {
+        "component": "rtr",
+        "port": "port2",
+        "latency": "1ns"
+      }
+    }
+  ]
+}

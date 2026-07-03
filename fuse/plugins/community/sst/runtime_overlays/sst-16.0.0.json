@@ -1,0 +1,415 @@
+{
+  "schema_version": 1,
+  "sst_version": "16.0.0",
+  "description": "FUSE SST runtime overlay for slots/logical ports that are loaded by runtime code but are not fully declared by sst-info metadata.",
+  "manual_resolutions": [
+    {
+      "owner_class": "CarcosaCPUBase",
+      "slot_name": "memory",
+      "resolution": "declared_by_concrete_types",
+      "requires_overlay": false,
+      "component_types": [
+        "carcosa.CarcosaCPU",
+        "carcosa.FaultInjCPU"
+      ],
+      "rationale": "CarcosaCPUBase is not a user-placeable SST element. Its concrete CPU components declare the memory StandardMem slot through ELI, so the slot belongs in sst-info/catalog metadata rather than the runtime overlay."
+    },
+    {
+      "owner_class": "CoherenceController",
+      "slot_name": "hash",
+      "resolution": "declared_by_concrete_types",
+      "requires_overlay": false,
+      "component_types": [
+        "memHierarchy.MESI_L1",
+        "memHierarchy.MESI_Inclusive",
+        "memHierarchy.MESI_Private_Noninclusive",
+        "memHierarchy.MESI_Shared_Noninclusive",
+        "memHierarchy.Incoherent",
+        "memHierarchy.Incoherent_L1"
+      ],
+      "rationale": "CoherenceController is a base implementation class. Concrete coherence-manager subcomponents declare the hash slot, and the runtime also has anonymous hash-function fallbacks."
+    },
+    {
+      "owner_class": "RoCCAnalog",
+      "slot_name": "array",
+      "resolution": "declared_by_concrete_types",
+      "requires_overlay": false,
+      "component_types": [
+        "golem.RoCCAnalogInt",
+        "golem.RoCCAnalogFloat"
+      ],
+      "rationale": "RoCCAnalog is a templated/base implementation. The concrete Golem RoCCAnalog subcomponents declare array through ELI."
+    },
+    {
+      "owner_class": "RoCCAnalog",
+      "slot_name": "memory_interface",
+      "resolution": "declared_by_concrete_types",
+      "requires_overlay": false,
+      "component_types": [
+        "golem.RoCCAnalogInt",
+        "golem.RoCCAnalogFloat"
+      ],
+      "rationale": "RoCCAnalog is a templated/base implementation. The concrete Golem RoCCAnalog subcomponents declare memory_interface through ELI."
+    },
+    {
+      "owner_class": "ScratchBackendConvertor",
+      "slot_name": "backend",
+      "resolution": "declared_by_concrete_types",
+      "requires_overlay": false,
+      "component_types": [
+        "memHierarchy.simpleMemScratchBackendConvertor"
+      ],
+      "rationale": "ScratchBackendConvertor is an API/base implementation. The concrete simpleMemScratchBackendConvertor declares the backend slot through ELI."
+    },
+    {
+      "owner_class": "VanadisDecoder",
+      "slot_name": "branch_unit",
+      "resolution": "declared_by_concrete_types",
+      "requires_overlay": false,
+      "component_types": [
+        "vanadis.VanadisMIPSDecoder",
+        "vanadis.VanadisRISCV64Decoder"
+      ],
+      "rationale": "VanadisDecoder is a base decoder class. The concrete Vanadis MIPS and RISCV64 decoders inherit and expose branch_unit through ELI in SST 16.0.0 catalogs."
+    },
+    {
+      "owner_class": "VanadisDecoder",
+      "slot_name": "os_handler",
+      "resolution": "declared_by_concrete_types",
+      "requires_overlay": false,
+      "component_types": [
+        "vanadis.VanadisMIPSDecoder",
+        "vanadis.VanadisRISCV64Decoder"
+      ],
+      "rationale": "VanadisDecoder is a base decoder class. The concrete Vanadis MIPS and RISCV64 decoders inherit and expose os_handler through ELI in SST 16.0.0 catalogs."
+    }
+  ],
+  "components": {
+    "ariel.ariel": {
+      "runtime_slots": {
+        "frontend": {
+          "description": "Runtime frontend slot loaded by ariel.ariel; if absent, Ariel falls back to the frontend parameter/default.",
+          "required_interface": "SST::ArielComponent::ArielFrontend",
+          "default_type": "ariel.frontend.pin",
+          "required": false,
+          "inject_default": false,
+          "provenance": "sst/elements/ariel/arielcpu.cc:143: loadUserSubComponent(\"frontend\")"
+        }
+      }
+    },
+    "balar.BalarTestCPU": {
+      "runtime_slots": {
+        "memory": {
+          "description": "Required StandardMem runtime slot loaded by BalarTestCPU.",
+          "required_interface": "SST::Interfaces::StandardMem",
+          "default_type": "memHierarchy.standardInterface",
+          "required": true,
+          "inject_default": false,
+          "provenance": "sst/elements/balar/testcpu/balarTestCPU.cc:60: loadUserSubComponent(\"memory\")"
+        }
+      }
+    },
+    "balar.balarMMIO": {
+      "runtime_slots": {
+        "mmio_iface": {
+          "description": "Required MMIO StandardMem runtime slot loaded by balarMMIO.",
+          "required_interface": "SST::Interfaces::StandardMem",
+          "default_type": "memHierarchy.standardInterface",
+          "required": true,
+          "inject_default": false,
+          "provenance": "sst/elements/balar/balarMMIO.cc:75: loadUserSubComponent(\"mmio_iface\")"
+        }
+      }
+    },
+    "balar.dmaEngine": {
+      "runtime_slots": {
+        "mem_iface": {
+          "description": "Required memory StandardMem runtime slot loaded by balar.dmaEngine.",
+          "required_interface": "SST::Interfaces::StandardMem",
+          "default_type": "memHierarchy.standardInterface",
+          "required": true,
+          "inject_default": false,
+          "provenance": "sst/elements/balar/dmaEngine.cc:50: loadUserSubComponent(\"mem_iface\")"
+        },
+        "mmio_iface": {
+          "description": "Required MMIO StandardMem runtime slot loaded by balar.dmaEngine.",
+          "required_interface": "SST::Interfaces::StandardMem",
+          "default_type": "memHierarchy.standardInterface",
+          "required": true,
+          "inject_default": false,
+          "provenance": "sst/elements/balar/dmaEngine.cc:48: loadUserSubComponent(\"mmio_iface\")"
+        }
+      }
+    },
+    "carcosa.CarcosaMemCtrl": {
+      "runtime_slots": {
+        "backend": {
+          "description": "Runtime backend slot loaded by CarcosaMemCtrl; legacy parameter fallback can anonymously load a backend.",
+          "required_interface": "SST::MemHierarchy::MemBackend",
+          "default_type": "memHierarchy.simpleMem",
+          "required": false,
+          "inject_default": false,
+          "provenance": "sst/elements/carcosa/components/carcosaMemCtrl.cc:123: loadUserSubComponent(\"backend\")"
+        },
+        "cpulink": {
+          "description": "Deprecated runtime slot loaded by CarcosaMemCtrl as a fallback for highlink.",
+          "required_interface": "SST::MemHierarchy::MemLinkBase",
+          "default_type": "memHierarchy.MemLink",
+          "required": false,
+          "inject_default": false,
+          "provenance": "sst/elements/carcosa/components/carcosaMemCtrl.cc:218: loadUserSubComponent(\"cpulink\")"
+        },
+        "customCmdHandler": {
+          "description": "Optional custom command handler runtime slot loaded by CarcosaMemCtrl.",
+          "required_interface": "SST::MemHierarchy::CustomCmdMemHandler",
+          "default_type": "",
+          "required": false,
+          "inject_default": false,
+          "provenance": "sst/elements/carcosa/components/carcosaMemCtrl.cc:376: loadUserSubComponent(\"customCmdHandler\")"
+        },
+        "highlink": {
+          "description": "Preferred runtime highlink slot loaded by CarcosaMemCtrl; port and legacy network fallbacks also exist.",
+          "required_interface": "SST::MemHierarchy::MemLinkBase",
+          "default_type": "memHierarchy.MemLink",
+          "required": false,
+          "inject_default": false,
+          "provenance": "sst/elements/carcosa/components/carcosaMemCtrl.cc:216: loadUserSubComponent(\"highlink\")"
+        }
+      }
+    },
+    "carcosa.Hali": {
+      "runtime_slots": {
+        "interceptionAgent": {
+          "description": "Optional interception-agent runtime slot loaded by Hali.",
+          "required_interface": "SST::Carcosa::InterceptionAgentAPI",
+          "default_type": "",
+          "required": false,
+          "inject_default": false,
+          "provenance": "sst/elements/carcosa/components/hali.cc:111: loadUserSubComponent(\"interceptionAgent\")"
+        }
+      }
+    },
+    "ember.EmberEngine": {
+      "runtime_slots": {
+        "OS": {
+          "description": "Runtime user subcomponent loaded by EmberEngine with loadUserSubComponent(\"OS\"). Not reported as an ELI slot by sst-info in SST 16.0.0.",
+          "required_interface": "SST::Hermes::OS",
+          "default_type": "firefly.hades",
+          "required": true,
+          "inject_default": false,
+          "provenance": "src/sst/elements/ember/emberengine.cc: loadUserSubComponent<OS>(\"OS\")"
+        }
+      },
+      "logical_ports": {
+        "loop": {
+          "component_path": "OS:proto:process",
+          "port": "loop",
+          "description": "Convenience mapping for the EmberEngine visible loop port to the generated Hades protocol process endpoint.",
+          "provenance": "EmberMPIJob/FireflyHades helper wiring"
+        },
+        "nic": {
+          "component_path": "OS:virtNic",
+          "port": "nic",
+          "description": "Convenience mapping for the EmberEngine visible nic port to the generated Hades/VirtNic endpoint.",
+          "provenance": "EmberMPIJob/FireflyHades helper wiring"
+        }
+      }
+    },
+    "firefly.CtrlMsgProto": {
+      "runtime_slots": {
+        "process": {
+          "description": "Runtime process subcomponent used by Firefly's control-message protocol stack.",
+          "required_interface": "",
+          "default_type": "firefly.ctrlMsg",
+          "required": true,
+          "inject_default": false,
+          "provenance": "src/sst/elements/firefly/pyfirefly.py: proto.setSubComponent(\"process\", \"firefly.ctrlMsg\")"
+        }
+      }
+    },
+    "firefly.detailedInterface": {
+      "runtime_slots": {
+        "standardInterface": {
+          "description": "Required StandardMem runtime slot loaded by firefly.detailedInterface.",
+          "required_interface": "SST::Interfaces::StandardMem",
+          "default_type": "memHierarchy.standardInterface",
+          "required": true,
+          "inject_default": false,
+          "provenance": "sst/elements/firefly/memoryModel/detailedInterface.h:92: loadUserSubComponent(\"standardInterface\")"
+        }
+      }
+    },
+    "firefly.hades": {
+      "runtime_slots": {
+        "detailedCompute": {
+          "description": "Optional detailed-compute runtime slot loaded by firefly.hades when detailedCompute.name is set.",
+          "required_interface": "SST::Thornhill::DetailedCompute",
+          "default_type": "",
+          "required": false,
+          "inject_default": false,
+          "provenance": "sst/elements/firefly/hades.cc:85: loadUserSubComponent(\"detailedCompute\")"
+        },
+        "memoryHeap": {
+          "description": "Optional memory-heap runtime slot loaded by firefly.hades when memoryHeapLink.name is set.",
+          "required_interface": "SST::Thornhill::MemoryHeapLink",
+          "default_type": "",
+          "required": false,
+          "inject_default": false,
+          "provenance": "sst/elements/firefly/hades.cc:91: loadUserSubComponent(\"memoryHeap\")"
+        },
+        "proto": {
+          "description": "Runtime user subcomponent loaded by firefly.hades with loadUserSubComponent(\"proto\").",
+          "required_interface": "SST::Firefly::CtrlMsg::API",
+          "default_type": "firefly.CtrlMsgProto",
+          "required": true,
+          "inject_default": false,
+          "provenance": "src/sst/elements/firefly/hades.cc: loadUserSubComponent<CtrlMsg::API>(\"proto\")"
+        },
+        "virtNic": {
+          "description": "Runtime user subcomponent loaded by firefly.hades with loadUserSubComponent(\"virtNic\").",
+          "required_interface": "SST::Firefly::VirtNic",
+          "default_type": "firefly.VirtNic",
+          "required": true,
+          "inject_default": false,
+          "provenance": "src/sst/elements/firefly/hades.cc: loadUserSubComponent<VirtNic>(\"virtNic\")"
+        }
+      }
+    },
+    "firefly.nic": {
+      "runtime_slots": {
+        "detailedInterface": {
+          "description": "Optional detailed-memory runtime slot loaded by firefly.nic when detailed memory is enabled.",
+          "required_interface": "SST::Firefly::DetailedInterface",
+          "default_type": "firefly.detailedInterface",
+          "required": false,
+          "inject_default": false,
+          "provenance": "sst/elements/firefly/nic.cc:221: loadUserSubComponent(\"detailedInterface\")"
+        },
+        "nicDetailedRead": {
+          "description": "Optional detailed-compute read runtime slot loaded by firefly.nic.",
+          "required_interface": "SST::Thornhill::DetailedCompute",
+          "default_type": "",
+          "required": false,
+          "inject_default": false,
+          "provenance": "sst/elements/firefly/nic.cc:297: loadUserSubComponent(\"nicDetailedRead\")"
+        },
+        "nicDetailedWrite": {
+          "description": "Optional detailed-compute write runtime slot loaded by firefly.nic.",
+          "required_interface": "SST::Thornhill::DetailedCompute",
+          "default_type": "",
+          "required": false,
+          "inject_default": false,
+          "provenance": "sst/elements/firefly/nic.cc:303: loadUserSubComponent(\"nicDetailedWrite\")"
+        },
+        "rtrLink": {
+          "description": "Required router-link SimpleNetwork runtime slot loaded by firefly.nic.",
+          "required_interface": "SST::Interfaces::SimpleNetwork",
+          "default_type": "merlin.linkcontrol",
+          "required": true,
+          "inject_default": false,
+          "provenance": "sst/elements/firefly/nic.cc:144: loadUserSubComponent(\"rtrLink\")"
+        }
+      }
+    },
+    "memHierarchy.Sieve": {
+      "runtime_slots": {
+        "replacement": {
+          "description": "Optional replacement-policy runtime slot loaded by Sieve; falls back to LRU if absent.",
+          "required_interface": "SST::MemHierarchy::ReplacementPolicy",
+          "default_type": "memHierarchy.replacement.lru",
+          "required": false,
+          "inject_default": false,
+          "provenance": "sst/elements/memHierarchy/Sieve/sieveFactory.cc:62: loadUserSubComponent(\"replacement\")"
+        }
+      }
+    },
+    "memHierarchy.streamCPU": {
+      "runtime_slots": {
+        "memory": {
+          "description": "Runtime memory slot loaded by streamCPU; falls back to an anonymous standardInterface on port mem_link if absent.",
+          "required_interface": "SST::Interfaces::StandardMem",
+          "default_type": "memHierarchy.standardInterface",
+          "required": false,
+          "inject_default": false,
+          "provenance": "sst/elements/memHierarchy/testcpu/streamCPU.cc:66: loadUserSubComponent(\"memory\")"
+        }
+      }
+    },
+    "mmu.tlb_wrapper": {
+      "runtime_slots": {
+        "tlb": {
+          "description": "Required TLB runtime slot loaded by mmu.tlb_wrapper.",
+          "required_interface": "SST::MMU_Lib::TLB",
+          "default_type": "",
+          "required": true,
+          "inject_default": false,
+          "provenance": "sst/elements/mmu/tlbWrapper.cc:59: loadUserSubComponent(\"tlb\")"
+        }
+      }
+    },
+    "prospero.prosperoCPU": {
+      "runtime_slots": {
+        "reader": {
+          "description": "Runtime trace-reader slot loaded by Prospero; falls back to the reader parameter/default if absent.",
+          "required_interface": "SST::Prospero::ProsperoTraceReader",
+          "default_type": "prospero.ProsperoTextTraceReader",
+          "required": false,
+          "inject_default": false,
+          "provenance": "sst/elements/prospero/proscpu.cc:36: loadUserSubComponent(\"reader\")"
+        }
+      }
+    },
+    "rdmaNic.nic": {
+      "runtime_slots": {
+        "dma": {
+          "description": "Conditional DMA StandardMem runtime slot loaded by rdmaNic.nic when useDmaCache is enabled.",
+          "required_interface": "SST::Interfaces::StandardMem",
+          "default_type": "memHierarchy.standardInterface",
+          "required": false,
+          "inject_default": false,
+          "provenance": "sst/elements/rdmaNic/rdmaNic.cc:96: loadUserSubComponent(\"dma\")"
+        },
+        "mmio": {
+          "description": "Required MMIO StandardMem runtime slot loaded by rdmaNic.nic.",
+          "required_interface": "SST::Interfaces::StandardMem",
+          "default_type": "memHierarchy.standardInterface",
+          "required": true,
+          "inject_default": false,
+          "provenance": "sst/elements/rdmaNic/rdmaNic.cc:86: loadUserSubComponent(\"mmio\")"
+        },
+        "rtrLink": {
+          "description": "Required router-link SimpleNetwork runtime slot loaded by rdmaNic.nic.",
+          "required_interface": "SST::Interfaces::SimpleNetwork",
+          "default_type": "merlin.linkcontrol",
+          "required": true,
+          "inject_default": false,
+          "provenance": "sst/elements/rdmaNic/rdmaNic.cc:106: loadUserSubComponent(\"rtrLink\")"
+        }
+      }
+    },
+    "vanadis.VanadisNodeOS": {
+      "runtime_slots": {
+        "mmu": {
+          "description": "Conditional MMU runtime slot loaded by VanadisNodeOS when an MMU is configured.",
+          "required_interface": "SST::MMU_Lib::MMU",
+          "default_type": "",
+          "required": false,
+          "inject_default": false,
+          "provenance": "sst/elements/vanadis/os/vnodeos.cc:107: loadUserSubComponent(\"mmu\")"
+        }
+      }
+    },
+    "zodiac.ZodiacSiriusTraceReader": {
+      "runtime_slots": {
+        "OS": {
+          "description": "Required Hermes OS runtime slot loaded by ZodiacSiriusTraceReader.",
+          "required_interface": "SST::Hermes::OS",
+          "default_type": "firefly.hades",
+          "required": true,
+          "inject_default": false,
+          "provenance": "sst/elements/zodiac/zsirius.cc:50: loadUserSubComponent(\"OS\")"
+        }
+      }
+    }
+  }
+}

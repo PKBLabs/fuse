@@ -29,6 +29,11 @@ from fuse.plugins.community.sst.policy.runtime import (
     resolve_param_kind,
     should_require_metadata_param_for_export,
 )
+from fuse.plugins.community.sst.runtime_overlays import (
+    framework_version_for_node,
+    logical_ports_for_component,
+    runtime_slots_for_component,
+)
 
 
 DEFAULT_LINK_LATENCY = "1ns"
@@ -380,6 +385,38 @@ def sst_component_type_for_node(node) -> str:
     return f"{element}.{name}"
 
 
+def runtime_slots_for_node(node) -> dict[str, Any]:
+    """Return runtime overlay slots for a node's SST type/version."""
+
+    try:
+        component_type = sst_component_type_for_node(node)
+    except SSTJsonExportError:
+        return {}
+
+    return runtime_slots_for_component(
+        component_type,
+        framework_version_for_node(node),
+    )
+
+
+def logical_ports_for_node(node) -> dict[str, Any]:
+    """Return logical port mappings for a node's SST type/version."""
+
+    try:
+        component_type = sst_component_type_for_node(node)
+    except SSTJsonExportError:
+        return {}
+
+    return logical_ports_for_component(
+        component_type,
+        framework_version_for_node(node),
+    )
+
+
+def _overlay_runtime_slot_names_for_node(node) -> set[str]:
+    return set(runtime_slots_for_node(node).keys())
+
+
 def _is_suppressed_slot_param(param_name: Any, suppress_prefixed_slots: set[str]) -> bool:
     """Return true when a param belongs to an attached subcomponent slot."""
 
@@ -547,7 +584,136 @@ def _child_attachments_for_node(
         for attachment in child_attachments
         if str(getattr(attachment, "slot_name", "") or "").strip()
     }
+    attached_slot_names.update(_overlay_runtime_slot_names_for_node(node))
     return child_attachments, attached_slot_names
+
+
+def _attached_subcomponent_for_slot(
+    node,
+    slot_name: str,
+    attachments_by_parent_id: dict[int, list],
+    nodes_by_id: dict[int, object],
+):
+    """Return the child node attached to ``slot_name`` on ``node``, if any."""
+
+    for attachment in attachments_by_parent_id.get(getattr(node, "node_id", None), []) or []:
+        if str(getattr(attachment, "slot_name", "") or "").strip() != slot_name:
+            continue
+
+        child = nodes_by_id.get(getattr(attachment, "child_node_id", None))
+        if child is not None:
+            return child
+
+    return None
+
+
+def _derived_export_params_for_node(
+    node,
+    attachments_by_parent_id: dict[int, list],
+    nodes_by_id: dict[int, object],
+) -> dict[str, Any]:
+    """Return SST params derived from graph structure rather than user fields."""
+
+    component_type = sst_component_type_for_node(node)
+
+    if component_type == "merlin.hr_router":
+        topology = _attached_subcomponent_for_slot(
+            node,
+            "topology",
+            attachments_by_parent_id,
+            nodes_by_id,
+        )
+        if topology is not None:
+            topology_type = sst_component_type_for_node(topology)
+            if topology_type:
+                return {"topology": topology_type}
+
+    return {}
+
+
+def _merge_derived_params_into_component(
+    component: dict[str, Any],
+    node,
+    derived_params: dict[str, Any],
+) -> None:
+    """Normalize and merge derived params into an exported SST component."""
+
+    if not derived_params:
+        return
+
+    params = dict(component.get("params", {}) or {})
+    params.update(normalize_params_for_node(node, derived_params))
+    if params:
+        component["params"] = params
+
+
+def _build_runtime_overlay_subcomponent_tree(
+    slot_name: str,
+    component_type: str,
+    version: str,
+    params: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build an injected runtime-overlay subcomponent tree."""
+
+    subcomponent: dict[str, Any] = {
+        "slot_name": slot_name,
+        "type": component_type,
+    }
+
+    cleaned_params = stringify_sst_params(non_empty_params(dict(params or {})))
+    if cleaned_params:
+        subcomponent["params"] = cleaned_params
+
+    children = []
+    for child_slot_name, child_slot in sorted(
+        runtime_slots_for_component(component_type, version).items(),
+        key=lambda item: item[0],
+    ):
+        if not child_slot.inject_default or not child_slot.default_type:
+            continue
+        children.append(
+            _build_runtime_overlay_subcomponent_tree(
+                child_slot_name,
+                child_slot.default_type,
+                version,
+                child_slot.params,
+            )
+        )
+
+    if children:
+        subcomponent["subcomponents"] = children
+
+    return subcomponent
+
+
+def _injected_runtime_overlay_subcomponents(
+    node,
+    child_attachments: list,
+) -> list[dict[str, Any]]:
+    """Return export subcomponents injected by runtime overlay defaults."""
+
+    attached_slots = {
+        str(getattr(attachment, "slot_name", "") or "").strip()
+        for attachment in child_attachments
+    }
+    version = framework_version_for_node(node)
+    injected = []
+
+    for slot_name, slot in sorted(runtime_slots_for_node(node).items(), key=lambda item: item[0]):
+        if slot_name in attached_slots:
+            continue
+        if not slot.inject_default or not slot.default_type:
+            continue
+        injected.append(
+            _build_runtime_overlay_subcomponent_tree(
+                slot_name,
+                slot.default_type,
+                version,
+                slot.params,
+            )
+        )
+
+    return injected
 
 
 def _attach_child_subcomponents(
@@ -580,6 +746,8 @@ def _attach_child_subcomponents(
                 nodes_by_id,
             )
         )
+
+    children.extend(_injected_runtime_overlay_subcomponents(node, child_attachments))
 
     if children:
         component["subcomponents"] = children
@@ -646,6 +814,15 @@ def build_sst_component_tree(
     component = build_sst_component(
         node,
         suppress_prefixed_slots=attached_slot_names,
+    )
+    _merge_derived_params_into_component(
+        component,
+        node,
+        _derived_export_params_for_node(
+            node,
+            attachments_by_parent_id,
+            nodes_by_id,
+        ),
     )
 
     return _attach_child_subcomponents(
@@ -749,6 +926,27 @@ def _sst_component_reference(
     return f"{parent_ref}:{slot_name}"
 
 
+def _runtime_path_component_reference(
+    *,
+    base_component: str,
+    component_path: str,
+) -> str:
+    """Append a colon-separated runtime subcomponent path to an SST component ref."""
+
+    current = str(base_component or "").strip()
+    for part in str(component_path or "").split(":"):
+        part = part.strip()
+        if part:
+            current = f"{current}:{part}" if current else part
+    return current
+
+
+def _logical_port_mapping_for_endpoint(node, port: str):
+    if node is None:
+        return None
+    return logical_ports_for_node(node).get(str(port or "").strip())
+
+
 def _sst_link_endpoint(
     *,
     node_id: int | None,
@@ -765,13 +963,26 @@ def _sst_link_endpoint(
     component references with the original subcomponent port unchanged.
     """
 
+    base_component = _sst_component_reference(
+        node_id=node_id,
+        fallback_component=fallback_component,
+        nodes_by_id=nodes_by_id,
+        attachments_by_child_id=attachments_by_child_id,
+    )
+
+    node = nodes_by_id.get(node_id) if nodes_by_id is not None and node_id is not None else None
+    mapping = _logical_port_mapping_for_endpoint(node, str(port or ""))
+    if mapping is not None:
+        return (
+            _runtime_path_component_reference(
+                base_component=base_component,
+                component_path=mapping.component_path,
+            ),
+            mapping.port,
+        )
+
     return (
-        _sst_component_reference(
-            node_id=node_id,
-            fallback_component=fallback_component,
-            nodes_by_id=nodes_by_id,
-            attachments_by_child_id=attachments_by_child_id,
-        ),
+        base_component,
         str(port or ""),
     )
 
@@ -896,6 +1107,426 @@ def add_export_policy_diagnostics(scene, add_issue) -> None:
         )
 
 
+def _group_list_from_sst_value(value: Any) -> list[int]:
+    """Parse SST MemNIC source/destination group values into integers."""
+
+    if value is None:
+        return []
+
+    if isinstance(value, int) and not isinstance(value, bool):
+        return [value]
+
+    if isinstance(value, (list, tuple, set)):
+        result: list[int] = []
+        for item in value:
+            result.extend(_group_list_from_sst_value(item))
+        return result
+
+    text = str(value).strip()
+    if not text or text in {"[]", "{}"}:
+        return []
+
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        parsed = None
+
+    if isinstance(parsed, list):
+        return _group_list_from_sst_value(parsed)
+    if isinstance(parsed, int) and not isinstance(parsed, bool):
+        return [parsed]
+
+    groups: list[int] = []
+    for token in text.replace(";", ",").split(","):
+        token = token.strip()
+        if not token:
+            continue
+        parsed_int = _parse_sst_integer_literal(token)
+        if parsed_int is not None:
+            groups.append(parsed_int)
+
+    return groups
+
+
+def _node_export_params_for_validation(
+    node,
+    attachments_by_parent_id: dict[int, list],
+    nodes_by_id: dict[int, object],
+) -> dict[str, Any]:
+    """Return exportable params plus graph-derived params for validation."""
+
+    attached_slot_names = {
+        str(attachment.slot_name)
+        for attachment in attachments_by_parent_id.get(getattr(node, "node_id", None), [])
+        if str(getattr(attachment, "slot_name", "") or "").strip()
+    }
+    params = exportable_params_for_node(
+        node,
+        suppress_prefixed_slots=attached_slot_names,
+    )
+    params.update(
+        _derived_export_params_for_node(
+            node,
+            attachments_by_parent_id,
+            nodes_by_id,
+        )
+    )
+    return params
+
+
+def _subcomponent_parent_attachment(
+    node,
+    attachments_by_child_id: dict[int, object],
+):
+    return attachments_by_child_id.get(getattr(node, "node_id", None))
+
+
+def _infer_memnic_role(
+    node,
+    nodes_by_id: dict[int, object],
+    attachments_by_child_id: dict[int, object],
+) -> str:
+    """Infer a MemNIC role from its parent component type and slot."""
+
+    attachment = _subcomponent_parent_attachment(node, attachments_by_child_id)
+    if attachment is None:
+        return "unknown"
+
+    parent = nodes_by_id.get(getattr(attachment, "parent_node_id", None))
+    if parent is None:
+        return "unknown"
+
+    parent_type = sst_component_type_for_node(parent)
+    slot_name = str(getattr(attachment, "slot_name", "") or "").strip()
+
+    if parent_type == "memHierarchy.standardInterface" and slot_name == "lowlink":
+        return "requester"
+
+    if parent_type == "memHierarchy.MemController" and slot_name == "highlink":
+        return "memory_target"
+
+    if parent_type == "memHierarchy.Cache" and slot_name == "highlink":
+        return "cache_upstream"
+
+    if parent_type == "memHierarchy.Cache" and slot_name == "lowlink":
+        return "cache_downstream"
+
+    if parent_type == "memHierarchy.DirectoryController" and slot_name == "highlink":
+        return "directory_upstream"
+
+    if parent_type == "memHierarchy.DirectoryController" and slot_name == "lowlink":
+        return "directory_downstream"
+
+    return "unknown"
+
+
+def _standard_cpu_has_direct_memnic_lowlink(
+    node,
+    attachments_by_parent_id: dict[int, list],
+    nodes_by_id: dict[int, object],
+) -> bool:
+    """Return true for standardCPU -> standardInterface -> MemNIC topologies."""
+
+    iface = _attached_subcomponent_for_slot(
+        node,
+        "memory",
+        attachments_by_parent_id,
+        nodes_by_id,
+    )
+    if iface is None or sst_component_type_for_node(iface) != "memHierarchy.standardInterface":
+        return False
+
+    lowlink = _attached_subcomponent_for_slot(
+        iface,
+        "lowlink",
+        attachments_by_parent_id,
+        nodes_by_id,
+    )
+
+    return lowlink is not None and sst_component_type_for_node(lowlink) == "memHierarchy.MemNIC"
+
+
+def _runtime_path_exists(
+    node,
+    component_path: str,
+    attachments_by_parent_id: dict[int, list],
+    nodes_by_id: dict[int, object],
+) -> bool:
+    """Return true if a runtime overlay component path exists or is injected."""
+
+    current = node
+    for part in str(component_path or "").split(":"):
+        slot_name = part.strip()
+        if not slot_name:
+            continue
+
+        child = _attached_subcomponent_for_slot(
+            current,
+            slot_name,
+            attachments_by_parent_id,
+            nodes_by_id,
+        )
+        if child is not None:
+            current = child
+            continue
+
+        slot = runtime_slots_for_node(current).get(slot_name)
+        if slot is not None and slot.inject_default and slot.default_type:
+            # The exporter will materialize this runtime slot.  For nested
+            # paths below an injected slot, follow the default type using a
+            # tiny synthetic object for overlay lookup only.
+            from types import SimpleNamespace
+            component = SimpleNamespace(
+                plugin_id="sst",
+                element=slot.default_type.split(".", 1)[0] if "." in slot.default_type else "",
+                name=slot.default_type.split(".", 1)[1] if "." in slot.default_type else slot.default_type,
+                framework_version=framework_version_for_node(current),
+                is_subcomp=1,
+            )
+            current = SimpleNamespace(
+                node_id=None,
+                instance_name=slot.default_type,
+                component=component,
+                parameters={},
+            )
+            continue
+
+        return False
+
+    return True
+
+
+def _add_runtime_overlay_guidance(
+    nodes: list,
+    links: list,
+    nodes_by_id: dict[int, object],
+    attachments_by_parent_id: dict[int, list],
+    add_issue,
+) -> None:
+    """Validate versioned runtime-overlay slots and logical ports."""
+
+    for node in nodes:
+        object_name = str(getattr(node, "instance_name", "") or "SST component")
+
+        for slot_name, slot in sorted(runtime_slots_for_node(node).items(), key=lambda item: item[0]):
+            child = _attached_subcomponent_for_slot(
+                node,
+                slot_name,
+                attachments_by_parent_id,
+                nodes_by_id,
+            )
+            if child is None and slot.required and not slot.inject_default:
+                default_hint = f" Default type: {slot.default_type}." if slot.default_type else ""
+                add_issue(
+                    validation_issue(
+                        "sst_export_runtime_slot",
+                        object_name,
+                        (
+                            f"Required SST runtime subcomponent slot '{slot_name}' is not filled. "
+                            "This slot is supplied by the SST plugin runtime overlay because it is loaded by SST runtime code "
+                            "but is not fully declared by sst-info."
+                            f"{default_hint}"
+                        ),
+                        node_id=getattr(node, "node_id", None),
+                        parameter_name=slot_name,
+                    )
+                )
+
+        logical_ports = logical_ports_for_node(node)
+        for port_name, mapping in sorted(logical_ports.items()):
+            if not _runtime_path_exists(
+                node,
+                mapping.component_path,
+                attachments_by_parent_id,
+                nodes_by_id,
+            ):
+                # Only warn here; the required-slot check above provides the
+                # blocking diagnostic for missing required overlay slots.
+                add_issue(
+                    validation_issue(
+                        "sst_export_runtime_port",
+                        object_name,
+                        (
+                            f"Logical port '{port_name}' maps to runtime path "
+                            f"'{mapping.component_path}.{mapping.port}', but that path is not complete. "
+                            "Fill the required runtime subcomponent slots or use a template that expands them."
+                        ),
+                        severity="warning",
+                        node_id=getattr(node, "node_id", None),
+                        parameter_name=port_name,
+                    )
+                )
+
+    for link in links:
+        for side in ("source", "target"):
+            node = nodes_by_id.get(getattr(link, f"{side}_node_id", None))
+            port = str(getattr(link, f"{side}_port", "") or "").strip()
+            mapping = _logical_port_mapping_for_endpoint(node, port)
+            if mapping is None:
+                continue
+            if not _runtime_path_exists(
+                node,
+                mapping.component_path,
+                attachments_by_parent_id,
+                nodes_by_id,
+            ):
+                add_issue(
+                    validation_issue(
+                        "sst_export_runtime_port",
+                        getattr(link, "name", "") or f"link_{getattr(link, 'link_id', '')}",
+                        (
+                            f"Link {side} uses logical port '{port}', which exports to "
+                            f"'{mapping.component_path}.{mapping.port}', but that runtime path is incomplete."
+                        ),
+                        node_id=getattr(node, "node_id", None),
+                        link_id=getattr(link, "link_id", None),
+                        parameter_name=f"{side}_port",
+                    )
+                )
+
+
+def _add_sst_specific_guidance(
+    nodes: list,
+    nodes_by_id: dict[int, object],
+    attachments_by_parent_id: dict[int, list],
+    attachments_by_child_id: dict[int, object],
+    add_issue,
+) -> None:
+    """Add graph-aware SST guidance for common memHierarchy/Merlin traps."""
+
+    memnic_infos: list[dict[str, Any]] = []
+    groups: dict[int, list[dict[str, Any]]] = {}
+
+    for node in nodes:
+        if sst_component_type_for_node(node) != "memHierarchy.MemNIC":
+            continue
+
+        params = _node_export_params_for_validation(
+            node,
+            attachments_by_parent_id,
+            nodes_by_id,
+        )
+        group = _parse_sst_integer_literal(params.get("group"))
+        role = _infer_memnic_role(node, nodes_by_id, attachments_by_child_id)
+        info = {
+            "node": node,
+            "params": params,
+            "group": group,
+            "role": role,
+            "sources": _group_list_from_sst_value(params.get("sources")),
+            "destinations": _group_list_from_sst_value(params.get("destinations")),
+        }
+        memnic_infos.append(info)
+        if group is not None:
+            groups.setdefault(group, []).append(info)
+
+        object_name = str(getattr(node, "instance_name", "") or "MemNIC")
+        if group is None:
+            add_issue(
+                validation_issue(
+                    "sst_export_memnic",
+                    object_name,
+                    "MemNIC parameter 'group' is required for networked memHierarchy routing.",
+                    node_id=getattr(node, "node_id", None),
+                    parameter_name="group",
+                )
+            )
+
+    for info in memnic_infos:
+        node = info["node"]
+        object_name = str(getattr(node, "instance_name", "") or "MemNIC")
+        role = info["role"]
+
+        for param_name in ("sources", "destinations"):
+            for group in info[param_name]:
+                if group not in groups:
+                    add_issue(
+                        validation_issue(
+                            "sst_export_memnic",
+                            object_name,
+                            f"MemNIC parameter '{param_name}' references group {group}, but no MemNIC in this network uses that group.",
+                            severity="warning",
+                            node_id=getattr(node, "node_id", None),
+                            parameter_name=param_name,
+                        )
+                    )
+
+        if role == "requester" and not info["destinations"]:
+            add_issue(
+                validation_issue(
+                    "sst_export_memnic",
+                    object_name,
+                    "Requester-side MemNIC has no destinations. Usually set destinations to the memory/cache target group.",
+                    severity="warning",
+                    node_id=getattr(node, "node_id", None),
+                    parameter_name="destinations",
+                )
+            )
+
+        if role == "memory_target" and info["destinations"]:
+            requester_destination_groups = [
+                group
+                for group in info["destinations"]
+                if any(member["role"] == "requester" for member in groups.get(group, []))
+            ]
+            if requester_destination_groups:
+                add_issue(
+                    validation_issue(
+                        "sst_export_memnic",
+                        object_name,
+                        (
+                            "Memory-controller-side MemNIC should not list requester groups as destinations; "
+                            f"group(s) {requester_destination_groups} contain requester endpoints that advertise overlapping default address ranges. "
+                            "Use sources for requester groups and leave destinations blank."
+                        ),
+                        node_id=getattr(node, "node_id", None),
+                        parameter_name="destinations",
+                    )
+                )
+            else:
+                add_issue(
+                    validation_issue(
+                        "sst_export_memnic",
+                        object_name,
+                        "Memory-controller-side MemNIC usually should leave destinations blank and use sources for requester groups.",
+                        severity="warning",
+                        node_id=getattr(node, "node_id", None),
+                        parameter_name="destinations",
+                    )
+                )
+
+    for node in nodes:
+        if sst_component_type_for_node(node) != "memHierarchy.standardCPU":
+            continue
+        if not _standard_cpu_has_direct_memnic_lowlink(node, attachments_by_parent_id, nodes_by_id):
+            continue
+
+        params = _node_export_params_for_validation(
+            node,
+            attachments_by_parent_id,
+            nodes_by_id,
+        )
+        enabled = [
+            name
+            for name in ("flush_freq", "flushcache_freq", "flushinv_freq", "llsc_freq")
+            if (_parse_sst_integer_literal(params.get(name)) or 0) > 0
+        ]
+        if enabled:
+            add_issue(
+                validation_issue(
+                    "sst_export_standardcpu",
+                    str(getattr(node, "instance_name", "") or "standardCPU"),
+                    (
+                        "This standardCPU is connected directly to a MemNIC without a cache, "
+                        f"but cache-line-dependent traffic is enabled ({', '.join(enabled)}). "
+                        "Set these frequencies to 0 or insert a Cache between the CPU interface and the MemNIC."
+                    ),
+                    severity="warning",
+                    node_id=getattr(node, "node_id", None),
+                )
+            )
+
+
 def validate_sst_json_export(scene) -> SSTExportReport:
     """Validate that a scene can be exported to SST JSON without repair."""
     from fuse.core.model.composite_flattening import flatten_scene_for_export
@@ -907,6 +1538,7 @@ def validate_sst_json_export(scene) -> SSTExportReport:
     attachments = list(getattr(scene, "subcomp_attachments", []) or [])
     nodes_by_id = {node.node_id: node for node in nodes}
     attached_child_ids = {attachment.child_node_id for attachment in attachments}
+    attachments_by_child_id = {attachment.child_node_id: attachment for attachment in attachments}
     attachments_by_parent_id: dict[int, list] = {}
     for attachment in attachments:
         attachments_by_parent_id.setdefault(
@@ -1006,11 +1638,37 @@ def validate_sst_json_export(scene) -> SSTExportReport:
                 node,
                 suppress_prefixed_slots=attached_slot_names,
             )
-            params = exportable_params_for_node(
+            params = _node_export_params_for_validation(
                 node,
-                suppress_prefixed_slots=attached_slot_names,
+                attachments_by_parent_id,
+                nodes_by_id,
             )
             metadata_by_name = parameter_metadata_for_node(node)
+
+            if component_type == "merlin.hr_router":
+                topology_child = _attached_subcomponent_for_slot(
+                    node,
+                    "topology",
+                    attachments_by_parent_id,
+                    nodes_by_id,
+                )
+                if topology_child is not None:
+                    attached_topology_type = sst_component_type_for_node(topology_child)
+                    raw_topology = raw_user_params.get("topology")
+                    if raw_topology and str(raw_topology).strip() != attached_topology_type:
+                        add_issue(
+                            validation_issue(
+                                "sst_export_topology",
+                                name or "<unnamed component>",
+                                (
+                                    f"Router topology parameter is {raw_topology!r}, but the attached topology subcomponent is "
+                                    f"{attached_topology_type!r}; exporter will use the attached topology type."
+                                ),
+                                severity="warning",
+                                node_id=getattr(node, "node_id", None),
+                                parameter_name="topology",
+                            )
+                        )
 
             for param_name, metadata in metadata_by_name.items():
                 if not should_require_metadata_param_for_export(
@@ -1265,7 +1923,7 @@ def validate_sst_json_export(scene) -> SSTExportReport:
 
         if source is not None and source_port:
             ports = port_names_for_node(source)
-            if ports and source_port not in ports:
+            if ports and source_port not in ports and source_port not in logical_ports_for_node(source):
                 add_issue(
                     validation_issue(
                         "sst_export_warning",
@@ -1279,7 +1937,7 @@ def validate_sst_json_export(scene) -> SSTExportReport:
                 )
         if target is not None and target_port:
             ports = port_names_for_node(target)
-            if ports and target_port not in ports:
+            if ports and target_port not in ports and target_port not in logical_ports_for_node(target):
                 add_issue(
                     validation_issue(
                         "sst_export_warning",
@@ -1311,6 +1969,22 @@ def validate_sst_json_export(scene) -> SSTExportReport:
                     link_id=getattr(link, "link_id", None),
                 )
             )
+
+    _add_runtime_overlay_guidance(
+        nodes,
+        links,
+        nodes_by_id,
+        attachments_by_parent_id,
+        add_issue,
+    )
+
+    _add_sst_specific_guidance(
+        nodes,
+        nodes_by_id,
+        attachments_by_parent_id,
+        attachments_by_child_id,
+        add_issue,
+    )
 
     return report
 
