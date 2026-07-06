@@ -128,3 +128,41 @@ def test_sst_component_with_no_declared_ports_does_not_get_fallback_ports(monkey
 
     assert sst_node.ports == []
     assert [port.name for port in core_node.ports] == ["in", "out"]
+
+
+def test_component_node_expands_sst_multi_expression_port_template(monkeypatch):
+    monkeypatch.setattr(
+        "fuse.core.ui.graphics_items.load_port_metadata_for_component",
+        lambda *args, **kwargs: [
+            {
+                "name": "nic%(nicsPerNode)dcore%(num_vNics/nicsPerNode)d",
+                "description": "loopback port",
+                "iface": "",
+                "is_variable": False,
+                "base_name": "nic%(nicsPerNode)dcore%(num_vNics/nicsPerNode)d",
+                "count_parameter": "",
+                "default_count": 1,
+            },
+        ],
+    )
+
+    node = ComponentNodeItem(
+        _component(),
+        parameters={
+            "numCores": "2",
+            "nicsPerNode": "2",
+        },
+    )
+
+    assert node.expanded_port_names() == [
+        "nic0core0",
+        "nic0core1",
+        "nic1core0",
+        "nic1core1",
+    ]
+    assert {port.name for port in node.ports} == {
+        "nic0core0",
+        "nic0core1",
+        "nic1core0",
+        "nic1core1",
+    }

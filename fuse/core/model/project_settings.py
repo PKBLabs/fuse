@@ -202,11 +202,60 @@ class ProjectSettings:
 
     @staticmethod
     def from_project_dict(project: dict[str, Any]) -> "ProjectSettings":
+        active_target = project.get("activeTarget", {}) or {}
+        legacy_plugin_settings = project.get("pluginSettings", {}) or {}
+
         if "projectSettings" in project:
-            return ProjectSettings.from_dict(project.get("projectSettings"))
+            settings = ProjectSettings.from_dict(project.get("projectSettings"))
+
+            # Older project files and some intermediate builds wrote toolchain
+            # details under top-level pluginSettings while projectSettings held
+            # only the active plugin/target identity. Merge those legacy entries
+            # so Open -> Save As preserves SST/gem5 toolchain paths.
+            if isinstance(legacy_plugin_settings, dict):
+                for plugin_id, plugin_data in legacy_plugin_settings.items():
+                    plugin_id = str(plugin_id or "")
+                    if not plugin_id:
+                        continue
+                    if plugin_id not in settings.plugins:
+                        settings.plugins[plugin_id] = PluginProjectSettings.from_dict(plugin_id, plugin_data)
+                        continue
+
+                    legacy = PluginProjectSettings.from_dict(plugin_id, plugin_data)
+                    current = settings.plugins[plugin_id]
+                    current_paths = current.toolchain.to_dict().get("toolPaths", {}) or {}
+                    legacy_paths = legacy.toolchain.to_dict().get("toolPaths", {}) or {}
+                    if (
+                        not any(str(value or "").strip() for value in current_paths.values())
+                        and any(str(value or "").strip() for value in legacy_paths.values())
+                    ):
+                        current.toolchain = legacy.toolchain
+                    if not current.options and legacy.options:
+                        current.options = legacy.options
+                    if not current.target_id and legacy.target_id:
+                        current.target_id = legacy.target_id
+                    if not current.target_label and legacy.target_label:
+                        current.target_label = legacy.target_label
+                    if not current.framework_version and legacy.framework_version:
+                        current.framework_version = legacy.framework_version
+                    current.enabled = current.enabled or legacy.enabled
+
+            if not settings.active_plugin_id:
+                settings.active_plugin_id = active_target.get("pluginId", "") or ""
+
+            if settings.active_plugin_id and settings.active_plugin_id not in settings.plugins:
+                settings.plugins[settings.active_plugin_id] = PluginProjectSettings(
+                    plugin_id=settings.active_plugin_id,
+                    enabled=True,
+                    target_id=active_target.get("targetId", "") or "",
+                )
+
+            active = settings.active_plugin_settings()
+            if active is not None and not active.target_id:
+                active.target_id = active_target.get("targetId", "") or ""
+            return settings
 
         # Compatibility with existing .fse files that only had activeTarget.
-        active_target = project.get("activeTarget", {}) or {}
         plugin_id = active_target.get("pluginId", "") or ""
         target_id = active_target.get("targetId", "") or ""
 
@@ -216,11 +265,24 @@ class ProjectSettings:
             active_plugin_id=plugin_id,
         )
 
-        if plugin_id:
+        if isinstance(legacy_plugin_settings, dict):
+            for legacy_plugin_id, plugin_data in legacy_plugin_settings.items():
+                legacy_plugin_id = str(legacy_plugin_id or "")
+                if legacy_plugin_id:
+                    settings.plugins[legacy_plugin_id] = PluginProjectSettings.from_dict(
+                        legacy_plugin_id,
+                        plugin_data,
+                    )
+
+        if plugin_id and plugin_id not in settings.plugins:
             settings.plugins[plugin_id] = PluginProjectSettings(
                 plugin_id=plugin_id,
                 enabled=True,
                 target_id=target_id,
             )
+        elif plugin_id:
+            settings.plugins[plugin_id].enabled = True
+            if not settings.plugins[plugin_id].target_id:
+                settings.plugins[plugin_id].target_id = target_id
 
         return settings

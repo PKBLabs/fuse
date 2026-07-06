@@ -186,6 +186,7 @@ def validate_serialized_project(project: Any, *, strict_references: bool = True)
 
     component_ids: set[int] = set()
     component_names: dict[int, str] = {}
+    used_component_instance_names: dict[str, int] = {}
 
     for index, component in enumerate(components):
         path = f"components[{index}]"
@@ -204,6 +205,17 @@ def validate_serialized_project(project: Any, *, strict_references: bool = True)
 
         _expect_stringish(issues, component.get("name"), f"{path}.name")
         _expect_stringish(issues, component.get("instanceName", component.get("name")), f"{path}.instanceName")
+        _expect_stringish(issues, component.get("nameTemplate", ""), f"{path}.nameTemplate")
+        instance_name = str(component.get("instanceName", component.get("name")) or "")
+        if instance_name:
+            if instance_name in used_component_instance_names:
+                _issue(
+                    issues,
+                    f"{path}.instanceName",
+                    f"duplicates component name {instance_name!r}",
+                )
+            else:
+                used_component_instance_names[instance_name] = index
         _expect_numeric_mapping(issues, component.get("position"), f"{path}.position", ("x", "y"))
 
         parameters = component.get("parameters", {})

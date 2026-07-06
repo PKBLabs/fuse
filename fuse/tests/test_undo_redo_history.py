@@ -65,7 +65,7 @@ def test_undo_redo_component_creation_restores_scene_and_dirty_indicator(qtbot, 
 
     nodes = window.scene.component_items()
     assert len(nodes) == 1
-    assert nodes[0].instance_name == "CPU_1"
+    assert nodes[0].instance_name == "CPU_0"
     assert window.is_dirty is True
     assert window.undo_action.isEnabled()
     assert not window.redo_action.isEnabled()
@@ -87,7 +87,7 @@ def test_undo_redo_property_edit_restores_instance_name(qtbot, monkeypatch):
 
     window.undo()
 
-    assert window.scene.component_items()[0].instance_name == "CPU_1"
+    assert window.scene.component_items()[0].instance_name == "CPU_0"
     assert window.is_dirty is False
 
     window.redo()
@@ -113,7 +113,7 @@ def test_undo_redo_component_deletion_restores_component(qtbot, monkeypatch):
 
     restored = window.scene.component_items()
     assert len(restored) == 1
-    assert restored[0].instance_name == "CPU_1"
+    assert restored[0].instance_name == "CPU_0"
     assert restored[0].pos() == QPointF(10, 20)
     assert window.is_dirty is False
 

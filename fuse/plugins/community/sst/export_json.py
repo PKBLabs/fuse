@@ -18,6 +18,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from fuse.core.model.port_templates import expand_parametric_port_template
 from fuse.core.model.subcomponents import is_visual_subcomponent_connection_parameter
 from fuse.plugins.community.sst.policy.models import ParamKind
 from fuse.plugins.community.sst.policy.runtime import (
@@ -270,7 +271,111 @@ def _drop_sst_runtime_incompatible_default_params(
     ):
         result.pop("memory_file", None)
 
+    if component_type == "firefly.hades":
+        node_perf = str(result.get("nodePerf", "")).strip()
+        if node_perf in {"", "0", "1"}:
+            # sst-info/policy catalogs can present a numeric/sentinel default
+            # for nodePerf, but at runtime the value is a module name. Omitting
+            # the parameter lets Hades use its compiled default,
+            # firefly.SimpleNodePerf.
+            result.pop("nodePerf", None)
+
     return result
+
+
+_FIREFLY_CTRLMSG_PROCESS_RUNTIME_DEFAULTS: dict[str, Any] = {
+    # firefly.ctrlMsg is the user-visible ProcessQueuesState subcomponent
+    # nested under firefly.CtrlMsgProto's "process" slot. It constructs an
+    # anonymous firefly.msgTiming helper using its own Params object. In
+    # SST-Elements 16, msgTiming unconditionally loads several LatencyMod
+    # modules when their selector params are missing/empty. The raw sst-info
+    # catalog exposes empty string defaults, but those are not safe runtime
+    # defaults. Emit explicit zero-latency modules unless the user selected
+    # something else.
+    "shortMsgLength": "4096",
+    "sendAckDelay_ns": "0",
+    "txSetupMod": "firefly.LatencyMod",
+    "rxSetupMod": "firefly.LatencyMod",
+    "txFiniMod": "firefly.LatencyMod",
+    "rxFiniMod": "firefly.LatencyMod",
+    "txSetupModParams.base": "0ns",
+    "rxSetupModParams.base": "0ns",
+    "txFiniModParams.base": "0ns",
+    "rxFiniModParams.base": "0ns",
+}
+
+
+_FIREFLY_CTRLMSG_PROTO_RUNTIME_DEFAULTS: dict[str, Any] = {
+    # firefly.CtrlMsgProto constructs an anonymous firefly.ctrlMsgMemory helper
+    # and passes the CtrlMsgProto Params object to it. That helper
+    # unconditionally loads tx/rx memcpy LatencyMod modules, so the defaults
+    # belong on the proto node rather than the process child.
+    "txMemcpyMod": "firefly.LatencyMod",
+    "rxMemcpyMod": "firefly.LatencyMod",
+    "txMemcpyModParams.base": "0ns",
+    "rxMemcpyModParams.base": "0ns",
+}
+
+
+_FIREFLY_HADES_RUNTIME_DEFAULTS: dict[str, Any] = {
+    # Hades asserts that netMapName is non-empty whenever netMapSize > 0.
+    # Ember's Python endpoint generator uses a shared "Ember<jobId>" region
+    # name; FUSE's visual graph usually has one job and no direct parent access
+    # at this point, so use the same safe default for job 0 unless overridden.
+    "netMapName": "Ember0",
+}
+
+
+_EMBER_ENGINE_RUNTIME_DEFAULTS: dict[str, Any] = {
+    # EmberEngine builds its API map from api.N.module params and asserts that
+    # at least one API exists. Normal Firefly/Ember MPI jobs use hadesMP.
+    "api.0.module": "firefly.hadesMP",
+}
+
+
+SST_ATTACHMENT_SELECTOR_PARAMS: dict[tuple[str, str], str] = {
+    # User-visible attached children should be the source of truth for selector
+    # params. The exporter derives these params from the graph so stale saved
+    # text fields cannot disagree with what is connected.
+    ("merlin.hr_router", "topology"): "topology",
+    ("merlin.hr_router", "XbarArb"): "xbar_arb",
+    ("firefly.hades", "virtNic"): "nicModule",
+}
+
+
+SST_SELECTOR_ONLY_ATTACHMENT_SLOTS: set[tuple[str, str]] = {
+    # hr_router does not load XbarArb as a user subcomponent. It reads xbar_arb
+    # and then constructs the XbarArb slot anonymously itself, so a visual
+    # attachment should export only the selector param.
+    ("merlin.hr_router", "XbarArb"),
+}
+
+
+def _runtime_required_default_params_for_node(node) -> dict[str, Any]:
+    """Return safe non-catalog defaults required by SST runtime loaders.
+
+    Some SST Elements runtime helper subcomponents read parameters that are not
+    represented as normal catalog defaults for the user-visible component. Those
+    values belong in plugin policy rather than raw generated catalogs.
+    """
+
+    component_type = sst_component_type_for_node(node)
+
+    if component_type == "firefly.CtrlMsgProto":
+        return dict(_FIREFLY_CTRLMSG_PROTO_RUNTIME_DEFAULTS)
+
+    if component_type == "firefly.ctrlMsg":
+        return dict(_FIREFLY_CTRLMSG_PROCESS_RUNTIME_DEFAULTS)
+
+    if component_type == "ember.EmberEngine":
+        return dict(_EMBER_ENGINE_RUNTIME_DEFAULTS)
+
+    if component_type == "firefly.hades":
+        net_map_size = str(getattr(node, "parameters", {}).get("netMapSize", "")).strip()
+        if net_map_size and not _looks_like_zero(net_map_size):
+            return dict(_FIREFLY_HADES_RUNTIME_DEFAULTS)
+
+    return {}
 
 
 def _parse_sst_integer_literal(value: Any) -> int | None:
@@ -488,6 +593,7 @@ def exportable_params_for_node(
             suppress_prefixed_slots=suppress_prefixed_slots,
         )
     )
+    merged.update(_runtime_required_default_params_for_node(node))
     merged.update(
         raw_export_params_for_node(
             node,
@@ -496,6 +602,27 @@ def exportable_params_for_node(
     )
 
     return non_empty_params(merged)
+
+
+def _normalize_ember_engine_motif_param_names(params: dict[str, Any]) -> dict[str, Any]:
+    """Convert legacy motifN type params into SST's motifN.name form."""
+
+    result = dict(params)
+    for key, value in list(params.items()):
+        name = str(key or "").strip()
+        if not name.startswith("motif"):
+            continue
+
+        suffix = name[len("motif") :]
+        if not suffix.isdigit():
+            continue
+
+        target_key = f"motif{suffix}.name"
+        if target_key not in result and value not in (None, ""):
+            result[target_key] = value
+        result.pop(name, None)
+
+    return result
 
 
 def normalize_params_for_node(
@@ -513,6 +640,8 @@ def normalize_params_for_node(
 
     component_type = sst_component_type_for_node(node)
     params = _normalize_sst_runtime_symbolic_values(params)
+    if component_type == "ember.EmberEngine":
+        params = _normalize_ember_engine_motif_param_names(params)
     normalized = normalize_params(
         component_type,
         params,
@@ -625,6 +754,36 @@ def _attached_subcomponent_for_slot(
     return None
 
 
+def _attached_child_for_slot_including_selector_only(
+    node,
+    slot_name: str,
+    attachments_by_parent_id: dict[int, list],
+    nodes_by_id: dict[int, object],
+):
+    """Return the attached child for selector derivation, including param-only slots."""
+
+    for attachment in attachments_by_parent_id.get(getattr(node, "node_id", None), []) or []:
+        if str(getattr(attachment, "slot_name", "") or "").strip() != slot_name:
+            continue
+
+        child = nodes_by_id.get(getattr(attachment, "child_node_id", None))
+        if child is not None:
+            return child
+
+    return None
+
+
+def _selector_param_attachment_key(parent, attachment) -> tuple[str, str]:
+    return (
+        sst_component_type_for_node(parent),
+        str(getattr(attachment, "slot_name", "") or "").strip(),
+    )
+
+
+def _is_selector_only_attachment(parent, attachment) -> bool:
+    return _selector_param_attachment_key(parent, attachment) in SST_SELECTOR_ONLY_ATTACHMENT_SLOTS
+
+
 def _derived_export_params_for_node(
     node,
     attachments_by_parent_id: dict[int, list],
@@ -636,17 +795,22 @@ def _derived_export_params_for_node(
 
     derived: dict[str, Any] = {}
 
-    if component_type == "merlin.hr_router":
-        topology = _attached_subcomponent_for_slot(
+    for (parent_type, slot_name), selector_param in SST_ATTACHMENT_SELECTOR_PARAMS.items():
+        if parent_type != component_type:
+            continue
+
+        child = _attached_child_for_slot_including_selector_only(
             node,
-            "topology",
+            slot_name,
             attachments_by_parent_id,
             nodes_by_id,
         )
-        if topology is not None:
-            topology_type = sst_component_type_for_node(topology)
-            if topology_type:
-                derived["topology"] = topology_type
+        if child is None:
+            continue
+
+        child_type = sst_component_type_for_node(child)
+        if child_type:
+            derived[selector_param] = child_type
 
     if component_type == "ember.EmberEngine":
         derived.update(
@@ -818,6 +982,16 @@ def build_sst_subcomponent_tree(
     if params:
         subcomponent["params"] = normalize_params_for_node(node, params)
 
+    _merge_derived_params_into_component(
+        subcomponent,
+        node,
+        _derived_export_params_for_node(
+            node,
+            attachments_by_parent_id,
+            nodes_by_id,
+        ),
+    )
+
     return _attach_child_subcomponents(
         subcomponent,
         node,
@@ -979,6 +1153,32 @@ def _logical_port_mapping_for_endpoint(node, port: str):
     return logical_ports_for_node(node).get(str(port or "").strip())
 
 
+def _resolved_endpoint_port_name(node, port: str) -> str:
+    """Resolve a saved SST printf-style port template to a concrete port name."""
+
+    port_name = str(port or "").strip()
+    if "%(" not in port_name:
+        return port_name
+
+    expanded = expand_parametric_port_template(
+        port_name,
+        parameters=getattr(node, "parameters", {}) if node is not None else {},
+        variable_port_counts=getattr(node, "variable_port_counts", {}) if node is not None else {},
+    )
+    concrete = [name for name in expanded if name and name != port_name]
+
+    if len(concrete) == 1:
+        return concrete[0]
+
+    # Older saved models may contain a template endpoint before the UI has had
+    # a chance to materialize it. Export the first concrete port rather than
+    # emitting an SST-JSON link to the literal template, which SST will reject.
+    if concrete:
+        return concrete[0]
+
+    return port_name
+
+
 def _sst_link_endpoint(
     *,
     node_id: int | None,
@@ -1003,7 +1203,8 @@ def _sst_link_endpoint(
     )
 
     node = nodes_by_id.get(node_id) if nodes_by_id is not None and node_id is not None else None
-    mapping = _logical_port_mapping_for_endpoint(node, str(port or ""))
+    endpoint_port = _resolved_endpoint_port_name(node, str(port or ""))
+    mapping = _logical_port_mapping_for_endpoint(node, endpoint_port)
     if mapping is not None:
         return (
             _runtime_path_component_reference(
@@ -1015,7 +1216,7 @@ def _sst_link_endpoint(
 
     return (
         base_component,
-        str(port or ""),
+        endpoint_port,
     )
 
 
@@ -1166,7 +1367,10 @@ def _is_visual_parameter_attachment(
 ) -> bool:
     """Return true when an attachment is a plugin-owned visual parameter edge."""
 
-    return _is_ember_motif_attachment(parent, attachment, nodes_by_id)
+    if _is_ember_motif_attachment(parent, attachment, nodes_by_id):
+        return True
+
+    return _is_selector_only_attachment(parent, attachment)
 
 
 def _exported_attachment_slot_names(
@@ -1252,9 +1456,11 @@ def _ember_motif_params_for_node(
 
         motif_type = sst_component_type_for_node(child)
         if motif_type:
-            derived[f"motif{index}"] = motif_type
+            derived[f"motif{index}.name"] = motif_type
 
         for param_name, param_value in _non_empty_motif_user_params(child).items():
+            if param_name == "name":
+                continue
             derived[f"motif{index}.{param_name}"] = param_value
 
     return derived

@@ -40,6 +40,16 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _resolve_restored_link_port_name(node: ComponentNodeItem, port_name: str) -> str:
+    """Resolve saved link endpoints against current component port metadata."""
+
+    resolver = getattr(node, "resolve_restored_port_name", None)
+    if callable(resolver):
+        return str(resolver(port_name))
+
+    return str(port_name or "")
+
+
 def component_node_to_save_dict(node: ComponentNodeItem) -> dict:
     """Convert a component graphics item into the project-file node schema."""
     position = node.pos()
@@ -63,6 +73,7 @@ def component_node_to_save_dict(node: ComponentNodeItem) -> dict:
         "isComposite": int(getattr(node.component, "is_composite", 0) or 0),
         "compositeId": getattr(node.component, "composite_id", "") or "",
         "instanceName": node.instance_name,
+        "nameTemplate": getattr(node, "instance_name_template", ""),
         "parameters": node.parameters,
         "variablePortCounts": getattr(node, "variable_port_counts", {}),
         "position": {
@@ -322,6 +333,7 @@ def load_project_into_scene(project: dict, scene: ModelScene) -> None:
             parameters=component_data.get("parameters", {}),
             instance_name=component_data.get("instanceName"),
             variable_port_counts=component_data.get("variablePortCounts", {}),
+            instance_name_template=component_data.get("nameTemplate", ""),
         )
 
         composite_instance = component_data.get("compositeInstance", {}) or {}
@@ -351,8 +363,14 @@ def load_project_into_scene(project: dict, scene: ModelScene) -> None:
 
         source_node_id = int(source["nodeId"])
         target_node_id = int(target["nodeId"])
-        source_port_name = source["port"]
-        target_port_name = target["port"]
+        source_port_name = _resolve_restored_link_port_name(
+            nodes_by_id[source_node_id],
+            source["port"],
+        )
+        target_port_name = _resolve_restored_link_port_name(
+            nodes_by_id[target_node_id],
+            target["port"],
+        )
 
         source_port = scene.find_port(source_node_id, source_port_name)
         target_port = scene.find_port(target_node_id, target_port_name)

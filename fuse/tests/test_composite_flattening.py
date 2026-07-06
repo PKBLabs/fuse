@@ -350,3 +350,103 @@ def test_flatten_scene_rejects_link_to_hidden_composite_port(monkeypatch):
         assert "cpu_to_hidden_pair_port" in str(exc)
     else:
         raise AssertionError("link to hidden composite port should fail flattening")
+
+def test_flatten_scene_resolves_parametric_internal_composite_link_port(monkeypatch, tmp_path):
+    from fuse.core.model.composite import CompositeComponentDefinition
+    from fuse.core.model.composite_flattening import flatten_scene_for_export
+    from fuse.core.persistence.composite_components import save_composite_component_definition
+
+    monkeypatch.setenv("FUSE_DB_PATH", str(tmp_path / "parametric-composite.db"))
+
+    def load_metadata(plugin_id, component_id, target_id=None):
+        if component_id == "loopback-type":
+            return [
+                {
+                    "name": "nic%(nicsPerNode)dcore%(num_vNics/nicsPerNode)d",
+                    "base_name": "nic%(nicsPerNode)dcore%(num_vNics/nicsPerNode)d",
+                    "iface": "",
+                    "is_variable": False,
+                    "default_count": 1,
+                }
+            ]
+        if component_id == "engine-type":
+            return [
+                {"name": "loop", "iface": "", "is_variable": False},
+            ]
+        return []
+
+    monkeypatch.setattr(
+        "fuse.core.persistence.db_access.load_port_metadata_for_component",
+        load_metadata,
+    )
+
+    definition = CompositeComponentDefinition.make(
+        composite_id="parametric-loopback-tile",
+        name="Parametric Loopback Tile",
+        mini_model={
+            "schemaVersion": "0.1.0",
+            "kind": "fuse.composite-mini-model",
+            "components": [
+                {
+                    "id": 5,
+                    "element": "firefly",
+                    "name": "loopBack",
+                    "pluginId": "sst",
+                    "targetId": "sst-test",
+                    "componentId": "loopback-type",
+                    "instanceName": "loopBack_0",
+                    "parameters": {},
+                    "variablePortCounts": {},
+                    "position": {"x": 0.0, "y": 0.0},
+                },
+                {
+                    "id": 3,
+                    "element": "ember",
+                    "name": "EmberEngine",
+                    "pluginId": "sst",
+                    "targetId": "sst-test",
+                    "componentId": "engine-type",
+                    "instanceName": "EmberEngine_0",
+                    "parameters": {},
+                    "variablePortCounts": {},
+                    "position": {"x": 200.0, "y": 0.0},
+                },
+            ],
+            "links": [
+                {
+                    "id": 1,
+                    "name": "loop_to_engine",
+                    "sourceLatency": "1ns",
+                    "targetLatency": "1ns",
+                    "pluginId": "sst",
+                    "source": {
+                        "nodeId": 5,
+                        "componentName": "loopBack_0",
+                        "port": "nic0core0",
+                    },
+                    "target": {
+                        "nodeId": 3,
+                        "componentName": "EmberEngine_0",
+                        "port": "loop",
+                    },
+                }
+            ],
+            "subcompAttachments": [],
+        },
+        port_mappings=[],
+    )
+    definition = save_composite_component_definition(definition)
+    composite = FakeNode(
+        composite_component(definition.composite_id, definition.name),
+        20,
+        "Tile_0",
+        ports=[],
+    )
+
+    flattened = flatten_scene_for_export(FakeScene([composite], []))
+
+    link = next(link for link in flattened.links if link.name == "loop_to_engine")
+    assert link.source_component_name == "loopBack_0_mc1"
+    assert link.source_port == "nic0core0"
+    assert link.target_component_name == "EmberEngine_0_mc1"
+    assert link.target_port == "loop"

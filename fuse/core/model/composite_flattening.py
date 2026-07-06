@@ -27,6 +27,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from fuse.core.model.models import ComponentDefinition, ModelLink, ModelSubcompAttachment
+from fuse.core.model.port_templates import expand_parametric_port_template
 from fuse.core.persistence.composite_components import get_composite_component_definition
 from fuse.core.model.composite import CompositePortMapping
 from fuse.core.model.composite_mini_model import normalize_mini_model_and_port_mappings
@@ -91,14 +92,22 @@ class FlattenedComponentNode:
         names: list[str] = []
 
         for template in metadata:
+            name = str(template.get("name", "") or "")
+            base_name = str(template.get("base_name", "") or name)
+            parametric_names = expand_parametric_port_template(
+                name,
+                parameters=self.parameters,
+                variable_port_counts=self.variable_port_counts,
+            )
+            if name and "%(" in name and parametric_names and parametric_names != [name]:
+                names.extend(parametric_names)
+                continue
+
             if bool(template.get("is_variable")):
-                base_name = template.get("base_name", "") or template.get("name", "")
                 count = int(self.variable_port_counts.get(base_name, template.get("default_count", 1)) or 0)
                 names.extend(f"{base_name}{index}" for index in range(max(0, count)))
-            else:
-                name = template.get("name", "")
-                if name:
-                    names.append(str(name))
+            elif name:
+                names.append(name)
 
         return names
 
@@ -204,8 +213,18 @@ def component_definition_from_save_dict(data: dict[str, Any]) -> ComponentDefini
     )
 
 
-def flattened_ports_for_node(component: ComponentDefinition, variable_port_counts: dict[str, int]) -> list[FlattenedPort]:
-    """Build flattened port metadata from a component definition."""
+def flattened_ports_for_node(
+    component: ComponentDefinition,
+    variable_port_counts: dict[str, int],
+    parameters: dict[str, Any] | None = None,
+) -> list[FlattenedPort]:
+    """Build flattened port metadata from a component definition.
+
+    SST catalogs can expose printf-style port templates such as
+    ``nic%(nicsPerNode)dcore%(num_vNics/nicsPerNode)d``. Those are not valid
+    concrete link endpoint names in flattened/exported models, so expand them
+    before applying the simpler FUSE ``base + index`` variable-port behavior.
+    """
     if int(getattr(component, "is_composite", 0) or 0):
         return []
 
@@ -222,15 +241,26 @@ def flattened_ports_for_node(component: ComponentDefinition, variable_port_count
 
     ports: list[FlattenedPort] = []
     for template in templates:
+        name = str(template.get("name", "") or "")
+        base_name = str(template.get("base_name", "") or name)
+        metadata = dict(template)
+
+        parametric_names = expand_parametric_port_template(
+            name,
+            parameters=parameters or {},
+            variable_port_counts=variable_port_counts,
+        )
+        if name and "%(" in name and parametric_names and parametric_names != [name]:
+            for port_name in parametric_names:
+                ports.append(FlattenedPort(port_name, metadata))
+            continue
+
         if bool(template.get("is_variable")):
-            base_name = template.get("base_name", "") or template.get("name", "")
             count = int(variable_port_counts.get(base_name, template.get("default_count", 1)) or 0)
             for index in range(max(0, count)):
-                ports.append(FlattenedPort(f"{base_name}{index}", dict(template)))
-        else:
-            name = str(template.get("name", "") or "")
-            if name:
-                ports.append(FlattenedPort(name, dict(template)))
+                ports.append(FlattenedPort(f"{base_name}{index}", metadata))
+        elif name:
+            ports.append(FlattenedPort(name, metadata))
     return ports
 
 
@@ -403,6 +433,7 @@ def expand_composite_instance(
             child_node.ports = flattened_ports_for_node(
                 component_definition,
                 child_node.variable_port_counts,
+                parameters=child_node.parameters,
             )
             expansion.nodes.append(child_node)
             original_node_to_expanded_node[original_node_id] = child_node

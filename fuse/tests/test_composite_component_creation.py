@@ -122,7 +122,7 @@ def test_replace_selection_with_composite_instance_removes_fragment_and_keeps_co
     assert scene.links == []
     assert composite_node.component.is_composite == 1
     assert composite_node.component.composite_id == definition.composite_id
-    assert composite_node.instance_name == "Pair_1"
+    assert composite_node.instance_name == "Pair_0"
     assert composite_node.pos() == QPointF(50.0, 80.0)
     assert [mapping.exposed for mapping in composite_node.composite_port_mappings] == [False, False]
     assert [port.name for port in composite_node.ports] == []

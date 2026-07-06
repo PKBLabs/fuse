@@ -95,11 +95,11 @@ def test_visual_ember_motif_attachments_export_as_engine_params_not_subcomponent
     rank = data["components"][0]
     assert "subcomponents" not in rank
     assert rank["params"]["motif_count"] == "2"
-    assert rank["params"]["motif0"] == "ember.AllreduceMotif"
+    assert rank["params"]["motif0.name"] == "ember.AllreduceMotif"
     assert rank["params"]["motif0.arg.count"] == "8"
     assert rank["params"]["motif0.arg.iterations"] == "10"
     assert "motif0._jobId" not in rank["params"]
-    assert rank["params"]["motif1"] == "ember.FiniMotif"
+    assert rank["params"]["motif1.name"] == "ember.FiniMotif"
 
 
 def test_visual_ember_motif_children_do_not_trigger_unattached_subcomponent_validation():
@@ -126,7 +126,7 @@ def test_visual_ember_motif_children_do_not_trigger_unattached_subcomponent_vali
 
 
 def test_sst_plugin_hook_syncs_ember_engine_motif_params_after_attachment_changes():
-    engine = _node(1, "rank0", "ember", "EmberEngine", {"jobId": "0", "motif0": "old"})
+    engine = _node(1, "rank0", "ember", "EmberEngine", {"jobId": "0", "motif0.name": "old"})
     allreduce = _node(
         2,
         "rank0_allreduce",
@@ -153,14 +153,14 @@ def test_sst_plugin_hook_syncs_ember_engine_motif_params_after_attachment_change
 
     assert engine.parameters["jobId"] == "0"
     assert engine.parameters["motif_count"] == "2"
-    assert engine.parameters["motif0"] == "ember.AllreduceMotif"
+    assert engine.parameters["motif0.name"] == "ember.AllreduceMotif"
     assert engine.parameters["motif0.arg.count"] == "8"
-    assert engine.parameters["motif1"] == "ember.FiniMotif"
+    assert engine.parameters["motif1.name"] == "ember.FiniMotif"
 
     scene.subcomp_attachments.remove(first)
     plugin.on_subcomponent_attachment_deleted(scene, first)
 
     assert engine.parameters["motif_count"] == "1"
-    assert engine.parameters["motif0"] == "ember.FiniMotif"
-    assert "motif1" not in engine.parameters
+    assert engine.parameters["motif0.name"] == "ember.FiniMotif"
+    assert "motif1.name" not in engine.parameters
     assert "motif0.arg.count" not in engine.parameters

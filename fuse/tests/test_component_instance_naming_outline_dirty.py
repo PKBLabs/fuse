@@ -62,9 +62,9 @@ def test_scene_generates_unique_default_component_names(monkeypatch):
     third = scene.create_component_node(_component("CPU"), QPointF(50, 60))
 
     assert [node.instance_name for node in (first, second, third)] == [
+        "CPU_0",
         "CPU_1",
         "CPU_2",
-        "CPU_3",
     ]
 
 
@@ -126,3 +126,49 @@ def test_main_window_dirty_state_tracks_parameter_edits(qtbot, monkeypatch):
     # so the unsaved-changes closeEvent dialog is not opened in offscreen mode.
     window.set_dirty(False)
     window.close()
+
+def test_explicit_name_template_survives_rendered_noop_rename(monkeypatch):
+    monkeypatch.setattr(
+        "fuse.core.ui.graphics_items.load_port_names_for_component",
+        lambda *args, **kwargs: ["in", "out"],
+    )
+
+    scene = ModelScene()
+    node = scene.create_component_node(_component("ariel"), QPointF(10, 20))
+
+    assert scene.rename_component_node(node, "ariel%d") == "ariel0"
+    assert node.instance_name == "ariel0"
+    assert node.instance_name_template == "ariel%d"
+
+    # A property-panel focus/refresh pass may commit the displayed rendered name
+    # again. That should not erase the user-authored template.
+    assert scene.rename_component_node(node, "ariel0") == "ariel0"
+    assert node.instance_name == "ariel0"
+    assert node.instance_name_template == "ariel%d"
+
+
+def test_copy_after_explicit_name_template_uses_template(monkeypatch):
+    monkeypatch.setattr(
+        "fuse.core.ui.graphics_items.load_port_names_for_component",
+        lambda *args, **kwargs: ["in", "out"],
+    )
+
+    scene = ModelScene()
+    node = scene.create_component_node(_component("ariel"), QPointF(10, 20))
+    scene.rename_component_node(node, "ariel%d")
+
+    node.setSelected(True)
+    assert scene.copy_selection_to_clipboard() is True
+
+    first_copy = scene.paste_clipboard(QPointF(200, 20))[0]
+    first_copy.setSelected(True)
+    assert scene.copy_selection_to_clipboard() is True
+    second_copy = scene.paste_clipboard(QPointF(400, 20))[0]
+
+    assert [node.instance_name, first_copy.instance_name, second_copy.instance_name] == [
+        "ariel0",
+        "ariel1",
+        "ariel2",
+    ]
+    assert first_copy.instance_name_template == "ariel%d"
+    assert second_copy.instance_name_template == "ariel%d"

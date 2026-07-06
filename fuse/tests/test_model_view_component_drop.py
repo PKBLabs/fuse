@@ -67,7 +67,7 @@ def test_model_view_drop_creates_component_at_model_coordinates(qtbot, monkeypat
     assert event.accepted is True
     assert len(nodes) == 1
     assert nodes[0].component.name == "CPU"
-    assert nodes[0].instance_name == "CPU_1"
+    assert nodes[0].instance_name == "CPU_0"
     assert nodes[0].pos() == expected_scene_position
 
 

@@ -64,6 +64,26 @@ INTERNAL_EMBER_MOTIF_PARAMS = {
 }
 
 
+# SST uses a few parameters as type selectors for attached SubComponents.
+# These are not normal graph links; FUSE can keep them synchronized when the
+# user attaches the corresponding child visually.
+SST_SUBCOMP_SLOT_PARAMETER_OVERRIDES = {
+    ("merlin.hr_router", "topology"): "topology",
+    ("merlin.hr_router", "XbarArb"): "xbar_arb",
+    ("firefly.hades", "virtNic"): "nicModule",
+}
+
+SST_PORT_COUNT_PARAMETER_CANDIDATES = (
+    "num_ports",
+    "numPorts",
+    "numports",
+    "port_count",
+    "portCount",
+    "num_links",
+    "numLinks",
+)
+
+
 def sst_component_type_for_component(component) -> str:
     """Return the canonical SST element.component type for a component definition."""
 
@@ -91,6 +111,54 @@ def is_ember_motif_node(node) -> bool:
         and bool(int(getattr(component, "is_subcomp", 0) or 0))
         and str(getattr(component, "iface", "") or "").strip() == EMBER_MOTIF_INTERFACE
     )
+
+
+def nodes_by_id_for_scene(scene) -> dict[int, object]:
+    return {
+        int(getattr(node, "node_id", 0) or 0): node
+        for node in scene.component_items()
+    }
+
+
+def property_definitions_by_name(plugin: "SSTPlugin", node) -> dict[str, PropertyDefinition]:
+    """Return SST property definitions for a node, keyed by parameter name."""
+    component = getattr(node, "component", None)
+    if component is None:
+        return {}
+
+    try:
+        details = plugin.load_item_details(
+            getattr(component, "component_id", ""),
+            target_id=getattr(component, "target_id", "") or None,
+        )
+    except Exception:
+        return {}
+
+    return {
+        str(getattr(prop, "name", "") or ""): prop
+        for prop in getattr(details, "properties", []) or []
+        if str(getattr(prop, "name", "") or "")
+    }
+
+
+def case_insensitive_property_name(
+    property_names: set[str],
+    candidate: str,
+) -> str:
+    if candidate in property_names:
+        return candidate
+
+    lowered = candidate.lower()
+    for name in property_names:
+        if name.lower() == lowered:
+            return name
+
+    return ""
+
+
+def sst_component_type_for_attachment_child(scene, attachment) -> str:
+    child = nodes_by_id_for_scene(scene).get(int(getattr(attachment, "child_node_id", 0) or 0))
+    return sst_component_type_for_node(child) if child is not None else ""
 
 
 def is_ember_motif_attachment(scene, attachment) -> bool:
@@ -164,9 +232,11 @@ def derive_ember_motif_params_for_engine(scene, engine_node) -> dict:
 
         motif_type = sst_component_type_for_node(child)
         if motif_type:
-            derived[f"motif{index}"] = motif_type
+            derived[f"motif{index}.name"] = motif_type
 
         for param_name, param_value in non_empty_motif_user_params(child).items():
+            if param_name == "name":
+                continue
             derived[f"motif{index}.{param_name}"] = param_value
 
     return derived
@@ -519,7 +589,7 @@ class SSTPlugin:
                     role="slot",
                     description=(
                         "[Visual attachment] Attach one or more EmberGenerator motifs here. "
-                        "The SST exporter converts these attachments into EmberEngine motif_count/motifN parameters."
+                        "The SST exporter converts these attachments into EmberEngine motif_count/motifN.name parameters."
                     ),
                     required_interface=EMBER_MOTIF_INTERFACE,
                     interface=EMBER_MOTIF_INTERFACE,
@@ -576,6 +646,156 @@ class SSTPlugin:
             properties=properties,
         )
 
+    def port_count_parameter_for_node(
+        self,
+        node,
+        base_name: str,
+        port_template: dict | None = None,
+    ) -> str:
+        """Return the SST parameter controlled by a variable port count."""
+        template = dict(port_template or {})
+        explicit = str(template.get("count_parameter", "") or "").strip()
+        properties = property_definitions_by_name(self, node)
+        property_names = set(properties)
+
+        if explicit:
+            return case_insensitive_property_name(property_names, explicit) or explicit
+
+        for candidate in SST_PORT_COUNT_PARAMETER_CANDIDATES:
+            name = case_insensitive_property_name(property_names, candidate)
+            if name:
+                return name
+
+        return ""
+
+    def on_variable_port_count_changed(
+        self,
+        scene,
+        node,
+        base_name: str,
+        count: int,
+        port_template: dict | None = None,
+    ) -> None:
+        """Core hook: keep SST variable-port count parameters synchronized."""
+        if getattr(getattr(node, "component", None), "plugin_id", "") != self.plugin_id:
+            return
+
+        parameter_name = self.port_count_parameter_for_node(
+            node,
+            base_name,
+            port_template or {},
+        )
+        if not parameter_name:
+            return
+
+        params = dict(getattr(node, "parameters", {}) or {})
+        params[parameter_name] = str(int(count))
+        node.parameters = params
+
+    def subcomponent_parameter_for_attachment(self, scene, attachment) -> str:
+        """Return the parent parameter that should mirror a child subcomponent type."""
+        if getattr(attachment, "plugin_id", "") not in ("", self.plugin_id):
+            return ""
+        if dict(getattr(attachment, "plugin_metadata", {}) or {}).get("visual_only"):
+            return ""
+
+        nodes_by_id = nodes_by_id_for_scene(scene)
+        parent = nodes_by_id.get(int(getattr(attachment, "parent_node_id", 0) or 0))
+        child = nodes_by_id.get(int(getattr(attachment, "child_node_id", 0) or 0))
+        if parent is None or child is None:
+            return ""
+
+        parent_type = sst_component_type_for_node(parent)
+        slot_name = str(getattr(attachment, "slot_name", "") or "").strip()
+        if not parent_type or not slot_name:
+            return ""
+
+        properties = property_definitions_by_name(self, parent)
+        property_names = set(properties)
+
+        override = SST_SUBCOMP_SLOT_PARAMETER_OVERRIDES.get((parent_type, slot_name), "")
+        if override:
+            return case_insensitive_property_name(property_names, override) or override
+
+        candidates = [
+            f"{slot_name}Module",
+            f"{slot_name}_module",
+            f"{slot_name}Type",
+            f"{slot_name}_type",
+            f"{slot_name}Class",
+            f"{slot_name}_class",
+        ]
+        for candidate in candidates:
+            name = case_insensitive_property_name(property_names, candidate)
+            if name:
+                return name
+
+        exact = case_insensitive_property_name(property_names, slot_name)
+        if exact:
+            prop = properties.get(exact)
+            description = str(getattr(prop, "description", "") or "").lower()
+            default_value = str(getattr(prop, "default_value", "") or "").lower()
+            combined = f"{description} {default_value}"
+            if any(token in combined for token in ("subcomponent", "sub-component", "module", "type")):
+                return exact
+
+        return ""
+
+    def sync_subcomponent_parameter_for_attachment(self, scene, attachment) -> None:
+        """Set parent selector params such as topology or nicModule from attachments."""
+        parameter_name = self.subcomponent_parameter_for_attachment(scene, attachment)
+        if not parameter_name:
+            return
+
+        nodes_by_id = nodes_by_id_for_scene(scene)
+        parent = nodes_by_id.get(int(getattr(attachment, "parent_node_id", 0) or 0))
+        child = nodes_by_id.get(int(getattr(attachment, "child_node_id", 0) or 0))
+        if parent is None or child is None:
+            return
+
+        child_type = sst_component_type_for_node(child)
+        if not child_type:
+            return
+
+        params = dict(getattr(parent, "parameters", {}) or {})
+        params[parameter_name] = child_type
+        parent.parameters = params
+
+    def clear_subcomponent_parameter_for_attachment(self, scene, attachment) -> None:
+        """Clear an auto-synced selector param if the corresponding attachment is removed."""
+        parameter_name = self.subcomponent_parameter_for_attachment(scene, attachment)
+        if not parameter_name:
+            return
+
+        nodes_by_id = nodes_by_id_for_scene(scene)
+        parent = nodes_by_id.get(int(getattr(attachment, "parent_node_id", 0) or 0))
+        if parent is None:
+            return
+
+        slot_name = str(getattr(attachment, "slot_name", "") or "")
+        replacement_type = ""
+        for other in getattr(scene, "subcomp_attachments", []) or []:
+            if other is attachment:
+                continue
+            if int(getattr(other, "parent_node_id", 0) or 0) != int(getattr(attachment, "parent_node_id", 0) or 0):
+                continue
+            if str(getattr(other, "slot_name", "") or "") != slot_name:
+                continue
+            replacement_type = sst_component_type_for_attachment_child(scene, other)
+            if replacement_type:
+                break
+
+        removed_child_type = sst_component_type_for_attachment_child(scene, attachment)
+        params = dict(getattr(parent, "parameters", {}) or {})
+        current_value = str(params.get(parameter_name, "") or "")
+        if replacement_type:
+            params[parameter_name] = replacement_type
+        elif not removed_child_type or current_value == removed_child_type:
+            params.pop(parameter_name, None)
+        else:
+            return
+        parent.parameters = params
+
     def sync_ember_motif_params_for_node(self, scene, engine_node) -> None:
         """Synchronize EmberEngine params from visual motif attachments."""
 
@@ -587,26 +807,26 @@ class SSTPlugin:
         engine_node.parameters = params
 
     def on_subcomponent_attachment_created(self, scene, attachment) -> None:
-        """Core hook: update plugin-owned params after a visual attachment is made."""
+        """Core hook: update plugin-owned params after an attachment is made."""
 
-        if not is_ember_motif_attachment(scene, attachment):
-            return
+        if is_ember_motif_attachment(scene, attachment):
+            for node in scene.component_items():
+                if getattr(node, "node_id", None) == getattr(attachment, "parent_node_id", None):
+                    self.sync_ember_motif_params_for_node(scene, node)
+                    return
 
-        for node in scene.component_items():
-            if getattr(node, "node_id", None) == getattr(attachment, "parent_node_id", None):
-                self.sync_ember_motif_params_for_node(scene, node)
-                return
+        self.sync_subcomponent_parameter_for_attachment(scene, attachment)
 
     def on_subcomponent_attachment_deleted(self, scene, attachment) -> None:
-        """Core hook: update plugin-owned params after a visual attachment is deleted."""
+        """Core hook: update plugin-owned params after an attachment is deleted."""
 
-        if not is_ember_motif_attachment(scene, attachment):
-            return
+        if is_ember_motif_attachment(scene, attachment):
+            for node in scene.component_items():
+                if getattr(node, "node_id", None) == getattr(attachment, "parent_node_id", None):
+                    self.sync_ember_motif_params_for_node(scene, node)
+                    return
 
-        for node in scene.component_items():
-            if getattr(node, "node_id", None) == getattr(attachment, "parent_node_id", None):
-                self.sync_ember_motif_params_for_node(scene, node)
-                return
+        self.clear_subcomponent_parameter_for_attachment(scene, attachment)
 
     def check_link_compatibility(
             self,

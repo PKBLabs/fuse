@@ -251,3 +251,54 @@ def test_new_project_cancel_save_failure_and_discard_paths(qtbot, monkeypatch):
     assert window.is_dirty is False
 
     window.close()
+
+
+
+def test_save_model_as_writes_existing_project_toolchain_settings(qtbot, monkeypatch, tmp_path):
+    from fuse.core.model.project_settings import PluginProjectSettings, ProjectSettings, ToolchainSettings
+
+    saved = []
+    chosen_path = tmp_path / "myproj_2.fse"
+
+    window = _make_window(qtbot, monkeypatch)
+    window.set_current_project_path(tmp_path / "myproj_1.fse")
+    window.project_settings = ProjectSettings(
+        project_name="myproj_1",
+        active_plugin_id="sst",
+        plugins={
+            "sst": PluginProjectSettings(
+                plugin_id="sst",
+                enabled=True,
+                target_id="16",
+                target_label="SST 16",
+                framework_version="16.0.0",
+                toolchain=ToolchainSettings(
+                    tool_paths={
+                        "sst": "/opt/sst/bin/sst",
+                        "sstInfo": "/opt/sst/bin/sst-info",
+                    }
+                ),
+            )
+        },
+    )
+    window.scene.create_component_node(_component("CPU"), QPointF(10, 20))
+
+    monkeypatch.setattr(window, "validate_model_before_save", lambda: True)
+    monkeypatch.setattr("fuse.app.app.QFileDialog.getSaveFileName", lambda *args, **kwargs: (str(chosen_path), ""))
+
+    def capture_save(project, path):
+        saved.append((project, Path(path)))
+
+    monkeypatch.setattr("fuse.app.app.save_project_file", capture_save)
+
+    assert window.save_model_as() is True
+
+    assert saved
+    project, path = saved[0]
+    assert path == chosen_path
+    sst = project["projectSettings"]["plugins"]["sst"]
+    assert sst["toolchain"]["toolPaths"]["sst"] == "/opt/sst/bin/sst"
+    assert sst["toolchain"]["toolPaths"]["sstInfo"] == "/opt/sst/bin/sst-info"
+    assert project["projectSettings"]["projectName"] == "myproj_2"
+
+    window.close()

@@ -150,3 +150,45 @@ def test_project_settings_component_catalog_preferences_round_trip():
     assert restored.preferred_component_grouping_mode == "Function"
     assert restored.auto_expand_all_component_tree is True
     assert restored.component_catalog_expanded is True
+
+
+
+def test_project_settings_merges_legacy_top_level_plugin_settings_with_project_settings():
+    restored = ProjectSettings.from_project_dict(
+        {
+            "project": {"name": "Copied"},
+            "projectSettings": {
+                "projectName": "Copied",
+                "activePluginId": "sst",
+                "plugins": {
+                    "sst": {
+                        "enabled": True,
+                        "targetId": "16",
+                        "targetLabel": "SST 16",
+                    }
+                },
+            },
+            "pluginSettings": {
+                "sst": {
+                    "enabled": True,
+                    "targetId": "16",
+                    "targetLabel": "SST 16",
+                    "frameworkVersion": "16.0.0",
+                    "toolchain": {
+                        "backend": "local",
+                        "toolPaths": {
+                            "sst": "/opt/sst/bin/sst",
+                            "sstInfo": "/opt/sst/bin/sst-info",
+                        },
+                    },
+                }
+            },
+            "activeTarget": {"pluginId": "sst", "targetId": "16"},
+        }
+    )
+
+    active = restored.active_plugin_settings()
+    assert active is not None
+    assert active.toolchain.tool_paths["sst"] == "/opt/sst/bin/sst"
+    assert active.toolchain.tool_paths["sstInfo"] == "/opt/sst/bin/sst-info"
+    assert active.framework_version == "16.0.0"

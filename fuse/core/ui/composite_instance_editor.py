@@ -106,10 +106,15 @@ def composite_instance_port_mappings(node) -> list[CompositePortMapping]:
 
 
 def port_mapping_matches_port(mapping: CompositePortMapping, port) -> bool:
-    """Return whether a mapping refers to the given internal node/port pair."""
+    """Return whether a mapping refers to the given internal node/port pair.
+
+    The internal node id is authoritative. Older copied composite instances may
+    carry stale ``internal_component_name`` text until their mini-model is
+    normalized; matching by id and port keeps exposure state stable through the
+    first edit/open cycle and lets normalization repair the stored name.
+    """
     return (
         int(mapping.internal_node_id) == int(port.node.node_id)
-        and str(mapping.internal_component_name) == str(port.node.instance_name)
         and str(mapping.internal_port_name) == str(port.name)
     )
 
@@ -122,6 +127,7 @@ def set_exposed_state_for_port_mapping(
     """Set the exposed/hidden state for one internal port mapping."""
     for mapping in mappings:
         if port_mapping_matches_port(mapping, port):
+            mapping.internal_component_name = str(port.node.instance_name)
             mapping.exposed = bool(exposed)
             return True
     return False
@@ -203,6 +209,13 @@ def preserve_exposed_state(
         ): bool(getattr(mapping, "exposed", True))
         for mapping in existing_mappings
     }
+    existing_by_node_and_port = {
+        (
+            int(mapping.internal_node_id),
+            str(mapping.internal_port_name),
+        ): bool(getattr(mapping, "exposed", True))
+        for mapping in existing_mappings
+    }
     existing_by_name = {
         str(mapping.external_port_name): bool(getattr(mapping, "exposed", True))
         for mapping in existing_mappings
@@ -214,8 +227,14 @@ def preserve_exposed_state(
             str(mapping.internal_component_name),
             str(mapping.internal_port_name),
         )
+        node_port_key = (
+            int(mapping.internal_node_id),
+            str(mapping.internal_port_name),
+        )
         if key in existing_by_internal_port:
             mapping.exposed = existing_by_internal_port[key]
+        elif node_port_key in existing_by_node_and_port:
+            mapping.exposed = existing_by_node_and_port[node_port_key]
         elif str(mapping.external_port_name) in existing_by_name:
             mapping.exposed = existing_by_name[str(mapping.external_port_name)]
     return new_mappings
@@ -297,6 +316,16 @@ class CompositeInstanceEditorWidget(QWidget):
         mini_model = composite_instance_mini_model(self.node)
         if not mini_model:
             return
+
+        # Materialize lazy template-backed instances on first open so subsequent
+        # editor scene changes preserve the same port-mapping source of truth
+        # instead of falling back to the template and losing exposed-state flags.
+        apply_composite_instance_edit(
+            self.node,
+            mini_model,
+            composite_instance_port_mappings(self.node),
+        )
+        mini_model = getattr(self.node, "composite_instance_model", {}) or {}
 
         self.loading_model = True
         try:

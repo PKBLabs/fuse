@@ -490,7 +490,16 @@ class PropertiesPanel(QWidget):
             return
 
         if key == "component.name" and self.current_node is not None:
-            self.current_node.set_instance_name(new_value)
+            scene = self.current_node.scene()
+            if scene is not None and hasattr(scene, "rename_component_node"):
+                effective_name = scene.rename_component_node(self.current_node, new_value)
+                if effective_name != new_value:
+                    self._loading = True
+                    item.setText(1, effective_name)
+                    self._loading = False
+                new_value = effective_name
+            else:
+                self.current_node.set_instance_name(new_value)
 
         elif key == "component.icon_path" and self.current_node is not None:
             self.current_node.set_icon_path(new_value)
@@ -574,9 +583,15 @@ class PropertiesPanel(QWidget):
 
     def name_is_unique(self, name: str) -> bool:
         scene = None
+        effective_name = name
 
         if self.current_node is not None:
             scene = self.current_node.scene()
+            if scene is not None and hasattr(scene, "preview_component_instance_name"):
+                effective_name, _template = scene.preview_component_instance_name(
+                    self.current_node,
+                    name,
+                )
 
         if self.current_link is not None:
             scene = self.current_link.scene()
@@ -588,7 +603,7 @@ class PropertiesPanel(QWidget):
             if isinstance(item, ComponentNodeItem):
                 if item is self.current_node:
                     continue
-                if item.instance_name == name:
+                if item.instance_name == effective_name:
                     return False
 
             if isinstance(item, ConnectionItem):

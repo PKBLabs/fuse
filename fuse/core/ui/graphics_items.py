@@ -52,6 +52,12 @@ from PySide6.QtWidgets import (
 )
 
 from fuse.core.model.models import ComponentDefinition, ModelLink, ModelSubcompAttachment
+from fuse.core.model.port_templates import expand_parametric_port_template
+from fuse.core.model.name_generation import (
+    has_name_index_token,
+    render_name_template,
+    template_for_source_name,
+)
 from fuse.core.persistence.db_access import (
     load_port_metadata_for_component,
     load_port_names_for_component,
@@ -136,6 +142,14 @@ class PortItem(QGraphicsEllipseItem):
         self.label.setScale(self.LABEL_SCALE)
         self.label.setZValue(31)
 
+        self.update_label_position()
+
+    def set_name(self, name: str):
+        """Update this port's canonical name and visible label."""
+
+        self.name = str(name)
+        self.label.setPlainText(self.name)
+        self.update_connection_state()
         self.update_label_position()
 
     def set_layout_position(self, x: float, y: float, side: str):
@@ -928,6 +942,7 @@ class ComponentNodeItem(QGraphicsRectItem):
         parameters: Optional[dict] = None,
         instance_name: Optional[str] = None,
         variable_port_counts: Optional[dict[str, int]] = None,
+        instance_name_template: Optional[str] = None,
     ):
         super().__init__(0, 0, self.WIDTH, self.HEIGHT)
 
@@ -942,7 +957,17 @@ class ComponentNodeItem(QGraphicsRectItem):
             )
 
         self.component = component
-        self.instance_name_value = instance_name or f"{component.name}_{self.node_id}"
+        requested_instance_name = instance_name or f"{component.name}_{self.node_id}"
+        if instance_name_template:
+            self.instance_name_template = str(instance_name_template)
+            if instance_name is None or has_name_index_token(str(instance_name)):
+                requested_instance_name = render_name_template(self.instance_name_template, 0)
+        elif has_name_index_token(str(requested_instance_name)):
+            self.instance_name_template = str(requested_instance_name)
+            requested_instance_name = render_name_template(self.instance_name_template, 0)
+        else:
+            self.instance_name_template = template_for_source_name(str(requested_instance_name))
+        self.instance_name_value = str(requested_instance_name)
         self.parameters = parameters or {}
         self.variable_port_counts = {
             str(key): max(0, _safe_int(value, 1))
@@ -1008,7 +1033,9 @@ class ComponentNodeItem(QGraphicsRectItem):
     def instance_name(self) -> str:
         return self.instance_name_value
 
-    def set_instance_name(self, new_name: str):
+    def set_instance_name(self, new_name: str, name_template: str | None = None):
+        if name_template is not None:
+            self.instance_name_template = str(name_template)
         self.instance_name_value = new_name
         self.title_item.setHtml(
             f"<div align='center'><b>{new_name}</b></div>"
@@ -1338,18 +1365,112 @@ class ComponentNodeItem(QGraphicsRectItem):
                 for port_name in port_names
             ]
 
+    def expanded_names_for_port_template(self, template: dict) -> list[str]:
+        """Return the concrete port names represented by a catalog template."""
+
+        template_name = str(template.get("name", "") or "")
+        base_name = str(template.get("base_name", "") or template_name)
+
+        # SST ``sst-info`` may report printf-style port templates such as
+        # ``nic%(nicsPerNode)dcore%(num_vNics/nicsPerNode)d``. These are count
+        # expressions, not literal port names, and must be expanded before the
+        # scene can restore links against them. Check this before normal FUSE
+        # variable-port handling because some catalogs flag the template as
+        # variable while still storing the printf expression as the name.
+        if "%(" in template_name:
+            expanded = expand_parametric_port_template(
+                template_name,
+                parameters=self.parameters,
+                variable_port_counts=self.variable_port_counts,
+            )
+            return expanded or [template_name]
+
+        if bool(template.get("is_variable")):
+            count = max(0, _safe_int(self.variable_port_counts.get(base_name), 1))
+            return [f"{base_name}{index}" for index in range(count)]
+
+        expanded = expand_parametric_port_template(
+            template_name,
+            parameters=self.parameters,
+            variable_port_counts=self.variable_port_counts,
+        )
+        return expanded or ([template_name] if template_name else [])
+
     def expanded_port_names(self) -> list[str]:
         names: list[str] = []
 
         for template in self.port_templates:
-            if bool(template.get("is_variable")):
-                base_name = template.get("base_name", "") or template.get("name", "")
-                count = max(0, _safe_int(self.variable_port_counts.get(base_name), 1))
-                names.extend(f"{base_name}{index}" for index in range(count))
-            else:
-                names.append(template.get("name", ""))
+            names.extend(self.expanded_names_for_port_template(template))
 
         return [name for name in names if name]
+
+    def resolve_restored_port_name(self, port_name: str) -> str:
+        """
+        Resolve a serialized link endpoint to a currently-visible port name.
+
+        Older projects may contain SST printf-style port templates as endpoint
+        names. Newer projects may already contain the concrete expanded name
+        even though a stale scene still has the template literal visible. This
+        helper accepts either form, synchronizes the node's port list to current
+        template expansion, and returns the concrete visible port name to use.
+        """
+
+        requested = str(port_name or "")
+        if not requested:
+            return requested
+
+        if any(port.name == requested for port in self.ports):
+            return requested
+
+        # The serialized endpoint may itself be a template literal. Expand it
+        # and use the first concrete member that exists on the node.
+        for candidate in expand_parametric_port_template(
+            requested,
+            parameters=self.parameters,
+            variable_port_counts=self.variable_port_counts,
+        ):
+            if candidate != requested and any(port.name == candidate for port in self.ports):
+                return candidate
+
+        # Re-sync ports to the current catalog expansion. This handles nodes
+        # loaded from projects saved before parametric port support existed.
+        self.sync_ports_to_templates()
+
+        if any(port.name == requested for port in self.ports):
+            return requested
+
+        for candidate in expand_parametric_port_template(
+            requested,
+            parameters=self.parameters,
+            variable_port_counts=self.variable_port_counts,
+        ):
+            if any(port.name == candidate for port in self.ports):
+                return candidate
+
+        # Inverse case: the serialized endpoint is already concrete, but the
+        # live node still has a stale template-literal port. If the template
+        # expands to the requested name, rename the stale port in place so link
+        # restoration can continue without dropping the connection.
+        for template in self.port_templates:
+            expanded = self.expanded_names_for_port_template(template)
+            if requested not in expanded:
+                continue
+
+            for port in self.ports:
+                if port.name in expanded:
+                    return port.name
+                if "%(" in port.name:
+                    literal_expanded = expand_parametric_port_template(
+                        port.name,
+                        parameters=self.parameters,
+                        variable_port_counts=self.variable_port_counts,
+                    )
+                    if requested in literal_expanded:
+                        port.set_name(requested)
+                        self.layout_ports(self.expanded_port_names())
+                        return requested
+
+        return requested
 
     def sync_ports_to_templates(self) -> tuple[bool, str]:
         desired_names = self.expanded_port_names()
@@ -1649,6 +1770,13 @@ class ComponentNodeItem(QGraphicsRectItem):
 
         scene = self.scene()
         if scene is not None:
+            if hasattr(scene, "notify_plugin_variable_port_count_changed"):
+                scene.notify_plugin_variable_port_count_changed(
+                    self,
+                    base_name,
+                    count,
+                    self.variable_port_template(base_name) or {},
+                )
             if hasattr(scene, "reroute_links_for_node"):
                 scene.reroute_links_for_node(self, force_full=True)
             if hasattr(scene, "notify_model_changed"):
@@ -1779,18 +1907,9 @@ class ComponentNodeItem(QGraphicsRectItem):
 
     def metadata_for_expanded_port(self, port_name: str) -> dict:
         for template in self.port_templates:
-            if not bool(template.get("is_variable")):
-                if template.get("name") == port_name:
-                    return dict(template)
-                continue
-
-            base_name = template.get("base_name", "") or template.get("name", "")
-
-            if port_name.startswith(base_name):
-                suffix = port_name[len(base_name):]
-                if suffix.isdigit():
-                    metadata = dict(template)
-                    metadata["expanded_name"] = port_name
-                    return metadata
+            if port_name in self.expanded_names_for_port_template(template):
+                metadata = dict(template)
+                metadata["expanded_name"] = port_name
+                return metadata
 
         return {}

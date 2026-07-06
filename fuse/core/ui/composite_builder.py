@@ -325,12 +325,19 @@ def replace_selection_with_composite_instance(
 
     composite_component = component_definition_for_composite(definition)
     composite_node = scene.create_component_node(composite_component, origin)
-    normalized_model, normalized_mappings = normalize_mini_model_and_port_mappings(
-        definition.mini_model or {},
-        definition.port_mappings,
-    )
-    composite_node.composite_instance_model = normalized_model
-    composite_node.composite_port_mappings = normalized_mappings
-    composite_node.sync_composite_ports_from_mappings()
+    if hasattr(scene, "set_composite_instance_model"):
+        scene.set_composite_instance_model(
+            composite_node,
+            definition.mini_model or {},
+            definition.port_mappings,
+        )
+    else:
+        normalized_model, normalized_mappings = normalize_mini_model_and_port_mappings(
+            definition.mini_model or {},
+            definition.port_mappings,
+        )
+        composite_node.composite_instance_model = normalized_model
+        composite_node.composite_port_mappings = normalized_mappings
+        composite_node.sync_composite_ports_from_mappings()
     composite_node.setSelected(True)
     return composite_node

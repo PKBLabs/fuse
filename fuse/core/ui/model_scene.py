@@ -39,6 +39,18 @@ from PySide6.QtWidgets import (
 )
 
 from fuse.core.model.models import ModelLink, ModelSubcompAttachment
+from fuse.core.model.name_generation import (
+    has_name_index_token,
+    implicit_name_template,
+    next_name_from_template,
+    render_name_template,
+    template_for_source_name,
+    copy_start_index_for_name,
+)
+from fuse.core.model.composite_mini_model import (
+    collect_mini_model_component_names,
+    uniquify_mini_model_component_names,
+)
 from fuse.core.plugin_runtime.manager import get_plugin_by_id
 from fuse.core.ui.graphics_items import (
     ComponentNodeItem,
@@ -216,26 +228,110 @@ class ModelScene(QGraphicsScene):
     def existing_component_names(self) -> set[str]:
         return {node.instance_name for node in self.component_items()}
 
+    def existing_component_and_composite_internal_names(
+        self,
+        exclude_nodes: set[int] | None = None,
+    ) -> set[str]:
+        """Return names currently used by top-level and composite-internal nodes."""
+        excluded = set(exclude_nodes or set())
+        names: set[str] = set()
+
+        for node in self.component_items():
+            if int(getattr(node, "node_id", 0)) in excluded:
+                continue
+            instance_name = str(getattr(node, "instance_name", "") or "")
+            if instance_name:
+                names.add(instance_name)
+
+            mini_model = getattr(node, "composite_instance_model", {}) or {}
+            names.update(collect_mini_model_component_names(mini_model))
+
+        return names
+
+    def allocate_component_name_from_template(
+        self,
+        template: str,
+        used_names: set[str] | None = None,
+        *,
+        start_index: int = 0,
+    ) -> tuple[str, str]:
+        """Allocate a unique component name from an explicit/implicit template."""
+        used = set(self.existing_component_names() if used_names is None else used_names)
+        name, _index = next_name_from_template(
+            template,
+            used,
+            start_index=start_index,
+        )
+        return name, template
+
+    def allocate_component_name_from_base(
+        self,
+        base_name: str,
+        used_names: set[str] | None = None,
+        *,
+        start_index: int = 0,
+    ) -> tuple[str, str]:
+        """Allocate a unique component name from a raw component/template name."""
+        base = (base_name or "Component").strip() or "Component"
+        template = base if has_name_index_token(base) else implicit_name_template(base)
+        return self.allocate_component_name_from_template(
+            template,
+            used_names,
+            start_index=start_index,
+        )
+
     def generate_unique_component_name(self, component) -> str:
-        base_name = component.name or "Component"
-        used_names = self.existing_component_names()
-
-        index = 1
-        while f"{base_name}_{index}" in used_names:
-            index += 1
-
-        return f"{base_name}_{index}"
-
+        name, _template = self.allocate_component_name_from_base(component.name or "Component")
+        return name
 
     def generate_unique_name_from_base(self, base_name: str, used_names: set[str] | None = None) -> str:
-        base = (base_name or "Component").strip() or "Component"
-        used = set(self.existing_component_names() if used_names is None else used_names)
+        name, _template = self.allocate_component_name_from_base(
+            base_name,
+            used_names,
+            start_index=0,
+        )
+        return name
 
-        index = 1
-        while f"{base}_{index}" in used:
-            index += 1
+    def preview_component_instance_name(
+        self,
+        node: ComponentNodeItem | None,
+        requested_name: str,
+    ) -> tuple[str, str]:
+        """Return the effective name/template for a user name edit."""
+        requested = (requested_name or "Component").strip() or "Component"
+        used = self.existing_component_names()
+        if node is not None:
+            used.discard(str(getattr(node, "instance_name", "") or ""))
 
-        return f"{base}_{index}"
+        if has_name_index_token(requested):
+            template = requested
+            name, _index = next_name_from_template(template, used, start_index=0)
+            return name, template
+
+        return requested, template_for_source_name(requested)
+
+    def rename_component_node(self, node: ComponentNodeItem, requested_name: str) -> str:
+        """Rename a node, resolving optional ``%d`` name templates.
+
+        A user-entered template such as ``cpu%d`` is rendered immediately to the
+        index-zero visible name (``cpu0``) while the unrendered template is stored
+        on the node for future copies. Property widgets may later commit the
+        already-rendered text again while focus changes or the panel refreshes.
+        Treat that exact no-op as a no-op so the preserved ``cpu%d`` template is
+        not replaced by an inferred ``cpu0_%d`` template.
+        """
+        requested = (requested_name or "Component").strip() or "Component"
+        current_name = str(getattr(node, "instance_name", "") or "")
+        current_template = str(getattr(node, "instance_name_template", "") or "")
+        if requested == current_name and current_template:
+            return current_name
+
+        new_name, template = self.preview_component_instance_name(node, requested)
+        if new_name == current_name and template == current_template:
+            return current_name
+        node.set_instance_name(new_name, name_template=template)
+        self.notify_model_changed()
+        return new_name
 
     def existing_link_names(self) -> set[str]:
         return {link.name for link in self.links}
@@ -297,6 +393,7 @@ class ModelScene(QGraphicsScene):
                     "old_node_id": node.node_id,
                     "component": deepcopy(node.component),
                     "instance_name": node.instance_name,
+                    "instance_name_template": getattr(node, "instance_name_template", ""),
                     "parameters": deepcopy(getattr(node, "parameters", {}) or {}),
                     "variable_port_counts": deepcopy(getattr(node, "variable_port_counts", {}) or {}),
                     "icon_path": getattr(node, "icon_path", ""),
@@ -343,7 +440,7 @@ class ModelScene(QGraphicsScene):
         min_x = min(float(item["pos"]["x"]) for item in nodes_payload)
         min_y = min(float(item["pos"]["y"]) for item in nodes_payload)
 
-        used_names = self.existing_component_names()
+        used_names = self.existing_component_and_composite_internal_names()
         old_to_new: dict[int, ComponentNodeItem] = {}
         old_group_to_new: dict[int, int] = {}
 
@@ -351,7 +448,16 @@ class ModelScene(QGraphicsScene):
 
         for item in nodes_payload:
             component = deepcopy(item["component"])
-            new_name = self.generate_unique_name_from_base(str(item.get("instance_name") or component.name), used_names)
+            source_name = str(item.get("instance_name") or component.name or "Component")
+            source_template = str(item.get("instance_name_template") or "")
+            if not source_template:
+                source_template = template_for_source_name(source_name)
+            start_index = copy_start_index_for_name(source_name, source_template)
+            new_name, new_template = self.allocate_component_name_from_template(
+                source_template,
+                used_names,
+                start_index=start_index,
+            )
             used_names.add(new_name)
 
             offset_x = float(item["pos"]["x"]) - min_x
@@ -360,11 +466,14 @@ class ModelScene(QGraphicsScene):
                 component,
                 QPointF(scene_pos.x() + offset_x, scene_pos.y() + offset_y),
                 instance_name=new_name,
+                instance_name_template=new_template,
             )
             node.parameters = deepcopy(item.get("parameters", {}) or {})
             node.variable_port_counts = deepcopy(item.get("variable_port_counts", {}) or {})
             node.composite_instance_model = deepcopy(item.get("composite_instance_model", {}) or {})
             node.composite_port_mappings = deepcopy(item.get("composite_port_mappings", []) or [])
+            if int(getattr(node.component, "is_composite", 0) or 0):
+                self.uniquify_composite_instance_node(node, used_names)
             if item.get("icon_path") and hasattr(node, "set_icon_path"):
                 node.set_icon_path(str(item.get("icon_path") or ""))
             if hasattr(node, "sync_ports_to_templates"):
@@ -527,23 +636,113 @@ class ModelScene(QGraphicsScene):
         finally:
             self._moving_group = False
 
-    def create_component_node(self, component, scene_pos, instance_name: str | None = None):
+    def create_component_node(
+        self,
+        component,
+        scene_pos,
+        instance_name: str | None = None,
+        instance_name_template: str | None = None,
+    ):
         if self.snap_to_grid_enabled:
             scene_pos = self.snap_position_to_grid(scene_pos)
+
+        if instance_name is None:
+            instance_name, instance_name_template = self.allocate_component_name_from_base(
+                component.name or "Component",
+            )
+        else:
+            requested_name = str(instance_name)
+            if instance_name_template is None:
+                if has_name_index_token(requested_name):
+                    instance_name, instance_name_template = self.allocate_component_name_from_base(
+                        requested_name,
+                    )
+                else:
+                    instance_name_template = template_for_source_name(requested_name)
 
         node = ComponentNodeItem(
             component,
             node_id=self.next_component_node_id(),
-            instance_name=instance_name or self.generate_unique_component_name(component),
+            instance_name=instance_name,
+            instance_name_template=instance_name_template,
         )
         node.setPos(scene_pos)
         self.addItem(node)
+
+        if int(getattr(component, "is_composite", 0) or 0):
+            self.populate_composite_instance_node_from_template(node)
 
         if self.component_used_callback is not None:
             self.component_used_callback(component)
 
         self.notify_component_added(node)
         return node
+
+    def populate_composite_instance_node_from_template(self, node: ComponentNodeItem) -> None:
+        """Load a placed composite's mini-model from its reusable definition."""
+        try:
+            from fuse.core.persistence.composite_components import get_composite_component_definition
+        except Exception:
+            return
+
+        composite_id = (
+            getattr(node.component, "composite_id", "")
+            or getattr(node.component, "component_id", "")
+            or ""
+        )
+        if not composite_id:
+            return
+
+        definition = get_composite_component_definition(str(composite_id))
+        if definition is None:
+            return
+
+        self.set_composite_instance_model(
+            node,
+            definition.mini_model or {},
+            definition.port_mappings,
+        )
+
+    def set_composite_instance_model(
+        self,
+        node: ComponentNodeItem,
+        mini_model: dict,
+        port_mappings: list,
+    ) -> None:
+        """Install a composite mini-model on a node with unique internal names."""
+        node.composite_instance_model = deepcopy(mini_model or {})
+        node.composite_port_mappings = deepcopy(port_mappings or [])
+        self.uniquify_composite_instance_node(node)
+
+    def uniquify_composite_instance_node(
+        self,
+        node: ComponentNodeItem,
+        used_names: set[str] | None = None,
+    ) -> None:
+        """Ensure a composite node's internal component names are unique."""
+        if not int(getattr(node.component, "is_composite", 0) or 0):
+            return
+        mini_model = getattr(node, "composite_instance_model", {}) or {}
+        if not isinstance(mini_model, dict) or not mini_model.get("components"):
+            return
+
+        if used_names is None:
+            used_names = self.existing_component_and_composite_internal_names(
+                exclude_nodes={int(getattr(node, "node_id", 0) or 0)}
+            )
+            node_name = str(getattr(node, "instance_name", "") or "")
+            if node_name:
+                used_names.add(node_name)
+
+        normalized_model, normalized_mappings = uniquify_mini_model_component_names(
+            mini_model,
+            getattr(node, "composite_port_mappings", []) or [],
+            used_names,
+        )
+        node.composite_instance_model = normalized_model
+        node.composite_port_mappings = normalized_mappings
+        if hasattr(node, "sync_composite_ports_from_mappings"):
+            node.sync_composite_ports_from_mappings()
 
     def find_port(self, node_id: int, port_name: str) -> Optional[PortItem]:
         for node in self.component_items():
@@ -1480,6 +1679,20 @@ class ModelScene(QGraphicsScene):
 
         return item
 
+    def plugin_for_node(self, node: ComponentNodeItem):
+        plugin_id = (
+            getattr(getattr(node, "component", None), "plugin_id", "")
+            or getattr(self, "active_plugin_id", "")
+            or ""
+        )
+        if not plugin_id:
+            return None
+
+        try:
+            return get_plugin_by_id(plugin_id)
+        except Exception:
+            return None
+
     def plugin_for_subcomp_attachment(self, attachment: ModelSubcompAttachment):
         plugin_id = (
             getattr(attachment, "plugin_id", "")
@@ -1493,6 +1706,18 @@ class ModelScene(QGraphicsScene):
             return get_plugin_by_id(plugin_id)
         except Exception:
             return None
+
+    def notify_plugin_variable_port_count_changed(
+        self,
+        node: ComponentNodeItem,
+        base_name: str,
+        count: int,
+        port_template: dict | None = None,
+    ) -> None:
+        plugin = self.plugin_for_node(node)
+        hook = getattr(plugin, "on_variable_port_count_changed", None)
+        if callable(hook):
+            hook(self, node, base_name, count, port_template or {})
 
     def notify_plugin_subcomp_attachment_created(self, attachment: ModelSubcompAttachment) -> None:
         plugin = self.plugin_for_subcomp_attachment(attachment)
