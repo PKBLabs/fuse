@@ -57,6 +57,13 @@ INTERNAL_EMBER_MOTIF_PARAMS = {
     "_enginePtr",
     "distribModule",
 }
+EMBER_INIT_MOTIF_TYPE = "ember.InitMotif"
+EMBER_FINI_MOTIF_TYPE = "ember.FiniMotif"
+EMBER_MOTIF_TYPES_NOT_REQUIRING_INIT_FINI = {
+    EMBER_INIT_MOTIF_TYPE,
+    EMBER_FINI_MOTIF_TYPE,
+    "ember.NullMotif",
+}
 
 
 class SSTJsonExportError(RuntimeError):
@@ -1432,6 +1439,29 @@ def _non_empty_motif_user_params(node) -> dict[str, Any]:
     return params
 
 
+def _motif_entries_with_required_init_fini(
+    entries: list[tuple[str, dict[str, Any]]],
+) -> list[tuple[str, dict[str, Any]]]:
+    """Return motif entries wrapped with Ember Init/Fini when a workload needs it."""
+
+    if not entries:
+        return entries
+
+    has_workload_motif = any(
+        motif_type not in EMBER_MOTIF_TYPES_NOT_REQUIRING_INIT_FINI
+        for motif_type, _params in entries
+    )
+    if not has_workload_motif:
+        return entries
+
+    wrapped = list(entries)
+    if wrapped[0][0] != EMBER_INIT_MOTIF_TYPE:
+        wrapped.insert(0, (EMBER_INIT_MOTIF_TYPE, {}))
+    if wrapped[-1][0] != EMBER_FINI_MOTIF_TYPE:
+        wrapped.append((EMBER_FINI_MOTIF_TYPE, {}))
+    return wrapped
+
+
 def _ember_motif_params_for_node(
     node,
     attachments_by_parent_id: dict[int, list],
@@ -1448,19 +1478,28 @@ def _ember_motif_params_for_node(
     if not motif_attachments:
         return {}
 
-    derived: dict[str, Any] = {"motif_count": str(len(motif_attachments))}
-    for index, attachment in enumerate(motif_attachments):
+    motif_entries: list[tuple[str, dict[str, Any]]] = []
+    for attachment in motif_attachments:
         child = nodes_by_id.get(getattr(attachment, "child_node_id", None))
         if child is None:
             continue
 
         motif_type = sst_component_type_for_node(child)
-        if motif_type:
-            derived[f"motif{index}.name"] = motif_type
+        if not motif_type:
+            continue
 
-        for param_name, param_value in _non_empty_motif_user_params(child).items():
-            if param_name == "name":
-                continue
+        motif_params = {
+            param_name: param_value
+            for param_name, param_value in _non_empty_motif_user_params(child).items()
+            if param_name != "name"
+        }
+        motif_entries.append((motif_type, motif_params))
+
+    motif_entries = _motif_entries_with_required_init_fini(motif_entries)
+    derived: dict[str, Any] = {"motif_count": str(len(motif_entries))}
+    for index, (motif_type, motif_params) in enumerate(motif_entries):
+        derived[f"motif{index}.name"] = motif_type
+        for param_name, param_value in motif_params.items():
             derived[f"motif{index}.{param_name}"] = param_value
 
     return derived

@@ -94,12 +94,13 @@ def test_visual_ember_motif_attachments_export_as_engine_params_not_subcomponent
     assert [component["name"] for component in data["components"]] == ["rank0"]
     rank = data["components"][0]
     assert "subcomponents" not in rank
-    assert rank["params"]["motif_count"] == "2"
-    assert rank["params"]["motif0.name"] == "ember.AllreduceMotif"
-    assert rank["params"]["motif0.arg.count"] == "8"
-    assert rank["params"]["motif0.arg.iterations"] == "10"
-    assert "motif0._jobId" not in rank["params"]
-    assert rank["params"]["motif1.name"] == "ember.FiniMotif"
+    assert rank["params"]["motif_count"] == "3"
+    assert rank["params"]["motif0.name"] == "ember.InitMotif"
+    assert rank["params"]["motif1.name"] == "ember.AllreduceMotif"
+    assert rank["params"]["motif1.arg.count"] == "8"
+    assert rank["params"]["motif1.arg.iterations"] == "10"
+    assert "motif1._jobId" not in rank["params"]
+    assert rank["params"]["motif2.name"] == "ember.FiniMotif"
 
 
 def test_visual_ember_motif_children_do_not_trigger_unattached_subcomponent_validation():
@@ -152,10 +153,11 @@ def test_sst_plugin_hook_syncs_ember_engine_motif_params_after_attachment_change
     plugin.on_subcomponent_attachment_created(scene, second)
 
     assert engine.parameters["jobId"] == "0"
-    assert engine.parameters["motif_count"] == "2"
-    assert engine.parameters["motif0.name"] == "ember.AllreduceMotif"
-    assert engine.parameters["motif0.arg.count"] == "8"
-    assert engine.parameters["motif1.name"] == "ember.FiniMotif"
+    assert engine.parameters["motif_count"] == "3"
+    assert engine.parameters["motif0.name"] == "ember.InitMotif"
+    assert engine.parameters["motif1.name"] == "ember.AllreduceMotif"
+    assert engine.parameters["motif1.arg.count"] == "8"
+    assert engine.parameters["motif2.name"] == "ember.FiniMotif"
 
     scene.subcomp_attachments.remove(first)
     plugin.on_subcomponent_attachment_deleted(scene, first)
@@ -163,4 +165,27 @@ def test_sst_plugin_hook_syncs_ember_engine_motif_params_after_attachment_change
     assert engine.parameters["motif_count"] == "1"
     assert engine.parameters["motif0.name"] == "ember.FiniMotif"
     assert "motif1.name" not in engine.parameters
-    assert "motif0.arg.count" not in engine.parameters
+    assert "motif1.arg.count" not in engine.parameters
+
+
+def test_visual_ember_workload_motif_is_wrapped_with_init_and_fini():
+    engine = _node(1, "rank0", "ember", "EmberEngine", {"jobId": "0"})
+    allreduce = _node(
+        2,
+        "rank0_allreduce",
+        "ember",
+        "AllreduceMotif",
+        {"arg.count": "8"},
+        is_subcomp=1,
+        iface=EMBER_MOTIF_INTERFACE,
+    )
+    scene = FakeScene([engine, allreduce], attachments=[_motif_attachment(1, engine, allreduce)])
+
+    data = build_sst_json_dict(scene)
+
+    rank = data["components"][0]
+    assert rank["params"]["motif_count"] == "3"
+    assert rank["params"]["motif0.name"] == "ember.InitMotif"
+    assert rank["params"]["motif1.name"] == "ember.AllreduceMotif"
+    assert rank["params"]["motif1.arg.count"] == "8"
+    assert rank["params"]["motif2.name"] == "ember.FiniMotif"
