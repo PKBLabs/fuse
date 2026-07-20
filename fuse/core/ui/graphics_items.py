@@ -46,6 +46,7 @@ from PySide6.QtWidgets import (
     QGraphicsPixmapItem,
     QGraphicsRectItem,
     QGraphicsTextItem,
+    QMessageBox,
     QMenu,
     QStyle,
     QStyleOptionGraphicsItem,
@@ -236,34 +237,63 @@ class PortItem(QGraphicsEllipseItem):
 
     def contextMenuEvent(self, event):
         scene = self.scene()
-        if scene is None or not hasattr(scene, "composite_port_exposure_requested_callback"):
+        node = self.node
+        variable_base_name = node.variable_port_family_for_port(self.name)
+        has_composite_menu = (
+            scene is not None
+            and hasattr(scene, "composite_port_exposure_requested_callback")
+        )
+
+        if variable_base_name is None and not has_composite_menu:
             super().contextMenuEvent(event)
             return
 
-        if hasattr(scene, "cancel_pending_connection"):
-            scene.cancel_pending_connection()
-        if hasattr(scene, "cancel_pending_subcomp_attachment"):
-            scene.cancel_pending_subcomp_attachment()
-
-        state_callback = getattr(scene, "composite_port_exposure_state_callback", None)
-        is_exposed = False
-        if state_callback is not None:
-            is_exposed = bool(state_callback(self))
+        if scene is not None:
+            if hasattr(scene, "cancel_pending_connection"):
+                scene.cancel_pending_connection()
+            if hasattr(scene, "cancel_pending_subcomp_attachment"):
+                scene.cancel_pending_subcomp_attachment()
 
         menu = QMenu()
-        action_text = "Hide Port from Composite" if is_exposed else "Expose Port on Composite"
-        exposure_action = menu.addAction(action_text)
-        if not is_exposed and self.is_connected():
-            exposure_action.setEnabled(False)
-            exposure_action.setToolTip("Only unlinked internal ports can be exposed.")
+        remove_port_action = None
+        exposure_action = None
+        is_exposed = False
+
+        if variable_base_name is not None:
+            remove_port_action = menu.addAction("Remove Port")
+
+        if has_composite_menu:
+            if remove_port_action is not None:
+                menu.addSeparator()
+
+            state_callback = getattr(scene, "composite_port_exposure_state_callback", None)
+            if state_callback is not None:
+                is_exposed = bool(state_callback(self))
+
+            action_text = "Hide Port from Composite" if is_exposed else "Expose Port on Composite"
+            exposure_action = menu.addAction(action_text)
+            if not is_exposed and self.is_connected():
+                exposure_action.setEnabled(False)
+                exposure_action.setToolTip("Only unlinked internal ports can be exposed.")
 
         action = menu.exec(event.screenPos())
-        if action == exposure_action:
+
+        if remove_port_action is not None and action == remove_port_action:
+            node.remove_variable_port(
+                variable_base_name,
+                port_name=self.name,
+                confirm=True,
+            )
+            if scene is not None and hasattr(scene, "cancel_pending_connection"):
+                scene.cancel_pending_connection()
+
+        elif exposure_action is not None and action == exposure_action:
             callback = getattr(scene, "composite_port_exposure_requested_callback", None)
             if callback is not None:
                 callback(self, not is_exposed)
-            if hasattr(scene, "cancel_pending_connection"):
+            if scene is not None and hasattr(scene, "cancel_pending_connection"):
                 scene.cancel_pending_connection()
+
         event.accept()
 
     def mousePressEvent(self, event):
@@ -901,9 +931,16 @@ class AddPortsButtonItem(QGraphicsTextItem):
 
         for template in templates:
             base_name = template.get("base_name", "") or template.get("name", "")
-            action = menu.addAction(f"Add {base_name}")
-            action.triggered.connect(
+            add_action = menu.addAction(f"Add {base_name}")
+            add_action.triggered.connect(
                 lambda checked=False, name=base_name: self.node.increment_variable_port(
+                    name
+                )
+            )
+
+            remove_action = menu.addAction(f"Remove {base_name}")
+            remove_action.triggered.connect(
+                lambda checked=False, name=base_name: self.node.decrement_variable_port(
                     name
                 )
             )
@@ -1371,12 +1408,20 @@ class ComponentNodeItem(QGraphicsRectItem):
         template_name = str(template.get("name", "") or "")
         base_name = str(template.get("base_name", "") or template_name)
 
+        if bool(template.get("is_variable")):
+            # Variable FUSE/SST port families are controlled by
+            # ``variable_port_counts``. Some SST catalogs store the original
+            # port pattern as ``port%(num_ports)d``; using the parameter
+            # expression first creates a one-click lag because the plugin hook
+            # mirrors the count back into ``num_ports`` after the scene has
+            # already re-expanded the visible ports.
+            count = max(0, _safe_int(self.variable_port_counts.get(base_name), 1))
+            return [f"{base_name}{index}" for index in range(count)]
+
         # SST ``sst-info`` may report printf-style port templates such as
         # ``nic%(nicsPerNode)dcore%(num_vNics/nicsPerNode)d``. These are count
         # expressions, not literal port names, and must be expanded before the
-        # scene can restore links against them. Check this before normal FUSE
-        # variable-port handling because some catalogs flag the template as
-        # variable while still storing the printf expression as the name.
+        # scene can restore links against them.
         if "%(" in template_name:
             expanded = expand_parametric_port_template(
                 template_name,
@@ -1384,10 +1429,6 @@ class ComponentNodeItem(QGraphicsRectItem):
                 variable_port_counts=self.variable_port_counts,
             )
             return expanded or [template_name]
-
-        if bool(template.get("is_variable")):
-            count = max(0, _safe_int(self.variable_port_counts.get(base_name), 1))
-            return [f"{base_name}{index}" for index in range(count)]
 
         expanded = expand_parametric_port_template(
             template_name,
@@ -1718,6 +1759,227 @@ class ComponentNodeItem(QGraphicsRectItem):
                     continue
                 seen.add(identity)
                 connection.update_position()
+
+    def variable_port_bases_for_count_parameter(self, parameter_name: str) -> list[str]:
+        """Return variable-port base names controlled by a component parameter."""
+
+        requested = str(parameter_name or "").strip().lower()
+        if not requested:
+            return []
+
+        base_names: list[str] = []
+        for template in self.variable_port_templates:
+            count_parameter = str(template.get("count_parameter", "") or "").strip()
+            if count_parameter.lower() != requested:
+                continue
+
+            base_name = str(template.get("base_name", "") or template.get("name", "") or "")
+            if base_name:
+                base_names.append(base_name)
+
+        return base_names
+
+    def sync_variable_port_count_from_parameter(self, parameter_name: str, value) -> tuple[bool, str]:
+        """Mirror manual edits to a count parameter into visible variable ports."""
+
+        base_names = self.variable_port_bases_for_count_parameter(parameter_name)
+        if not base_names:
+            return True, ""
+
+        try:
+            count = int(value)
+        except (TypeError, ValueError):
+            return False, f"Port count parameter '{parameter_name}' must be an integer."
+
+        for base_name in base_names:
+            ok, message = self.set_variable_port_count(base_name, count)
+            if not ok:
+                return ok, message
+
+        return True, ""
+
+    def variable_port_family_for_port(self, port_name: str) -> str | None:
+        """Return the variable-port family base name for a concrete port."""
+
+        name = str(port_name or "")
+
+        for template in self.variable_port_templates:
+            base_name = str(template.get("base_name", "") or template.get("name", "") or "")
+            if not base_name or not name.startswith(base_name):
+                continue
+
+            suffix = name[len(base_name):]
+            if suffix.isdigit():
+                return base_name
+
+        return None
+
+    def variable_port_index(self, base_name: str, port_name: str) -> int | None:
+        name = str(port_name or "")
+        base = str(base_name or "")
+
+        if not base or not name.startswith(base):
+            return None
+
+        suffix = name[len(base):]
+        if not suffix.isdigit():
+            return None
+
+        return int(suffix)
+
+    def variable_port_current_count(self, base_name: str) -> int:
+        count = max(0, _safe_int(self.variable_port_counts.get(base_name), 0))
+
+        for port in self.ports:
+            index = self.variable_port_index(base_name, port.name)
+            if index is not None:
+                count = max(count, index + 1)
+
+        return count
+
+    def variable_ports_for_family(self, base_name: str) -> list[PortItem]:
+        ports = [
+            port
+            for port in self.ports
+            if self.variable_port_index(base_name, port.name) is not None
+        ]
+        return sorted(
+            ports,
+            key=lambda port: self.variable_port_index(base_name, port.name) or 0,
+        )
+
+    def choose_variable_port_to_remove(
+        self,
+        base_name: str,
+        port_name: str | None = None,
+    ) -> PortItem | None:
+        ports = self.variable_ports_for_family(base_name)
+        if not ports:
+            return None
+
+        if port_name:
+            for port in ports:
+                if port.name == port_name:
+                    return port
+            return None
+
+        # Prefer an unconnected port so the common Add/Remove menu operation
+        # does not disturb existing links. Use the highest-numbered available
+        # port to preserve the names of lower ports whenever possible.
+        for port in reversed(ports):
+            if not port.is_connected():
+                return port
+
+        # All ports are connected. Let the confirmation path decide whether to
+        # remove the highest-numbered port and its link.
+        return ports[-1]
+
+    def confirm_remove_connected_variable_port(self, base_name: str, port_names: list[str]) -> bool:
+        if len(port_names) == 1:
+            detail = f"Port '{port_names[0]}' is linked."
+        else:
+            detail = "All ports in this family are linked."
+
+        response = QMessageBox.warning(
+            None,
+            "Remove Connected Port",
+            (
+                f"{detail}\n\n"
+                "Removing the port will also remove its connected link and may "
+                "break model validation. Continue?"
+            ),
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        return response == QMessageBox.Yes
+
+    def rename_variable_port_and_link_endpoints(self, port: PortItem, new_name: str):
+        old_name = port.name
+        if old_name == new_name:
+            return
+
+        for connection in list(port.connections):
+            if connection.source_port is port:
+                connection.link.source_port = new_name
+            if connection.target_port is port:
+                connection.link.target_port = new_name
+            connection.update_tooltip()
+
+        port.set_name(new_name)
+        port.metadata = self.metadata_for_expanded_port(new_name)
+
+    def remove_variable_port(
+        self,
+        base_name: str,
+        *,
+        port_name: str | None = None,
+        confirm: bool = True,
+    ) -> tuple[bool, str]:
+        """Remove one concrete member of a variable port family.
+
+        Removing a lower-numbered member compacts later port names so the visible
+        family remains sequential from zero. Any links attached to renamed ports
+        have their saved endpoint names updated to match.
+        """
+
+        if self.variable_port_template(base_name) is None:
+            return False, f"'{base_name}' is not a variable port family for this component."
+
+        count = self.variable_port_current_count(base_name)
+        if count <= 0:
+            return False, f"No '{base_name}' ports are available to remove."
+
+        target_port = self.choose_variable_port_to_remove(base_name, port_name)
+        if target_port is None:
+            return False, f"No '{base_name}' port was found to remove."
+
+        target_index = self.variable_port_index(base_name, target_port.name)
+        if target_index is None:
+            return False, f"'{target_port.name}' is not in the '{base_name}' variable port family."
+
+        all_family_ports = self.variable_ports_for_family(base_name)
+        if target_port.is_connected() and confirm:
+            connected_names = [
+                port.name for port in all_family_ports if port.is_connected()
+            ]
+            if not self.confirm_remove_connected_variable_port(base_name, connected_names):
+                return False, "Port removal cancelled."
+
+        scene = self.scene()
+
+        for connection in list(target_port.connections):
+            if scene is not None and hasattr(scene, "delete_link"):
+                scene.delete_link(connection)
+            else:
+                for port in (connection.source_port, connection.target_port):
+                    if connection in port.connections:
+                        port.connections.remove(connection)
+                    port.update_connection_state()
+
+        self.remove_port_item(target_port)
+
+        indexed_ports = {
+            self.variable_port_index(base_name, port.name): port
+            for port in self.variable_ports_for_family(base_name)
+        }
+
+        for index in range(target_index + 1, count):
+            port = indexed_ports.get(index)
+            if port is None:
+                continue
+            self.rename_variable_port_and_link_endpoints(
+                port,
+                f"{base_name}{index - 1}",
+            )
+
+        ok, message = self.set_variable_port_count(base_name, count - 1)
+        if not ok:
+            return ok, message
+
+        return True, ""
+
+    def decrement_variable_port(self, base_name: str):
+        self.remove_variable_port(base_name, confirm=True)
 
     def variable_port_template(self, base_name: str) -> dict | None:
         for template in self.variable_port_templates:

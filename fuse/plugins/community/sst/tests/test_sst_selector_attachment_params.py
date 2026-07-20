@@ -129,3 +129,50 @@ def test_subcomponent_attachment_selector_params_are_derived_inside_nested_trees
     os_subcomponent = data["components"][0]["subcomponents"][0]
     assert hades.parameters["nicModule"] == "firefly.VirtNic"
     assert os_subcomponent["params"]["nicModule"] == "firefly.VirtNic"
+
+
+
+def test_firefly_nic_simple_memory_logical_attachment_enables_and_exports_scoped_params():
+    nic = make_node(
+        1,
+        "nic0",
+        "firefly",
+        "nic",
+        parameters={
+            "nid": "0",
+            "packetSize": "2048B",
+            "useSimpleMemoryModel": "0",
+        },
+    )
+    simple_memory = make_node(
+        2,
+        "nic0_simple_memory",
+        "firefly",
+        "SimpleMemory",
+        is_subcomp=1,
+        parameters={
+            "id": "0",
+            "useHostCache": "yes",
+            "useBusBridge": "yes",
+            "memReadLat_ns": "120",
+            "empty": "",
+        },
+    )
+    scene = FakeScene(
+        [nic, simple_memory],
+        attachments=[_attachment(1, nic, simple_memory, "simpleMemoryModel")],
+    )
+
+    SSTPlugin().on_subcomponent_attachment_created(scene, scene.subcomp_attachments[0])
+    data = build_sst_json_dict(scene)
+
+    assert nic.parameters["useSimpleMemoryModel"] == "1"
+    assert [component["name"] for component in data["components"]] == ["nic0"]
+    exported = data["components"][0]
+    assert "subcomponents" not in exported
+    assert exported["params"]["useSimpleMemoryModel"] == "1"
+    assert exported["params"]["simpleMemoryModel.id"] == "0"
+    assert exported["params"]["simpleMemoryModel.useHostCache"] == "yes"
+    assert exported["params"]["simpleMemoryModel.useBusBridge"] == "yes"
+    assert exported["params"]["simpleMemoryModel.memReadLat_ns"] == "120"
+    assert "simpleMemoryModel.empty" not in exported["params"]

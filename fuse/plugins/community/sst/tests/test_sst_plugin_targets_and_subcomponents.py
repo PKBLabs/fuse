@@ -168,3 +168,72 @@ def test_sst_subcomponent_slot_compatibility_ok_warning_and_error():
     assert error.severity == "warning"
     assert error.code == "sst.subcomponent_slot_interface_mismatch"
     assert error.visual_indicator == "warning"
+
+
+
+def test_sst_plugin_firefly_nic_exposes_logical_simple_memory_slot_from_runtime_overlay():
+    from fuse.core.persistence.db_access import ensure_database_ready
+    from fuse.core.persistence.database import get_connection
+    from fuse.plugins.community.sst.get_sstinfo import sync_parsed_sstinfo_to_database
+    from fuse.plugins.community.sst.plugin import SSTPlugin
+
+    ensure_database_ready(run_plugin_bootstrap=False)
+
+    with get_connection() as conn:
+        target = resolve_framework_version_id(
+            conn,
+            version="16.0.0",
+            label="SST 16.0.0",
+            source_kind="test",
+            source_path="firefly-simple-memory",
+            is_default=True,
+        )
+
+    sync_parsed_sstinfo_to_database(
+        target,
+        [ParsedElement("firefly")],
+        [
+            ParsedComponent(
+                element_name="firefly",
+                name="nic",
+                description="Firefly NIC",
+            ),
+            ParsedComponent(
+                element_name="firefly",
+                name="SimpleMemory",
+                description="Firefly simple memory model",
+                is_subcomp=1,
+                iface="SST::Firefly::SimpleMemoryModel",
+            ),
+        ],
+    )
+
+    plugin = SSTPlugin()
+    nic_item = next(
+        item
+        for item in plugin.load_palette_items(target_id=str(target))
+        if item.element_name == "firefly" and item.type_name == "nic"
+    )
+    simple_memory_item = next(
+        item
+        for item in plugin.load_palette_items(target_id=str(target))
+        if item.element_name == "firefly" and item.type_name == "SimpleMemory"
+    )
+
+    nic_details = plugin.load_item_details(nic_item.item_id, target_id=str(target))
+    simple_memory_details = plugin.load_item_details(simple_memory_item.item_id, target_id=str(target))
+
+    slot = next(
+        connector
+        for connector in nic_details.subcomp_connectors
+        if connector.name == "simpleMemoryModel"
+    )
+    assert slot.role == "slot"
+    assert slot.required_interface == "SST::Firefly::SimpleMemoryModel"
+
+    interface = next(
+        connector
+        for connector in simple_memory_details.subcomp_connectors
+        if connector.name == "interface"
+    )
+    assert interface.provided_interface == "SST::Firefly::SimpleMemoryModel"

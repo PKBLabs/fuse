@@ -308,6 +308,14 @@
           "required": true,
           "inject_default": false,
           "provenance": "sst/elements/firefly/nic.cc:144: loadUserSubComponent(\"rtrLink\")"
+        },
+        "simpleMemoryModel": {
+          "description": "Logical FUSE-only editor slot for the firefly.nic anonymous firefly.SimpleMemory model. SST's firefly.nic enables this model with useSimpleMemoryModel=1 and consumes parameters scoped as simpleMemoryModel.*; it is not exported as a nested user subcomponent.",
+          "required_interface": "SST::Firefly::SimpleMemoryModel",
+          "default_type": "firefly.SimpleMemory",
+          "required": false,
+          "inject_default": false,
+          "provenance": "src/sst/elements/firefly/nic.cc:203-250: loadAnonymousSubComponent<MemoryModel>(\"firefly.SimpleMemory\", ..., smmParams)"
         }
       }
     },

@@ -70,6 +70,9 @@ EMBER_MOTIF_TYPES_NOT_REQUIRING_INIT_FINI = {
     "ember.NullMotif",
 }
 
+FIREFLY_NIC_SIMPLE_MEMORY_SLOT = "simpleMemoryModel"
+FIREFLY_NIC_SIMPLE_MEMORY_TYPE = "firefly.SimpleMemory"
+
 
 # SST uses a few parameters as type selectors for attached SubComponents.
 # These are not normal graph links; FUSE can keep them synchronized when the
@@ -185,6 +188,39 @@ def is_ember_motif_attachment(scene, attachment) -> bool:
     parent = nodes_by_id.get(getattr(attachment, "parent_node_id", None))
     child = nodes_by_id.get(getattr(attachment, "child_node_id", None))
     return bool(parent is not None and child is not None and is_ember_engine_node(parent) and is_ember_motif_node(child))
+
+
+def is_firefly_nic_simple_memory_attachment(scene, attachment) -> bool:
+    """Return true for the FUSE-only firefly.nic SimpleMemory editor slot."""
+
+    if str(getattr(attachment, "slot_name", "") or "").strip() != FIREFLY_NIC_SIMPLE_MEMORY_SLOT:
+        return False
+
+    nodes_by_id = nodes_by_id_for_scene(scene)
+    parent = nodes_by_id.get(int(getattr(attachment, "parent_node_id", 0) or 0))
+    child = nodes_by_id.get(int(getattr(attachment, "child_node_id", 0) or 0))
+
+    return bool(
+        parent is not None
+        and child is not None
+        and sst_component_type_for_node(parent) == "firefly.nic"
+        and sst_component_type_for_node(child) == FIREFLY_NIC_SIMPLE_MEMORY_TYPE
+    )
+
+
+def sync_firefly_nic_simple_memory_params_for_attachment(scene, attachment) -> None:
+    """Enable the firefly.nic anonymous SimpleMemory model for a logical attachment."""
+
+    if not is_firefly_nic_simple_memory_attachment(scene, attachment):
+        return
+
+    parent = nodes_by_id_for_scene(scene).get(int(getattr(attachment, "parent_node_id", 0) or 0))
+    if parent is None:
+        return
+
+    params = dict(getattr(parent, "parameters", {}) or {})
+    params["useSimpleMemoryModel"] = "1"
+    parent.parameters = params
 
 
 def ordered_ember_motif_attachments_for_engine(scene, engine_node) -> list:
@@ -850,6 +886,10 @@ class SSTPlugin:
                 if getattr(node, "node_id", None) == getattr(attachment, "parent_node_id", None):
                     self.sync_ember_motif_params_for_node(scene, node)
                     return
+
+        if is_firefly_nic_simple_memory_attachment(scene, attachment):
+            sync_firefly_nic_simple_memory_params_for_attachment(scene, attachment)
+            return
 
         self.sync_subcomponent_parameter_for_attachment(scene, attachment)
 

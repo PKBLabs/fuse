@@ -65,6 +65,9 @@ EMBER_MOTIF_TYPES_NOT_REQUIRING_INIT_FINI = {
     "ember.NullMotif",
 }
 
+FIREFLY_NIC_SIMPLE_MEMORY_SLOT = "simpleMemoryModel"
+FIREFLY_NIC_SIMPLE_MEMORY_TYPE = "firefly.SimpleMemory"
+
 
 class SSTJsonExportError(RuntimeError):
     """Raised when a model cannot be converted to valid SST JSON."""
@@ -791,6 +794,63 @@ def _is_selector_only_attachment(parent, attachment) -> bool:
     return _selector_param_attachment_key(parent, attachment) in SST_SELECTOR_ONLY_ATTACHMENT_SLOTS
 
 
+def _is_firefly_nic_simple_memory_attachment(
+    parent,
+    attachment,
+    nodes_by_id: dict[int, object] | None = None,
+) -> bool:
+    """Return true for the FUSE-only firefly.nic SimpleMemory editor slot."""
+
+    if sst_component_type_for_node(parent) != "firefly.nic":
+        return False
+
+    if str(getattr(attachment, "slot_name", "") or "").strip() != FIREFLY_NIC_SIMPLE_MEMORY_SLOT:
+        return False
+
+    if nodes_by_id is None:
+        return True
+
+    child = nodes_by_id.get(getattr(attachment, "child_node_id", None))
+    return bool(child is not None and sst_component_type_for_node(child) == FIREFLY_NIC_SIMPLE_MEMORY_TYPE)
+
+
+def _firefly_nic_simple_memory_params_for_node(
+    node,
+    attachments_by_parent_id: dict[int, list],
+    nodes_by_id: dict[int, object],
+) -> dict[str, Any]:
+    """Fold an attached firefly.SimpleMemory node into firefly.nic params.
+
+    firefly.nic loads firefly.SimpleMemory anonymously when useSimpleMemoryModel
+    is enabled.  The visible subcomponent attachment is a FUSE editor aid; SST
+    expects the attached node's params to be scoped as simpleMemoryModel.* on the
+    parent NIC rather than exported as a real nested subcomponent.
+    """
+
+    if sst_component_type_for_node(node) != "firefly.nic":
+        return {}
+
+    for attachment in attachments_by_parent_id.get(getattr(node, "node_id", None), []) or []:
+        if not _is_firefly_nic_simple_memory_attachment(node, attachment, nodes_by_id):
+            continue
+
+        child = nodes_by_id.get(getattr(attachment, "child_node_id", None))
+        if child is None:
+            continue
+
+        params: dict[str, Any] = {"useSimpleMemoryModel": "1"}
+        child_params = normalize_params_for_node(
+            child,
+            non_empty_params(dict(getattr(child, "parameters", {}) or {})),
+        )
+        for key, value in child_params.items():
+            params[f"{FIREFLY_NIC_SIMPLE_MEMORY_SLOT}.{key}"] = value
+
+        return params
+
+    return {}
+
+
 def _derived_export_params_for_node(
     node,
     attachments_by_parent_id: dict[int, list],
@@ -822,6 +882,15 @@ def _derived_export_params_for_node(
     if component_type == "ember.EmberEngine":
         derived.update(
             _ember_motif_params_for_node(
+                node,
+                attachments_by_parent_id,
+                nodes_by_id,
+            )
+        )
+
+    if component_type == "firefly.nic":
+        derived.update(
+            _firefly_nic_simple_memory_params_for_node(
                 node,
                 attachments_by_parent_id,
                 nodes_by_id,
@@ -1375,6 +1444,9 @@ def _is_visual_parameter_attachment(
     """Return true when an attachment is a plugin-owned visual parameter edge."""
 
     if _is_ember_motif_attachment(parent, attachment, nodes_by_id):
+        return True
+
+    if _is_firefly_nic_simple_memory_attachment(parent, attachment, nodes_by_id):
         return True
 
     return _is_selector_only_attachment(parent, attachment)

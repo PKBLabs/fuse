@@ -166,3 +166,195 @@ def test_component_node_expands_sst_multi_expression_port_template(monkeypatch):
         "nic1core0",
         "nic1core1",
     }
+
+
+def test_increment_variable_port_updates_visible_ports_without_parameter_lag(monkeypatch):
+    monkeypatch.setattr(
+        "fuse.core.ui.graphics_items.load_port_metadata_for_component",
+        lambda *args, **kwargs: [
+            {
+                "name": "port%(num_ports)d",
+                "description": "router port",
+                "iface": "",
+                "is_variable": True,
+                "base_name": "port",
+                "count_parameter": "num_ports",
+                "default_count": 1,
+            },
+        ],
+    )
+
+    node = ComponentNodeItem(_component())
+
+    assert [port.name for port in node.ports] == ["port0"]
+
+    node.increment_variable_port("port")
+
+    assert [port.name for port in node.ports] == ["port0", "port1"]
+    assert node.variable_port_counts == {"port": 2}
+
+
+def test_manual_count_parameter_edit_updates_visible_variable_ports(monkeypatch):
+    monkeypatch.setattr(
+        "fuse.core.ui.graphics_items.load_port_metadata_for_component",
+        lambda *args, **kwargs: [
+            {
+                "name": "port%(num_ports)d",
+                "description": "router port",
+                "iface": "",
+                "is_variable": True,
+                "base_name": "port",
+                "count_parameter": "num_ports",
+                "default_count": 1,
+            },
+        ],
+    )
+
+    node = ComponentNodeItem(_component())
+
+    node.parameters["num_ports"] = "5"
+    ok, message = node.sync_variable_port_count_from_parameter("num_ports", "5")
+
+    assert ok is True
+    assert message == ""
+    assert [port.name for port in node.ports] == [
+        "port0",
+        "port1",
+        "port2",
+        "port3",
+        "port4",
+    ]
+    assert node.variable_port_counts == {"port": 5}
+
+
+def test_remove_variable_port_prefers_unconnected_highest_port(monkeypatch):
+    monkeypatch.setattr(
+        "fuse.core.ui.graphics_items.load_port_metadata_for_component",
+        lambda *args, **kwargs: _variable_ports(),
+    )
+
+    scene = ModelScene()
+    router = ComponentNodeItem(_component(), instance_name="router0")
+    peer = ComponentNodeItem(
+        ComponentDefinition(plugin_id="core", element="test", name="Peer"),
+        instance_name="peer0",
+    )
+    scene.addItem(router)
+    scene.addItem(peer)
+
+    ok, message = router.set_variable_port_count("port", 3)
+    assert ok is True
+
+    source = next(port for port in router.ports if port.name == "port1")
+    target = next(port for port in peer.ports if port.name == "port0")
+    link = ModelLink(
+        link_id=1,
+        name="link_router_peer",
+        source_node_id=router.node_id,
+        source_component_name="router0",
+        source_port="port1",
+        target_node_id=peer.node_id,
+        target_component_name="peer0",
+        target_port="port0",
+    )
+    scene.links.append(link)
+    scene.addItem(ConnectionItem(link, source, target))
+
+    ok, message = router.remove_variable_port("port", confirm=False)
+
+    assert ok is True
+    assert message == ""
+    assert [port.name for port in router.ports] == ["port0", "port1", "ctrl"]
+    assert link in scene.links
+    assert link.source_port == "port1"
+
+
+def test_remove_lower_variable_port_compacts_names_and_updates_links(monkeypatch):
+    monkeypatch.setattr(
+        "fuse.core.ui.graphics_items.load_port_metadata_for_component",
+        lambda *args, **kwargs: _variable_ports(),
+    )
+
+    scene = ModelScene()
+    router = ComponentNodeItem(_component(), instance_name="router0")
+    peer = ComponentNodeItem(
+        ComponentDefinition(plugin_id="core", element="test", name="Peer"),
+        instance_name="peer0",
+    )
+    scene.addItem(router)
+    scene.addItem(peer)
+
+    ok, message = router.set_variable_port_count("port", 4)
+    assert ok is True
+
+    source = next(port for port in router.ports if port.name == "port3")
+    target = next(port for port in peer.ports if port.name == "port0")
+    link = ModelLink(
+        link_id=1,
+        name="link_router_peer",
+        source_node_id=router.node_id,
+        source_component_name="router0",
+        source_port="port3",
+        target_node_id=peer.node_id,
+        target_component_name="peer0",
+        target_port="port0",
+    )
+    scene.links.append(link)
+    scene.addItem(ConnectionItem(link, source, target))
+
+    ok, message = router.remove_variable_port("port", port_name="port1", confirm=False)
+
+    assert ok is True
+    assert message == ""
+    assert [port.name for port in router.ports] == ["port0", "port1", "port2", "ctrl"]
+    assert link in scene.links
+    assert link.source_port == "port2"
+
+
+def test_remove_connected_variable_port_deletes_attached_link_when_confirmed(monkeypatch):
+    monkeypatch.setattr(
+        "fuse.core.ui.graphics_items.load_port_metadata_for_component",
+        lambda *args, **kwargs: [
+            {
+                "name": "port%(num_ports)d",
+                "description": "router port",
+                "iface": "",
+                "is_variable": True,
+                "base_name": "port",
+                "count_parameter": "num_ports",
+                "default_count": 1,
+            },
+        ],
+    )
+
+    scene = ModelScene()
+    router = ComponentNodeItem(_component(), instance_name="router0")
+    peer = ComponentNodeItem(
+        ComponentDefinition(plugin_id="core", element="test", name="Peer"),
+        instance_name="peer0",
+    )
+    scene.addItem(router)
+    scene.addItem(peer)
+
+    source = next(port for port in router.ports if port.name == "port0")
+    target = next(port for port in peer.ports if port.name == "port0")
+    link = ModelLink(
+        link_id=1,
+        name="link_router_peer",
+        source_node_id=router.node_id,
+        source_component_name="router0",
+        source_port="port0",
+        target_node_id=peer.node_id,
+        target_component_name="peer0",
+        target_port="port0",
+    )
+    scene.links.append(link)
+    scene.addItem(ConnectionItem(link, source, target))
+
+    ok, message = router.remove_variable_port("port", port_name="port0", confirm=False)
+
+    assert ok is True
+    assert message == ""
+    assert link not in scene.links
+    assert [port.name for port in router.ports] == []
+    assert router.variable_port_counts == {"port": 0}

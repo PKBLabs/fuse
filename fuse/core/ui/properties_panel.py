@@ -533,7 +533,26 @@ class PropertiesPanel(QWidget):
         elif isinstance(key, str) and key.startswith("component.parameter.") and self.current_node is not None:
             parameter_name = metadata.get("name")
             if parameter_name:
+                old_parameter_value = self.current_node.parameters.get(parameter_name)
                 self.current_node.parameters[parameter_name] = new_value
+
+                sync_variable_ports = getattr(
+                    self.current_node,
+                    "sync_variable_port_count_from_parameter",
+                    None,
+                )
+                if sync_variable_ports is not None:
+                    ok, message = sync_variable_ports(parameter_name, new_value)
+                    if not ok:
+                        QMessageBox.warning(self, "Invalid Port Count", message)
+                        if old_parameter_value is None:
+                            self.current_node.parameters.pop(parameter_name, None)
+                        else:
+                            self.current_node.parameters[parameter_name] = old_parameter_value
+                        self._loading = True
+                        item.setText(1, old_value)
+                        self._loading = False
+                        return
 
         item.setData(1, Qt.UserRole + 1, new_value)
 
