@@ -18,6 +18,7 @@ component, link, or subcomponent attachment. It also overlays validation issues
 from the latest model validation pass so users can see which parameters or
 objects need attention without leaving the main editor.
 """
+import re
 from typing import Optional
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QBrush
@@ -34,6 +35,8 @@ from PySide6.QtWidgets import (
 from fuse.core.persistence.db_access import get_component_details
 from fuse.core.ui.graphics_items import ComponentNodeItem, ConnectionItem, SubcompAttachmentItem
 
+
+_INTEGER_WITH_BYTE_UNIT_RE = re.compile(r"^\\s*[+-]?(?:(?:0[xX][0-9A-Fa-f_]+)|(?:\\d+(?:\\.\\d+)?))\\s*(?:[KMGTPE]?i?B|[KMGTPE]?B)\\s*$")
 
 class PropertiesPanel(QWidget):
     """Dock widget content for inspecting and editing selected model objects.
@@ -660,11 +663,12 @@ class PropertiesPanel(QWidget):
 
     @staticmethod
     def looks_like_int(value: str) -> bool:
+        text = str(value).strip()
         try:
-            int(value)
+            int(text)
             return True
         except ValueError:
-            return False
+            return bool(_INTEGER_WITH_BYTE_UNIT_RE.match(text))
 
     @staticmethod
     def looks_like_float(value: str) -> bool:

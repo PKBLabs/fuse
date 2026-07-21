@@ -6048,11 +6048,11 @@
           "missing_severity": "silent",
           "required": false
         },
-        "FAM_memsize": {
+        "FAM_memSize": {
           "default_kind": "literal",
-          "default_value": "0",
+          "default_value": "0B",
           "export_default": true,
-          "kind": "unknown",
+          "kind": "unit_algebra",
           "missing_severity": "silent",
           "required": false
         },

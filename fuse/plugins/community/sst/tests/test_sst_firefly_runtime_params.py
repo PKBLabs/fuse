@@ -189,3 +189,20 @@ def test_ember_engine_legacy_motif_type_param_exports_as_name():
     assert "motif0" not in params
     assert params["motif0.name"] == "ember.AllreduceMotif"
     assert params["motif0.arg.count"] == "8"
+
+def test_firefly_nic_maps_legacy_fam_memsize_param_to_runtime_name():
+    node = make_node(
+        1,
+        "nic_0",
+        "firefly",
+        "nic",
+        parameters={
+            "nid": "0",
+            "FAM_memsize": "64MiB",
+        },
+    )
+
+    params = normalize_params_for_node(node, exportable_params_for_node(node))
+
+    assert params["FAM_memSize"] == "64MiB"
+    assert "FAM_memsize" not in params

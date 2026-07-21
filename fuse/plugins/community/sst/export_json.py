@@ -614,6 +614,15 @@ def exportable_params_for_node(
     return non_empty_params(merged)
 
 
+def _normalize_firefly_nic_param_names(params: dict[str, Any]) -> dict[str, Any]:
+    """Map legacy imported Firefly NIC parameter spellings to runtime names."""
+
+    result = dict(params)
+    if "FAM_memsize" in result:
+        result["FAM_memSize"] = result.pop("FAM_memsize")
+    return result
+
+
 def _normalize_ember_engine_motif_param_names(params: dict[str, Any]) -> dict[str, Any]:
     """Convert legacy motifN type params into SST's motifN.name form."""
 
@@ -652,6 +661,8 @@ def normalize_params_for_node(
     params = _normalize_sst_runtime_symbolic_values(params)
     if component_type == "ember.EmberEngine":
         params = _normalize_ember_engine_motif_param_names(params)
+    elif component_type == "firefly.nic":
+        params = _normalize_firefly_nic_param_names(params)
     normalized = normalize_params(
         component_type,
         params,

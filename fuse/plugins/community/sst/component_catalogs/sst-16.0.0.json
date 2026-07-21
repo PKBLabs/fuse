@@ -21022,9 +21022,9 @@
           "required": 0
         },
         {
-          "default_val": "0",
-          "description": "",
-          "name": "FAM_memsize",
+          "default_val": "0B",
+          "description": "Size of FAM memory to register on this NIC. Accepts SST UnitAlgebra byte values such as 64MiB.",
+          "name": "FAM_memSize",
           "required": 0
         },
         {
