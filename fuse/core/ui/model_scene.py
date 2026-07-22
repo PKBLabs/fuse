@@ -29,7 +29,7 @@ from __future__ import annotations
 from typing import Optional
 from copy import deepcopy
 
-from PySide6.QtCore import QPointF, Qt, QTimer
+from PySide6.QtCore import QPointF, Qt, QThreadPool, QTimer
 from PySide6.QtGui import QKeySequence, QPen, QColor
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -52,6 +52,11 @@ from fuse.core.model.composite_mini_model import (
     uniquify_mini_model_component_names,
 )
 from fuse.core.plugin_runtime.manager import get_plugin_by_id
+from fuse.core.ui.async_link_routing import (
+    LinkRouteRequest,
+    LinkRouteResult,
+    LinkRoutingWorker,
+)
 from fuse.core.ui.graphics_items import (
     ComponentNodeItem,
     ConnectionItem,
@@ -127,6 +132,31 @@ class ModelScene(QGraphicsScene):
         self._reroute_timer.setInterval(250)
         self._reroute_timer.timeout.connect(self.reroute_all_links)
 
+        # Keep large selections responsive while dragging. Updating every
+        # connected link for every ItemPositionHasChanged event scales poorly as
+        # diagrams grow, so drag preview routing is throttled to one small batch
+        # per timer tick. Drop/release still performs the accurate reroute.
+        self._drag_preview_timer = QTimer()
+        self._drag_preview_timer.setSingleShot(True)
+        self._drag_preview_timer.setInterval(33)
+        self._drag_preview_timer.timeout.connect(self.update_drag_preview_links)
+        self._drag_preview_node_ids: set[int] = set()
+        self._drag_moved_node_ids: set[int] = set()
+
+        # Full orthogonal routing can be expensive on dense diagrams. Keep Qt
+        # graphics mutation on the GUI thread, but compute numeric route points
+        # in a thread-pool worker from a GUI-thread geometry snapshot.
+        self._route_thread_pool = QThreadPool.globalInstance()
+        self._route_generation = 0
+        self._active_route_workers: set[LinkRoutingWorker] = set()
+        self._pending_route_batches: dict[int, dict] = {}
+        self._async_routing_enabled = True
+
+        # During project load, build the scene first and avoid item-change
+        # callbacks, incremental routing, and model-change snapshots until the
+        # complete model has been restored.
+        self._model_loading_depth = 0
+
     def connection_items(self) -> list[ConnectionItem]:
         items = [item for item in self.items() if isinstance(item, ConnectionItem)]
         return sorted(items, key=lambda item: item.link.link_id)
@@ -146,6 +176,9 @@ class ModelScene(QGraphicsScene):
     def clear_model(self):
         self.cancel_pending_connection()
         self.cancel_pending_subcomp_attachment()
+        self.invalidate_pending_link_routes()
+        self._reroute_timer.stop()
+        self._drag_preview_timer.stop()
         self.clear()
         self.links = []
         self.subcomp_attachments = []
@@ -156,6 +189,36 @@ class ModelScene(QGraphicsScene):
         self.node_group_ids = {}
         self._next_node_id = 1
         self.notify_model_changed()
+
+    def begin_model_load(self) -> None:
+        """Enter a project-load batch.
+
+        Qt graphics items are still created on the GUI thread, but their
+        position-change handlers should not trigger routing/history work until
+        all nodes, links, and subcomponent attachments have been restored.
+        """
+        self._model_loading_depth += 1
+        self.begin_model_change_batch()
+        self.invalidate_pending_link_routes()
+        self._reroute_timer.stop()
+        self._drag_preview_timer.stop()
+
+    def end_model_load(self) -> None:
+        """Leave a project-load batch."""
+        if self._model_loading_depth > 0:
+            self._model_loading_depth -= 1
+        self.end_model_change_batch()
+
+    def invalidate_pending_link_routes(self) -> None:
+        """Drop stale asynchronous route batches.
+
+        Worker threads cannot be forcibly stopped, but bumping the generation
+        makes their eventual results no-ops. Clearing the bookkeeping prevents
+        old workers from keeping scene state alive after a model clear/load.
+        """
+        self._route_generation += 1
+        self._pending_route_batches.clear()
+        self._active_route_workers.clear()
 
     def next_component_node_id(self) -> int:
         """Return the next component id for this scene.
@@ -221,6 +284,10 @@ class ModelScene(QGraphicsScene):
             self.notify_model_changed()
 
     def notify_component_added(self, node: ComponentNodeItem):
+        if self._model_change_batch_depth > 0:
+            self.notify_model_changed()
+            return
+
         if self.component_added_callback is not None:
             self.component_added_callback(node)
         self.notify_model_changed()
@@ -444,124 +511,128 @@ class ModelScene(QGraphicsScene):
         old_to_new: dict[int, ComponentNodeItem] = {}
         old_group_to_new: dict[int, int] = {}
 
-        self.clearSelection()
+        self.begin_model_change_batch()
+        try:
+            self.clearSelection()
 
-        for item in nodes_payload:
-            component = deepcopy(item["component"])
-            source_name = str(item.get("instance_name") or component.name or "Component")
-            source_template = str(item.get("instance_name_template") or "")
-            if not source_template:
-                source_template = template_for_source_name(source_name)
-            start_index = copy_start_index_for_name(source_name, source_template)
-            new_name, new_template = self.allocate_component_name_from_template(
-                source_template,
-                used_names,
-                start_index=start_index,
-            )
-            used_names.add(new_name)
+            for item in nodes_payload:
+                component = deepcopy(item["component"])
+                source_name = str(item.get("instance_name") or component.name or "Component")
+                source_template = str(item.get("instance_name_template") or "")
+                if not source_template:
+                    source_template = template_for_source_name(source_name)
+                start_index = copy_start_index_for_name(source_name, source_template)
+                new_name, new_template = self.allocate_component_name_from_template(
+                    source_template,
+                    used_names,
+                    start_index=start_index,
+                )
+                used_names.add(new_name)
 
-            offset_x = float(item["pos"]["x"]) - min_x
-            offset_y = float(item["pos"]["y"]) - min_y
-            node = self.create_component_node(
-                component,
-                QPointF(scene_pos.x() + offset_x, scene_pos.y() + offset_y),
-                instance_name=new_name,
-                instance_name_template=new_template,
-            )
-            node.parameters = deepcopy(item.get("parameters", {}) or {})
-            node.variable_port_counts = deepcopy(item.get("variable_port_counts", {}) or {})
-            node.composite_instance_model = deepcopy(item.get("composite_instance_model", {}) or {})
-            node.composite_port_mappings = deepcopy(item.get("composite_port_mappings", []) or [])
-            if int(getattr(node.component, "is_composite", 0) or 0):
-                self.uniquify_composite_instance_node(node, used_names)
-            if item.get("icon_path") and hasattr(node, "set_icon_path"):
-                node.set_icon_path(str(item.get("icon_path") or ""))
-            if hasattr(node, "sync_ports_to_templates"):
-                node.sync_ports_to_templates()
-            if hasattr(node, "sync_composite_ports_from_mappings"):
-                node.sync_composite_ports_from_mappings()
+                offset_x = float(item["pos"]["x"]) - min_x
+                offset_y = float(item["pos"]["y"]) - min_y
+                node = self.create_component_node(
+                    component,
+                    QPointF(scene_pos.x() + offset_x, scene_pos.y() + offset_y),
+                    instance_name=new_name,
+                    instance_name_template=new_template,
+                    notify=False,
+                )
+                node.parameters = deepcopy(item.get("parameters", {}) or {})
+                node.variable_port_counts = deepcopy(item.get("variable_port_counts", {}) or {})
+                node.composite_instance_model = deepcopy(item.get("composite_instance_model", {}) or {})
+                node.composite_port_mappings = deepcopy(item.get("composite_port_mappings", []) or [])
+                if int(getattr(node.component, "is_composite", 0) or 0):
+                    self.uniquify_composite_instance_node(node, used_names)
+                if item.get("icon_path") and hasattr(node, "set_icon_path"):
+                    node.set_icon_path(str(item.get("icon_path") or ""))
+                if hasattr(node, "sync_ports_to_templates"):
+                    node.sync_ports_to_templates()
+                if hasattr(node, "sync_composite_ports_from_mappings"):
+                    node.sync_composite_ports_from_mappings()
 
-            old_to_new[int(item["old_node_id"])] = node
-            old_group_id = item.get("group_id")
-            if old_group_id is not None:
-                old_group_id = int(old_group_id)
-                if old_group_id not in old_group_to_new:
-                    old_group_to_new[old_group_id] = self._next_group_id
-                    self._next_group_id += 1
-                self.node_group_ids[node.node_id] = old_group_to_new[old_group_id]
+                old_to_new[int(item["old_node_id"])] = node
+                old_group_id = item.get("group_id")
+                if old_group_id is not None:
+                    old_group_id = int(old_group_id)
+                    if old_group_id not in old_group_to_new:
+                        old_group_to_new[old_group_id] = self._next_group_id
+                        self._next_group_id += 1
+                    self.node_group_ids[node.node_id] = old_group_to_new[old_group_id]
 
-            node.setSelected(True)
+                node.setSelected(True)
 
-        for item in payload.get("links", []):
-            old_link = item.get("link")
-            source_node = old_to_new.get(int(old_link.source_node_id))
-            target_node = old_to_new.get(int(old_link.target_node_id))
-            if source_node is None or target_node is None:
-                continue
+            for item in payload.get("links", []):
+                old_link = item.get("link")
+                source_node = old_to_new.get(int(old_link.source_node_id))
+                target_node = old_to_new.get(int(old_link.target_node_id))
+                if source_node is None or target_node is None:
+                    continue
 
-            source_port = self.find_port(source_node.node_id, old_link.source_port)
-            target_port = self.find_port(target_node.node_id, old_link.target_port)
-            if source_port is None or target_port is None:
-                continue
+                source_port = self.find_port(source_node.node_id, old_link.source_port)
+                target_port = self.find_port(target_node.node_id, old_link.target_port)
+                if source_port is None or target_port is None:
+                    continue
 
-            link = deepcopy(old_link)
-            link.link_id = self._next_link_id
-            self._next_link_id += 1
-            link.name = self.generate_unique_link_name_from_base(link.name)
-            link.source_node_id = source_node.node_id
-            link.source_component_name = source_node.instance_name
-            link.target_node_id = target_node.node_id
-            link.target_component_name = target_node.instance_name
+                link = deepcopy(old_link)
+                link.link_id = self._next_link_id
+                self._next_link_id += 1
+                link.name = self.generate_unique_link_name_from_base(link.name)
+                link.source_node_id = source_node.node_id
+                link.source_component_name = source_node.instance_name
+                link.target_node_id = target_node.node_id
+                link.target_component_name = target_node.instance_name
 
-            self.links.append(link)
-            connection = ConnectionItem(link, source_port, target_port)
-            self.addItem(connection)
-            connection.update_position()
+                self.links.append(link)
+                connection = ConnectionItem(link, source_port, target_port)
+                self.addItem(connection)
 
-        for item in payload.get("subcomp_attachments", []):
-            old_attachment = item.get("attachment")
-            parent_node = old_to_new.get(int(old_attachment.parent_node_id))
-            child_node = old_to_new.get(int(old_attachment.child_node_id))
-            if parent_node is None or child_node is None:
-                continue
+            for item in payload.get("subcomp_attachments", []):
+                old_attachment = item.get("attachment")
+                parent_node = old_to_new.get(int(old_attachment.parent_node_id))
+                child_node = old_to_new.get(int(old_attachment.child_node_id))
+                if parent_node is None or child_node is None:
+                    continue
 
-            slot_connector = self.find_subcomp_connector(
-                parent_node.node_id,
-                old_attachment.slot_name,
-                role="slot",
-            )
-            interface_connector = self.find_subcomp_connector(
-                child_node.node_id,
-                str(item.get("target_connector_name") or ""),
-                role="interface",
-            )
-            if slot_connector is None:
-                continue
-            if interface_connector is None:
-                connectors = [
-                    connector
-                    for connector in getattr(child_node, "subcomp_connectors", [])
-                    if getattr(connector, "role", "") == "interface"
-                ]
-                interface_connector = connectors[0] if connectors else None
-            if interface_connector is None:
-                continue
+                slot_connector = self.find_subcomp_connector(
+                    parent_node.node_id,
+                    old_attachment.slot_name,
+                    role="slot",
+                )
+                interface_connector = self.find_subcomp_connector(
+                    child_node.node_id,
+                    str(item.get("target_connector_name") or ""),
+                    role="interface",
+                )
+                if slot_connector is None:
+                    continue
+                if interface_connector is None:
+                    connectors = [
+                        connector
+                        for connector in getattr(child_node, "subcomp_connectors", [])
+                        if getattr(connector, "role", "") == "interface"
+                    ]
+                    interface_connector = connectors[0] if connectors else None
+                if interface_connector is None:
+                    continue
 
-            attachment = deepcopy(old_attachment)
-            attachment.attachment_id = self._next_subcomp_attachment_id
-            self._next_subcomp_attachment_id += 1
-            attachment.parent_node_id = parent_node.node_id
-            attachment.parent_component_name = parent_node.instance_name
-            attachment.child_node_id = child_node.node_id
-            attachment.child_component_name = child_node.instance_name
+                attachment = deepcopy(old_attachment)
+                attachment.attachment_id = self._next_subcomp_attachment_id
+                self._next_subcomp_attachment_id += 1
+                attachment.parent_node_id = parent_node.node_id
+                attachment.parent_component_name = parent_node.instance_name
+                attachment.child_node_id = child_node.node_id
+                attachment.child_component_name = child_node.instance_name
 
-            self.subcomp_attachments.append(attachment)
-            attachment_item = SubcompAttachmentItem(attachment, slot_connector, interface_connector)
-            self.addItem(attachment_item)
-            attachment_item.update_position()
+                self.subcomp_attachments.append(attachment)
+                attachment_item = SubcompAttachmentItem(attachment, slot_connector, interface_connector)
+                self.addItem(attachment_item)
 
-        self.reroute_all_links()
-        self.notify_model_changed()
+            self.reroute_all_links()
+            self.notify_model_changed()
+        finally:
+            self.end_model_change_batch()
+
         return list(old_to_new.values())
 
     def group_selection(self) -> bool:
@@ -642,6 +713,8 @@ class ModelScene(QGraphicsScene):
         scene_pos,
         instance_name: str | None = None,
         instance_name_template: str | None = None,
+        *,
+        notify: bool = True,
     ):
         if self.snap_to_grid_enabled:
             scene_pos = self.snap_position_to_grid(scene_pos)
@@ -672,10 +745,11 @@ class ModelScene(QGraphicsScene):
         if int(getattr(component, "is_composite", 0) or 0):
             self.populate_composite_instance_node_from_template(node)
 
-        if self.component_used_callback is not None:
-            self.component_used_callback(component)
+        if notify:
+            if self.component_used_callback is not None:
+                self.component_used_callback(component)
 
-        self.notify_component_added(node)
+            self.notify_component_added(node)
         return node
 
     def populate_composite_instance_node_from_template(self, node: ComponentNodeItem) -> None:
@@ -844,14 +918,32 @@ class ModelScene(QGraphicsScene):
 
         return None
 
-    def begin_node_drag(self):
+    def begin_node_drag(self, node: Optional["ComponentNodeItem"] = None):
+        # Invalidate any pending background route batch so stale paths do not
+        # overwrite drag previews while the user is moving components.
+        self._route_generation += 1
         self._dragging_node = True
         self._drag_changed = False
+
+        drag_nodes: set[ComponentNodeItem] = set()
+        if node is not None:
+            drag_nodes.add(node)
+            drag_nodes.update(self.group_members_for_node(node))
+
+        for selected_node in self.selected_component_nodes(expand_groups=True):
+            drag_nodes.add(selected_node)
+
+        if not drag_nodes:
+            drag_nodes = set(self.component_items())
+
         self._drag_start_positions = {
-            node.node_id: (node.pos().x(), node.pos().y())
-            for node in self.component_items()
+            drag_node.node_id: (drag_node.pos().x(), drag_node.pos().y())
+            for drag_node in drag_nodes
         }
         self._reroute_timer.stop()
+        self._drag_preview_timer.stop()
+        self._drag_preview_node_ids.clear()
+        self._drag_moved_node_ids.clear()
 
     def end_node_drag(self, node: Optional["ComponentNodeItem"] = None):
         """
@@ -879,11 +971,22 @@ class ModelScene(QGraphicsScene):
                 node.setPos(snapped_position)
                 changed = True
 
-        self._dragging_node = False
+        moved_node_ids = set(self._drag_moved_node_ids)
+        if changed and node is not None:
+            moved_node_ids.add(node.node_id)
 
-        if node is not None:
-            self.reroute_links_affected_by_node(node)
-            self.update_subcomp_attachments_for_node(node)
+        self._dragging_node = False
+        self._drag_preview_timer.stop()
+        self._drag_preview_node_ids.clear()
+        self._drag_moved_node_ids.clear()
+
+        moved_nodes = [
+            moved_node
+            for moved_node_id in moved_node_ids
+            if (moved_node := self.find_node_by_id(moved_node_id)) is not None
+        ]
+        if changed and moved_nodes:
+            self.reroute_links_affected_by_nodes(moved_nodes)
 
         self._drag_changed = False
         self._drag_start_positions = {}
@@ -898,37 +1001,305 @@ class ModelScene(QGraphicsScene):
         Do not full-reroute while a node is actively being dragged. That is what
         caused multi-second UI freezes in dense models.
         """
-        if self._dragging_node:
+        if self._dragging_node or self._model_loading_depth > 0:
             return
 
         self._reroute_timer.start()
 
+    def request_drag_preview_for_node(self, node: "ComponentNodeItem") -> None:
+        """Throttle cheap link preview updates during interactive drags."""
+        if not self._dragging_node:
+            self.reroute_links_for_node(node)
+            return
+
+        node_id = int(getattr(node, "node_id", 0) or 0)
+        if node_id <= 0:
+            return
+
+        self._drag_preview_node_ids.add(node_id)
+        self._drag_moved_node_ids.add(node_id)
+        if not self._drag_preview_timer.isActive():
+            self._drag_preview_timer.start()
+
+    def update_drag_preview_links(self) -> None:
+        """Update attached link previews for nodes moved since the last tick."""
+        if not self._dragging_node:
+            self._drag_preview_node_ids.clear()
+            return
+
+        node_ids = set(self._drag_preview_node_ids)
+        self._drag_preview_node_ids.clear()
+        if not node_ids:
+            return
+
+        affected_connections: set[ConnectionItem] = set()
+        affected_nodes: list[ComponentNodeItem] = []
+
+        for node_id in node_ids:
+            node = self.find_node_by_id(node_id)
+            if node is None:
+                continue
+            affected_nodes.append(node)
+            affected_connections.update(self.links_attached_to_node(node))
+
+        for connection in sorted(affected_connections, key=lambda item: item.link.link_id):
+            connection.update_position_fast()
+
+        for node in affected_nodes:
+            self.update_subcomp_attachments_for_node(node)
+
+    def route_obstacle_rect_tuples(self) -> list[tuple[float, float, float, float]]:
+        """Snapshot padded component rectangles for background link routing."""
+        pad = ConnectionItem.ROUTE_CLEARANCE
+        rects: list[tuple[float, float, float, float]] = []
+
+        for node in self.component_items():
+            rect = node.mapRectToScene(node.rect()).adjusted(-pad, -pad, pad, pad)
+            rects.append((rect.left(), rect.top(), rect.right(), rect.bottom()))
+
+        return rects
+
+    def route_request_for_connection(
+        self,
+        connection: ConnectionItem,
+    ) -> LinkRouteRequest:
+        """Snapshot one connection's route inputs on the GUI thread."""
+        source_center = connection.source_port.scene_center()
+        target_center = connection.target_port.scene_center()
+        source_exit = connection.exit_point_for_port(connection.source_port)
+        target_exit = connection.exit_point_for_port(connection.target_port)
+        config = connection.routing_config()
+
+        return LinkRouteRequest(
+            link_id=int(connection.link.link_id),
+            source_center=(source_center.x(), source_center.y()),
+            target_center=(target_center.x(), target_center.y()),
+            source_exit=(source_exit.x(), source_exit.y()),
+            target_exit=(target_exit.x(), target_exit.y()),
+            lane_distance=float(connection.outward_lane_distance()),
+            config={
+                "route_clearance": float(config.route_clearance),
+                "exit_margin": float(config.exit_margin),
+                "lane_spacing": float(config.lane_spacing),
+                "bend_penalty": float(config.bend_penalty),
+                "fallback_margin": float(config.fallback_margin),
+            },
+        )
+
+    def route_generation(self) -> int:
+        """Advance and return the latest asynchronous routing generation."""
+        self._route_generation += 1
+        return self._route_generation
+
+    def schedule_async_link_routing(
+        self,
+        connections: list[ConnectionItem],
+        *,
+        update_all_attachments: bool = False,
+        attachment_nodes: list["ComponentNodeItem"] | None = None,
+    ) -> None:
+        """Route links on worker threads and apply the resulting paths later.
+
+        Only plain geometry snapshots leave the GUI thread. The returned route
+        points are applied to ``ConnectionItem`` graphics objects on the GUI
+        thread via Qt signals.
+        """
+        if self._model_loading_depth > 0:
+            return
+
+        connections = [
+            connection
+            for connection in connections
+            if connection.scene() is self
+        ]
+
+        if not connections:
+            if update_all_attachments:
+                for attachment in self.subcomp_attachment_items():
+                    attachment.update_position()
+            elif attachment_nodes:
+                for node in attachment_nodes:
+                    self.update_subcomp_attachments_for_node(node)
+            return
+
+        if not self._async_routing_enabled:
+            self.reroute_connections_sync(
+                connections,
+                update_all_attachments=update_all_attachments,
+                attachment_nodes=attachment_nodes,
+            )
+            return
+
+        generation = self.route_generation()
+        obstacle_rects = self.route_obstacle_rect_tuples()
+        requests = [
+            self.route_request_for_connection(connection)
+            for connection in sorted(
+                connections,
+                key=lambda item: item.link.link_id,
+            )
+        ]
+
+        worker = LinkRoutingWorker(
+            generation=generation,
+            requests=requests,
+            obstacle_rects=obstacle_rects,
+        )
+        self._active_route_workers.add(worker)
+        self._pending_route_batches[generation] = {
+            "worker": worker,
+            "connection_ids": [int(connection.link.link_id) for connection in connections],
+            "update_all_attachments": bool(update_all_attachments),
+            "attachment_node_ids": [
+                int(node.node_id)
+                for node in (attachment_nodes or [])
+                if node is not None
+            ],
+        }
+
+        worker.signals.finished.connect(self.apply_async_link_routes)
+        worker.signals.failed.connect(self.handle_async_link_routing_failed)
+
+        self._route_thread_pool.start(worker)
+
+    def reroute_connections_sync(
+        self,
+        connections: list[ConnectionItem],
+        *,
+        update_all_attachments: bool = False,
+        attachment_nodes: list["ComponentNodeItem"] | None = None,
+    ) -> None:
+        """Synchronous fallback used if the background router fails."""
+        for connection in sorted(connections, key=lambda item: item.link.link_id):
+            if connection.scene() is self:
+                connection.clear_route_points()
+                connection.update_position()
+
+        if update_all_attachments:
+            for attachment in self.subcomp_attachment_items():
+                attachment.update_position()
+        elif attachment_nodes:
+            for node in attachment_nodes:
+                self.update_subcomp_attachments_for_node(node)
+
+    def apply_async_link_routes(
+        self,
+        generation: int,
+        results: list[LinkRouteResult],
+    ) -> None:
+        """Apply worker-computed link routes if they are still current."""
+        generation = int(generation)
+        batch = self._pending_route_batches.pop(generation, {})
+        worker = batch.get("worker")
+        if worker is not None:
+            self._active_route_workers.discard(worker)
+
+        if generation != int(self._route_generation):
+            return
+
+        connections_by_id = {
+            int(connection.link.link_id): connection
+            for connection in self.connection_items()
+        }
+
+        for result in results:
+            connection = connections_by_id.get(int(result.link_id))
+            if connection is None or connection.scene() is not self:
+                continue
+
+            connection.set_route_points_from_tuples(result.points)
+
+        self.update_attachments_for_route_batch(batch)
+
+    def handle_async_link_routing_failed(
+        self,
+        generation: int,
+        message: str,
+    ) -> None:
+        """Fallback to synchronous routing for the latest failed route batch."""
+        generation = int(generation)
+        batch = self._pending_route_batches.pop(generation, {})
+        worker = batch.get("worker")
+        if worker is not None:
+            self._active_route_workers.discard(worker)
+
+        if generation != int(self._route_generation):
+            return
+
+        connection_ids = {
+            int(link_id)
+            for link_id in batch.get("connection_ids", [])
+        }
+        connections = [
+            connection
+            for connection in self.connection_items()
+            if int(connection.link.link_id) in connection_ids
+        ]
+        attachment_nodes = self.nodes_for_route_batch(batch)
+
+        self.reroute_connections_sync(
+            connections,
+            update_all_attachments=bool(batch.get("update_all_attachments")),
+            attachment_nodes=attachment_nodes,
+        )
+
+    def nodes_for_route_batch(self, batch: dict) -> list["ComponentNodeItem"]:
+        """Resolve stored node ids for a completed asynchronous route batch."""
+        node_ids = {
+            int(node_id)
+            for node_id in batch.get("attachment_node_ids", [])
+        }
+        if not node_ids:
+            return []
+
+        return [
+            node
+            for node in self.component_items()
+            if int(node.node_id) in node_ids
+        ]
+
+    def update_attachments_for_route_batch(self, batch: dict) -> None:
+        """Update attachment lines requested by a route batch."""
+        if bool(batch.get("update_all_attachments")):
+            for attachment in self.subcomp_attachment_items():
+                attachment.update_position()
+            return
+
+        for node in self.nodes_for_route_batch(batch):
+            self.update_subcomp_attachments_for_node(node)
+
     def reroute_all_links(self):
         """
         Recompute link paths in link-id order.
+
+        The expensive route search runs on a thread-pool worker from a snapshot
+        of numeric geometry. Qt graphics items are updated when the worker
+        returns to the GUI thread.
         """
-        connections = self.connection_items()
-
-        for connection in connections:
-            connection.clear_route_points()
-
-        for connection in connections:
-            connection.update_position()
-
-        for attachment in self.subcomp_attachment_items():
-            attachment.update_position()
+        self.schedule_async_link_routing(
+            self.connection_items(),
+            update_all_attachments=True,
+        )
 
     def reroute_links_for_node(self, node: "ComponentNodeItem", force_full: bool = False):
         """
         Update only links and subcomponent attachment edges attached to a node.
         """
-        for connection in self.links_attached_to_node(node):
-            if self._dragging_node and not force_full:
-                connection.update_position_fast()
-            else:
-                connection.update_position()
+        connections = sorted(
+            self.links_attached_to_node(node),
+            key=lambda item: item.link.link_id,
+        )
 
-        self.update_subcomp_attachments_for_node(node)
+        if self._dragging_node and not force_full:
+            for connection in connections:
+                connection.update_position_fast()
+            self.update_subcomp_attachments_for_node(node)
+            return
+
+        self.schedule_async_link_routing(
+            connections,
+            attachment_nodes=[node],
+        )
 
     def update_subcomp_attachments_for_node(self, node: "ComponentNodeItem"):
         for attachment in self.subcomp_attachment_items():
@@ -968,22 +1339,38 @@ class ModelScene(QGraphicsScene):
         Reroute links attached to the moved node plus unrelated links whose
         current path now crosses the moved node.
         """
-        affected = self.links_attached_to_node(node)
+        self.reroute_links_affected_by_nodes([node])
+
+    def reroute_links_affected_by_nodes(self, nodes: list["ComponentNodeItem"]):
+        """
+        Reroute links affected by one or more moved nodes as one release-time batch.
+        """
+        moved_nodes = [node for node in nodes if node is not None]
+        if not moved_nodes:
+            return
+
+        affected: set[ConnectionItem] = set()
+        for node in moved_nodes:
+            affected.update(self.links_attached_to_node(node))
 
         for connection in self.connection_items():
             if connection in affected:
                 continue
 
-            if self.link_route_intersects_node(connection, node):
+            if any(self.link_route_intersects_node(connection, node) for node in moved_nodes):
                 affected.add(connection)
 
-        # Clear affected route_points first so the overlap-avoidance penalty does
-        # not compare a link against its own stale path.
-        for connection in affected:
-            connection.clear_route_points()
+        affected_connections = sorted(affected, key=lambda item: item.link.link_id)
+        for connection in affected_connections:
+            connection.update_position_fast()
 
-        for connection in sorted(affected, key=lambda item: item.link.link_id):
-            connection.update_position()
+        for node in moved_nodes:
+            self.update_subcomp_attachments_for_node(node)
+
+        self.schedule_async_link_routing(
+            affected_connections,
+            attachment_nodes=moved_nodes,
+        )
 
     def endpoint_for_port(self, port: PortItem) -> LinkEndpoint:
         return LinkEndpoint(

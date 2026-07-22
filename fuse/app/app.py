@@ -33,7 +33,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from PySide6.QtCore import Qt, QElapsedTimer, QPoint, QTimer
+from PySide6.QtCore import QObject, QRunnable, Qt, QElapsedTimer, QPoint, QThreadPool, QTimer, Signal, Slot
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QApplication,
@@ -120,6 +120,50 @@ UNSAVED_CHOICE_SAVE = "save"
 UNSAVED_CHOICE_DISCARD = "discard"
 UNSAVED_CHOICE_CANCEL = "cancel"
 
+
+def project_history_signature_for_save(project: dict) -> str:
+    """Return the same clean-state signature used by undo/dirty tracking.
+
+    ``build_project_dict`` includes transient editor viewport state and a fresh
+    ``updatedAt`` timestamp. Those fields should be written to the .fse file, but
+    they should not make a just-saved model look dirty.
+    """
+    comparable = copy.deepcopy(project)
+    comparable.setdefault("project", {})["updatedAt"] = ""
+    comparable.pop("editor", None)
+    return json.dumps(comparable, sort_keys=True, separators=(",", ":"))
+
+
+class ProjectSaveSignals(QObject):
+    """Queued signals emitted by a background project-save worker."""
+    finished = Signal(int, str, str, str)
+
+
+class ProjectSaveWorker(QRunnable):
+    """Write a detached project snapshot without blocking the Qt UI thread."""
+    def __init__(self, token: int, project: dict, file_path: Path):
+        super().__init__()
+        self.token = token
+        self.project = project
+        self.file_path = Path(file_path)
+        self.signals = ProjectSaveSignals()
+
+    @Slot()
+    def run(self) -> None:
+        error = ""
+        clean_signature = ""
+        try:
+            clean_signature = project_history_signature_for_save(self.project)
+            save_project_file(self.project, self.file_path)
+        except Exception as exc:
+            error = str(exc)
+
+        self.signals.finished.emit(
+            self.token,
+            str(self.file_path),
+            clean_signature,
+            error,
+        )
 
 
 def prefer_xcb_platform_for_window_manager_shadows() -> None:
@@ -304,6 +348,15 @@ class MainWindow(QMainWindow):
         self._last_history_signature = ""
         self._saved_history_signature = ""
         self._restoring_history = False
+
+        self._save_thread_pool = QThreadPool.globalInstance()
+        self._save_in_progress = False
+        self._next_save_token = 1
+        self._active_save_token = 0
+        self._active_save_workers: set[ProjectSaveWorker] = set()
+        self._active_save_restore_path: Optional[Path] = None
+        self._active_save_restore_path_requested = False
+        self._active_save_signature_at_start = ""
 
         self.palette = ComponentPalette()
         self.scene = ModelScene()
@@ -559,41 +612,41 @@ class MainWindow(QMainWindow):
         tools_menu = menu_bar.addMenu("Tools")
         help_menu = menu_bar.addMenu("Help")
 
-        new_action = QAction("New Project...", self)
-        open_action = QAction("Open Project...", self)
+        self.new_action = QAction("New Project...", self)
+        self.open_action = QAction("Open Project...", self)
         project_settings_action = QAction("Project Settings...", self)
         validate_model_action = QAction("Validate Model", self)
         validate_export_action = QAction("Validate for Export", self)
-        save_action = QAction("Save", self)
-        save_as_action = QAction("Save As...", self)
+        self.save_action = QAction("Save", self)
+        self.save_as_action = QAction("Save As...", self)
         export_sst_json_action = QAction("SST JSON...", self)
         export_gem5_python_action = QAction("gem5 Python...", self)
         self.import_composite_action = QAction("Import Composite Component...", self)
         self.export_composite_action = QAction("Selected Composite Component...", self)
         exit_action = QAction("Exit", self)
 
-        new_action.triggered.connect(self.new_project)
-        open_action.triggered.connect(self.open_model)
+        self.new_action.triggered.connect(self.new_project)
+        self.open_action.triggered.connect(self.open_model)
         project_settings_action.triggered.connect(self.show_project_settings)
         validate_model_action.triggered.connect(self.validate_current_model)
         validate_export_action.triggered.connect(self.validate_current_model_for_export)
-        save_action.triggered.connect(self.save_model)
-        save_as_action.triggered.connect(self.save_model_as)
+        self.save_action.triggered.connect(self.save_model)
+        self.save_as_action.triggered.connect(self.save_model_as)
         export_sst_json_action.triggered.connect(self.export_sst_json)
         export_gem5_python_action.triggered.connect(self.export_gem5_python)
         self.import_composite_action.triggered.connect(self.import_composite_component)
         self.export_composite_action.triggered.connect(self.export_selected_composite_component)
         exit_action.triggered.connect(self.close)
 
-        file_menu.addAction(new_action)
-        file_menu.addAction(open_action)
+        file_menu.addAction(self.new_action)
+        file_menu.addAction(self.open_action)
         file_menu.addAction(project_settings_action)
         file_menu.addSeparator()
         file_menu.addAction(validate_model_action)
         file_menu.addAction(validate_export_action)
         file_menu.addSeparator()
-        file_menu.addAction(save_action)
-        file_menu.addAction(save_as_action)
+        file_menu.addAction(self.save_action)
+        file_menu.addAction(self.save_as_action)
 
         import_menu = file_menu.addMenu("Import")
         import_menu.addAction(self.import_composite_action)
@@ -1626,12 +1679,19 @@ class MainWindow(QMainWindow):
         if choice == UNSAVED_CHOICE_DISCARD:
             return True
         if choice == UNSAVED_CHOICE_SAVE:
-            return self.save_model()
+            # Saves now run in the background after a fast GUI-thread snapshot.
+            # Do not immediately continue with destructive actions such as Open,
+            # New, or Exit; the user can retry once the status bar reports that
+            # the save has completed.
+            self.save_model()
+            return False
 
         # Unknown responses are treated as cancel to avoid accidental data loss.
         return False
 
     def new_project(self):
+        if not self.ensure_no_save_in_progress("creating a new project"):
+            return
         if not self.confirm_discard_unsaved_changes("new"):
             return
 
@@ -1696,35 +1756,123 @@ class MainWindow(QMainWindow):
         self.refresh_project_model_tab_title()
         self.set_dirty(self.is_dirty)
 
-    def save_model(self) -> bool:
-        if not self.validate_model_before_save():
+    def set_save_in_progress(self, in_progress: bool) -> None:
+        self._save_in_progress = bool(in_progress)
+        for attr_name in ("save_action", "save_as_action"):
+            action = getattr(self, attr_name, None)
+            if action is not None:
+                action.setEnabled(not self._save_in_progress)
+
+    def ensure_no_save_in_progress(self, action_name: str) -> bool:
+        if not self._save_in_progress:
+            return True
+
+        QMessageBox.information(
+            self,
+            "Save In Progress",
+            f"FUSE is still saving the current project. Wait for that save to finish before {action_name}.",
+        )
+        return False
+
+    def save_model(
+        self,
+        checked: bool = False,
+        *,
+        restore_path_on_failure: Optional[Path] = None,
+        restore_path_on_failure_requested: bool = False,
+    ) -> bool:
+        if self._save_in_progress:
+            self.statusBar().showMessage("A save is already in progress", 3000)
             return False
 
         if self.current_project_path is None:
             return self.save_model_as()
 
-        project = self.project_dict()
+        # Saving a .fse file should be a quick snapshot operation. Full live
+        # validation can be expensive on large SST models because it queries
+        # catalog metadata and plugin checks from the GUI thread. Users can still
+        # run File -> Validate Model explicitly; save keeps work-in-progress state
+        # recoverable and lets structural project-file validation run in the
+        # background writer.
+        self._last_save_validation_issue_count = None
+
         try:
-            save_project_file(project, self.current_project_path)
+            project = self.project_dict()
         except Exception as exc:
             QMessageBox.critical(self, "Save Failed", str(exc))
             return False
 
-        self._saved_history_signature = self.history_signature()
-        self._last_history_signature = self._saved_history_signature
-        self.update_undo_redo_actions()
-        self.set_dirty(False)
-        issue_count = int(getattr(self, "_last_save_validation_issue_count", 0) or 0)
-        if issue_count:
-            self.statusBar().showMessage(
-                f"Saved {self.current_project_path} with {issue_count} validation issue(s) still present",
-                5000,
-            )
-        else:
-            self.statusBar().showMessage(f"Saved {self.current_project_path}", 3000)
+        token = self._next_save_token
+        self._next_save_token += 1
+        self._active_save_token = token
+        self._active_save_restore_path = Path(restore_path_on_failure) if restore_path_on_failure else None
+        self._active_save_restore_path_requested = bool(restore_path_on_failure_requested)
+        self._active_save_signature_at_start = self._last_history_signature
+
+        worker = ProjectSaveWorker(
+            token=token,
+            project=project,
+            file_path=self.current_project_path,
+        )
+        worker.signals.finished.connect(self.on_project_save_finished)
+        self._active_save_workers.add(worker)
+
+        self.set_save_in_progress(True)
+        self.statusBar().showMessage(f"Saving {self.current_project_path}…")
+        self._save_thread_pool.start(worker)
         return True
 
-    def save_model_as(self) -> bool:
+    def on_project_save_finished(
+        self,
+        token: int,
+        file_path: str,
+        clean_signature: str,
+        error_message: str,
+    ) -> None:
+        worker_to_remove = None
+        for worker in self._active_save_workers:
+            if worker.token == token:
+                worker_to_remove = worker
+                break
+        if worker_to_remove is not None:
+            self._active_save_workers.discard(worker_to_remove)
+
+        if token != self._active_save_token:
+            return
+
+        restore_path = self._active_save_restore_path
+        restore_path_requested = self._active_save_restore_path_requested
+        signature_at_start = self._active_save_signature_at_start
+
+        self._active_save_token = 0
+        self._active_save_restore_path = None
+        self._active_save_restore_path_requested = False
+        self._active_save_signature_at_start = ""
+        self.set_save_in_progress(False)
+
+        saved_path = Path(file_path)
+
+        if error_message:
+            if restore_path_requested and self.current_project_path == saved_path:
+                self.set_current_project_path(restore_path)
+
+            QMessageBox.critical(self, "Save Failed", error_message)
+            self.statusBar().showMessage(f"Save failed: {error_message}", 7000)
+            return
+
+        self._saved_history_signature = clean_signature
+        if self._last_history_signature == signature_at_start:
+            self._last_history_signature = clean_signature
+
+        self.update_undo_redo_actions()
+        self.set_dirty(self._last_history_signature != self._saved_history_signature)
+        self.statusBar().showMessage(f"Saved {saved_path}", 3000)
+
+    def save_model_as(self, checked: bool = False) -> bool:
+        if self._save_in_progress:
+            self.statusBar().showMessage("A save is already in progress", 3000)
+            return False
+
         file_path, _ = QFileDialog.getSaveFileName(
             self,
             "Save FUSE Model",
@@ -1740,7 +1888,10 @@ class MainWindow(QMainWindow):
 
         old_path = self.current_project_path
         self.set_current_project_path(file_path)
-        if self.save_model():
+        if self.save_model(
+            restore_path_on_failure=old_path,
+            restore_path_on_failure_requested=True,
+        ):
             return True
 
         self.set_current_project_path(old_path)
@@ -1953,6 +2104,8 @@ class MainWindow(QMainWindow):
         )
 
     def open_model(self):
+        if not self.ensure_no_save_in_progress("opening another project"):
+            return
         if not self.confirm_discard_unsaved_changes("open"):
             return
 
@@ -2391,6 +2544,15 @@ class MainWindow(QMainWindow):
         super().keyPressEvent(event)
 
     def closeEvent(self, event):
+        if self._save_in_progress:
+            QMessageBox.information(
+                self,
+                "Save In Progress",
+                "FUSE is still saving the current project. Wait for that save to finish before exiting.",
+            )
+            event.ignore()
+            return
+
         if self.confirm_discard_unsaved_changes("exit"):
             event.accept()
         else:

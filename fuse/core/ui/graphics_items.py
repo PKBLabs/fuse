@@ -357,12 +357,29 @@ class ConnectionItem(QGraphicsPathItem):
     LANE_SPACING = 12
     SELECTION_TOLERANCE = 10.0
 
-    def __init__(self, link: ModelLink, source_port: PortItem, target_port: PortItem):
+    # Keep routed links behind component bodies. Long routed paths often cross
+    # through a component while the async router is still catching up; if links
+    # sit above nodes, Qt hit testing can spend a long time checking stroked
+    # link shapes before the node receives the click.
+    NORMAL_Z = -10.0
+    VALIDATION_Z = -8.0
+    HIGHLIGHT_Z = 8.0
+
+    def __init__(
+        self,
+        link: ModelLink,
+        source_port: PortItem,
+        target_port: PortItem,
+        *,
+        update_immediately: bool = True,
+    ):
         super().__init__()
         self.link = link
         self.source_port = source_port
         self.target_port = target_port
         self.route_points: list[QPointF] = []
+        self._shape_cache: QPainterPath | None = None
+        self._highlighted = False
 
         self.base_color = QColor("#38bdf8")
         self.highlight_color = QColor("#2563eb")
@@ -371,7 +388,7 @@ class ConnectionItem(QGraphicsPathItem):
         self.validation_messages: list[str] = []
 
         self.setPen(QPen(self.base_color, 2))
-        self.setZValue(5)
+        self.setZValue(self.NORMAL_Z)
         self.setFlag(QGraphicsItem.ItemIsSelectable, True)
         self.setAcceptedMouseButtons(Qt.LeftButton)
 
@@ -382,7 +399,19 @@ class ConnectionItem(QGraphicsPathItem):
         source_port.update_connection_state()
         target_port.update_connection_state()
 
-        self.update_position()
+        if update_immediately:
+            self.update_position()
+
+    def invalidate_shape_cache(self) -> None:
+        self._shape_cache = None
+
+    def setPath(self, path):  # noqa: N802 - Qt override name
+        self.invalidate_shape_cache()
+        super().setPath(path)
+
+    def setPen(self, pen):  # noqa: N802 - Qt override name
+        self.invalidate_shape_cache()
+        super().setPen(pen)
 
     def contextMenuEvent(self, event):
         scene = self.scene()
@@ -580,14 +609,23 @@ class ConnectionItem(QGraphicsPathItem):
         version of the visible path so the link is only selectable when the pointer
         is on or near the line.
         """
-        stroker = QPainterPathStroker()
-        stroker.setWidth(max(self.pen().widthF(), self.SELECTION_TOLERANCE))
-        stroker.setCapStyle(Qt.RoundCap)
-        stroker.setJoinStyle(Qt.RoundJoin)
-        return stroker.createStroke(self.path())
+        if self._shape_cache is None:
+            stroker = QPainterPathStroker()
+            stroker.setWidth(max(self.pen().widthF(), self.SELECTION_TOLERANCE))
+            stroker.setCapStyle(Qt.RoundCap)
+            stroker.setJoinStyle(Qt.RoundJoin)
+            self._shape_cache = stroker.createStroke(self.path())
+
+        return self._shape_cache
 
     def contains(self, point) -> bool:
         return self.shape().contains(point)
+
+    def set_route_points_from_tuples(self, points: list[tuple[float, float]]):
+        """Apply worker-computed route points on the GUI thread."""
+        route_points = [QPointF(float(x), float(y)) for x, y in points]
+        self.route_points = route_points
+        self.setPath(self.build_path_from_points(route_points))
 
     def update_position(self):
         points = self.routed_points()
@@ -628,6 +666,7 @@ class ConnectionItem(QGraphicsPathItem):
         )
 
         points = route_a if route_length(route_a) <= route_length(route_b) else route_b
+        self.route_points = points
         self.setPath(self.build_path_from_points(points))
 
     def clear_route_points(self):
@@ -649,20 +688,28 @@ class ConnectionItem(QGraphicsPathItem):
         self.validation_messages = list(messages)
         self.update_tooltip()
 
-        if messages:
+        if self._highlighted:
+            self.setPen(QPen(self.highlight_color, 4))
+            self.setZValue(self.HIGHLIGHT_Z)
+        elif messages:
             self.setPen(QPen(self.error_color, 3))
-            self.setZValue(15)
+            self.setZValue(self.VALIDATION_Z)
         else:
             self.setPen(QPen(self.link_base_color(), 2))
-            self.setZValue(5)
+            self.setZValue(self.NORMAL_Z)
 
     def set_highlighted(self, highlighted: bool):
+        highlighted = bool(highlighted)
+        if self._highlighted == highlighted:
+            return
+
+        self._highlighted = highlighted
         if highlighted:
             self.setPen(QPen(self.highlight_color, 4))
-            self.setZValue(20)
+            self.setZValue(self.HIGHLIGHT_Z)
         else:
             self.setPen(QPen(self.link_base_color(), 2))
-            self.setZValue(15 if self.validation_messages else 5)
+            self.setZValue(self.VALIDATION_Z if self.validation_messages else self.NORMAL_Z)
 
     def segment_intersects_rect(self, a: QPointF, b: QPointF, rect) -> bool:
         """
@@ -809,11 +856,18 @@ class SubcompConnectorItem(QGraphicsPolygonItem):
 class SubcompAttachmentItem(QGraphicsPathItem):
     """Dashed visual edge representing a SubComponent assignment."""
 
+    NORMAL_Z = -9.0
+    VALIDATION_Z = -7.0
+    HIGHLIGHT_Z = 8.0
+    SELECTION_TOLERANCE = 10.0
+
     def __init__(
         self,
         attachment: ModelSubcompAttachment,
         slot_connector: SubcompConnectorItem,
         interface_connector: SubcompConnectorItem,
+        *,
+        update_immediately: bool = True,
     ):
         super().__init__()
         self.attachment = attachment
@@ -823,12 +877,39 @@ class SubcompAttachmentItem(QGraphicsPathItem):
         self.highlight_color = QColor("#f59e0b")
         self.error_color = QColor("#ef4444")
         self.validation_messages: list[str] = []
+        self._shape_cache: QPainterPath | None = None
+        self._highlighted = False
         self.setPen(QPen(self.base_color, 2, Qt.DashLine))
-        self.setZValue(4)
+        self.setZValue(self.NORMAL_Z)
         self.setFlag(QGraphicsItem.ItemIsSelectable, True)
         self.setAcceptedMouseButtons(Qt.LeftButton)
         self.update_tooltip()
-        self.update_position()
+        if update_immediately:
+            self.update_position()
+
+    def invalidate_shape_cache(self) -> None:
+        self._shape_cache = None
+
+    def setPath(self, path):  # noqa: N802 - Qt override name
+        self.invalidate_shape_cache()
+        super().setPath(path)
+
+    def setPen(self, pen):  # noqa: N802 - Qt override name
+        self.invalidate_shape_cache()
+        super().setPen(pen)
+
+    def shape(self) -> QPainterPath:
+        if self._shape_cache is None:
+            stroker = QPainterPathStroker()
+            stroker.setWidth(max(self.pen().widthF(), self.SELECTION_TOLERANCE))
+            stroker.setCapStyle(Qt.RoundCap)
+            stroker.setJoinStyle(Qt.RoundJoin)
+            self._shape_cache = stroker.createStroke(self.path())
+
+        return self._shape_cache
+
+    def contains(self, point) -> bool:
+        return self.shape().contains(point)
 
     def update_tooltip(self):
         tooltip = (
@@ -883,24 +964,32 @@ class SubcompAttachmentItem(QGraphicsPathItem):
         self.validation_messages = list(messages)
         self.update_tooltip()
 
-        if messages:
+        if self._highlighted:
+            self.setPen(QPen(self.highlight_color, 4, Qt.DashLine))
+            self.setZValue(self.HIGHLIGHT_Z)
+        elif messages:
             self.setPen(QPen(self.error_color, 3, Qt.DashLine))
-            self.setZValue(15)
+            self.setZValue(self.VALIDATION_Z)
         else:
             self.setPen(QPen(self.base_color, 2, Qt.DashLine))
-            self.setZValue(4)
+            self.setZValue(self.NORMAL_Z)
 
     def set_highlighted(self, highlighted: bool):
+        highlighted = bool(highlighted)
+        if self._highlighted == highlighted:
+            return
+
+        self._highlighted = highlighted
         if highlighted:
             self.setPen(QPen(self.highlight_color, 4, Qt.DashLine))
-            self.setZValue(20)
+            self.setZValue(self.HIGHLIGHT_Z)
         else:
             if self.validation_messages:
                 self.setPen(QPen(self.error_color, 3, Qt.DashLine))
-                self.setZValue(15)
+                self.setZValue(self.VALIDATION_Z)
             else:
                 self.setPen(QPen(self.base_color, 2, Qt.DashLine))
-                self.setZValue(4)
+                self.setZValue(self.NORMAL_Z)
 
 
 class AddPortsButtonItem(QGraphicsTextItem):
@@ -980,8 +1069,10 @@ class ComponentNodeItem(QGraphicsRectItem):
         instance_name: Optional[str] = None,
         variable_port_counts: Optional[dict[str, int]] = None,
         instance_name_template: Optional[str] = None,
+        metadata_cache: Optional[dict[tuple[str, str, str, str], list[dict]]] = None,
     ):
         super().__init__(0, 0, self.WIDTH, self.HEIGHT)
+        self.setZValue(10.0)
 
         if node_id is None:
             self.node_id = ComponentNodeItem._next_node_id
@@ -994,6 +1085,7 @@ class ComponentNodeItem(QGraphicsRectItem):
             )
 
         self.component = component
+        self._metadata_cache = metadata_cache
         requested_instance_name = instance_name or f"{component.name}_{self.node_id}"
         if instance_name_template:
             self.instance_name_template = str(instance_name_template)
@@ -1230,15 +1322,46 @@ class ComponentNodeItem(QGraphicsRectItem):
 
         return True
 
+    def metadata_cache_key(self, kind: str) -> tuple[str, str, str, str]:
+        return (
+            str(kind or ""),
+            str(getattr(self.component, "plugin_id", "") or ""),
+            str(getattr(self.component, "component_id", "") or ""),
+            str(getattr(self.component, "target_id", "") or ""),
+        )
+
+    def cached_metadata_list(self, kind: str, loader) -> list[dict]:
+        """
+        Return copied component metadata, using a caller-provided cache when one
+        is available.
+
+        Project load constructs many repeated SST component types. Without a
+        cache, every node construction can re-query the catalog for the same port
+        and subcomponent-slot metadata. The returned dictionaries are copied so
+        node-local UI code can safely annotate them.
+        """
+        cache = getattr(self, "_metadata_cache", None)
+        if cache is None:
+            return [dict(item) for item in loader()]
+
+        key = self.metadata_cache_key(kind)
+        if key not in cache:
+            cache[key] = [dict(item) for item in loader()]
+
+        return [dict(item) for item in cache.get(key, [])]
+
     def load_subcomp_connector_templates(self) -> list[dict]:
-        try:
-            return load_subcomp_connector_metadata_for_component(
-                self.component.plugin_id,
-                self.component.component_id,
-                self.component.target_id,
-            )
-        except Exception:
-            return []
+        def loader() -> list[dict]:
+            try:
+                return load_subcomp_connector_metadata_for_component(
+                    self.component.plugin_id,
+                    self.component.component_id,
+                    self.component.target_id,
+                )
+            except Exception:
+                return []
+
+        return self.cached_metadata_list("subcomp_connectors", loader)
 
     def add_subcomp_connectors_from_metadata(self):
         self.subcomp_connector_templates = self.load_subcomp_connector_templates()
@@ -1368,39 +1491,42 @@ class ComponentNodeItem(QGraphicsRectItem):
         return result
 
     def load_port_templates(self) -> list[dict]:
-        try:
-            return load_port_metadata_for_component(
-                self.component.plugin_id,
-                self.component.component_id,
-                self.component.target_id,
-            )
-        except Exception:
+        def loader() -> list[dict]:
             try:
-                port_names = load_port_names_for_component(
+                return load_port_metadata_for_component(
                     self.component.plugin_id,
                     self.component.component_id,
                     self.component.target_id,
                 )
-            except TypeError:
-                port_names = load_port_names_for_component(
-                    self.component.plugin_id,
-                    self.component.component_id,
-                )
             except Exception:
-                port_names = []
+                try:
+                    port_names = load_port_names_for_component(
+                        self.component.plugin_id,
+                        self.component.component_id,
+                        self.component.target_id,
+                    )
+                except TypeError:
+                    port_names = load_port_names_for_component(
+                        self.component.plugin_id,
+                        self.component.component_id,
+                    )
+                except Exception:
+                    port_names = []
 
-            return [
-                {
-                    "name": port_name,
-                    "description": "",
-                    "iface": "",
-                    "is_variable": False,
-                    "base_name": port_name,
-                    "count_parameter": "",
-                    "default_count": 1,
-                }
-                for port_name in port_names
-            ]
+                return [
+                    {
+                        "name": port_name,
+                        "description": "",
+                        "iface": "",
+                        "is_variable": False,
+                        "base_name": port_name,
+                        "count_parameter": "",
+                        "default_count": 1,
+                    }
+                    for port_name in port_names
+                ]
+
+        return self.cached_metadata_list("ports", loader)
 
     def expanded_names_for_port_template(self, template: dict) -> list[str]:
         """Return the concrete port names represented by a catalog template."""
@@ -2067,7 +2193,7 @@ class ComponentNodeItem(QGraphicsRectItem):
                 scene.select_component(self)
 
             if hasattr(scene, "begin_node_drag"):
-                scene.begin_node_drag()
+                scene.begin_node_drag(self)
 
         super().mousePressEvent(event)
 
@@ -2097,21 +2223,24 @@ class ComponentNodeItem(QGraphicsRectItem):
         if change == QGraphicsItem.ItemPositionHasChanged:
             scene = self.scene()
 
+            if scene is not None and getattr(scene, "_model_loading_depth", 0) > 0:
+                return super().itemChange(change, value)
+
             if scene is not None and hasattr(scene, "apply_group_drag"):
                 scene.apply_group_drag(self)
 
-            if scene is not None and hasattr(scene, "reroute_links_for_node"):
+            if scene is not None and getattr(scene, "_dragging_node", False):
+                scene._drag_changed = True
+                if hasattr(scene, "request_drag_preview_for_node"):
+                    scene.request_drag_preview_for_node(self)
+            elif scene is not None and hasattr(scene, "reroute_links_for_node"):
                 scene.reroute_links_for_node(self)
+                if hasattr(scene, "notify_model_changed"):
+                    scene.notify_model_changed()
             else:
                 for port in self.ports:
                     for connection in port.connections:
                         connection.update_position()
-
-            if scene is not None:
-                if getattr(scene, "_dragging_node", False):
-                    scene._drag_changed = True
-                elif hasattr(scene, "notify_model_changed"):
-                    scene.notify_model_changed()
 
         return super().itemChange(change, value)
 

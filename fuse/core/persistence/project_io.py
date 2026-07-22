@@ -33,6 +33,7 @@ from fuse.core.model.composite_mini_model import normalize_mini_model_and_port_m
 from fuse.core.model.models import ComponentDefinition, ModelLink, ModelSubcompAttachment, SCHEMA_VERSION
 from fuse.core.model.project_settings import ProjectSettings
 from fuse.core.persistence.model_serializer import finalize_project_dict, validate_serialized_project
+from fuse.core.plugin_runtime.manager import list_all_targets, load_all_palette_items
 
 
 def now_iso() -> str:
@@ -48,6 +49,196 @@ def _resolve_restored_link_port_name(node: ComponentNodeItem, port_name: str) ->
         return str(resolver(port_name))
 
     return str(port_name or "")
+
+
+def _text(value) -> str:
+    """Return a normalized string for project-file matching."""
+
+    return str(value or "").strip()
+
+
+def _bool_int(value) -> int:
+    """Parse stored integer/bool-ish project fields without raising."""
+
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _saved_component_definition(component_data: dict) -> ComponentDefinition:
+    """Build a component definition from the exact data stored in the project file."""
+
+    icon_path = component_data.get("iconPath", "") or component_data.get("icon_path", "")
+    return ComponentDefinition(
+        plugin_id=component_data.get("pluginId", component_data.get("plugin_id", "core")),
+        target_id=component_data.get("targetId", component_data.get("target_id", "")),
+        target_label=component_data.get("targetLabel", ""),
+        framework_version=component_data.get("frameworkVersion", ""),
+        component_id=component_data.get("componentId"),
+        element=component_data.get("element", ""),
+        name=component_data.get("name", ""),
+        is_subcomp=_bool_int(component_data.get("isSubcomponent", 0)),
+        category=component_data.get("category", ""),
+        functionality=component_data.get("functionality", ""),
+        description=component_data.get("description", ""),
+        iface=component_data.get("interface", ""),
+        icon_path=icon_path,
+        display_name_override=component_data.get("displayNameOverride", ""),
+        is_composite=_bool_int(component_data.get("isComposite", 0)),
+        composite_id=component_data.get("compositeId", ""),
+    )
+
+
+def _palette_item_is_subcomponent(item) -> int:
+    """Return whether a palette item represents a simulator subcomponent."""
+
+    return 1 if _text(getattr(item, "raw_kind", "")).lower() == "subcomponent" else 0
+
+
+def _candidate_target_ids_for_saved_component(component_data: dict) -> list[str | None]:
+    """Return local target ids likely to contain the saved component.
+
+    Project files store database row ids for targets and components. Those ids are
+    only reliable on the machine that saved the file. Prefer the saved target id
+    first for same-machine loads, then look up a local target with the same
+    plugin/framework version for cross-machine loads.
+    """
+
+    plugin_id = _text(component_data.get("pluginId", component_data.get("plugin_id", "")))
+    saved_target_id = _text(component_data.get("targetId", component_data.get("target_id", "")))
+    framework_version = _text(component_data.get("frameworkVersion", ""))
+
+    candidate_ids: list[str | None] = []
+    seen: set[str | None] = set()
+
+    def add_candidate(target_id: str | None) -> None:
+        key = _text(target_id) if target_id is not None else None
+        if key in seen:
+            return
+        seen.add(key)
+        candidate_ids.append(key)
+
+    if saved_target_id:
+        add_candidate(saved_target_id)
+
+    if framework_version:
+        try:
+            targets = list_all_targets()
+        except Exception:
+            targets = []
+
+        for target in targets:
+            target_plugin_id = _text(getattr(target, "plugin_id", ""))
+            target_version = _text(getattr(target, "framework_version", ""))
+            if plugin_id and target_plugin_id != plugin_id:
+                continue
+            if target_version != framework_version:
+                continue
+            add_candidate(_text(getattr(target, "target_id", "")))
+
+    # Last chance: let the plugin use its current default target. This helps
+    # older project files that did not persist enough target metadata.
+    add_candidate(None)
+    return candidate_ids
+
+
+def _load_palette_items_for_target(
+    plugin_id: str,
+    target_id: str | None,
+    palette_cache: dict[tuple[str, str | None], list],
+) -> list:
+    """Load palette items with a small per-project cache."""
+
+    cache_key = (plugin_id, target_id)
+    if cache_key not in palette_cache:
+        try:
+            palette_cache[cache_key] = load_all_palette_items(
+                plugin_id=plugin_id or None,
+                target_id=target_id,
+            )
+        except Exception:
+            palette_cache[cache_key] = []
+
+    return palette_cache[cache_key]
+
+
+def _palette_item_matches_saved_component(item, component_data: dict) -> bool:
+    """Match a saved component using stable catalog fields rather than row ids."""
+
+    saved_name = _text(component_data.get("name", ""))
+    saved_element = _text(component_data.get("element", ""))
+    saved_plugin_id = _text(component_data.get("pluginId", component_data.get("plugin_id", "")))
+    saved_framework_version = _text(component_data.get("frameworkVersion", ""))
+    saved_is_subcomp = _bool_int(component_data.get("isSubcomponent", 0))
+
+    if saved_plugin_id and _text(getattr(item, "plugin_id", "")) != saved_plugin_id:
+        return False
+    if saved_name and _text(getattr(item, "type_name", "")) != saved_name:
+        return False
+    if saved_element and _text(getattr(item, "element_name", "")) != saved_element:
+        return False
+    if saved_framework_version and _text(getattr(item, "framework_version", "")) != saved_framework_version:
+        return False
+    if _palette_item_is_subcomponent(item) != saved_is_subcomp:
+        return False
+
+    return True
+
+
+def _component_definition_from_palette_item(item, component_data: dict) -> ComponentDefinition:
+    """Build a fresh definition using local catalog ids and saved UI fallbacks."""
+
+    return ComponentDefinition(
+        plugin_id=getattr(item, "plugin_id", "") or component_data.get("pluginId", "core"),
+        target_id=getattr(item, "target_id", "") or component_data.get("targetId", ""),
+        target_label=getattr(item, "target_label", "") or component_data.get("targetLabel", ""),
+        framework_version=getattr(item, "framework_version", "") or component_data.get("frameworkVersion", ""),
+        component_id=getattr(item, "item_id", None) or component_data.get("componentId"),
+        element=getattr(item, "element_name", "") or component_data.get("element", ""),
+        name=getattr(item, "type_name", "") or component_data.get("name", ""),
+        is_subcomp=_palette_item_is_subcomponent(item),
+        category=getattr(item, "category", "") or component_data.get("category", ""),
+        functionality=getattr(item, "functionality", "") or component_data.get("functionality", ""),
+        description=getattr(item, "description", "") or component_data.get("description", ""),
+        iface=getattr(item, "iface", "") or component_data.get("interface", ""),
+        icon_path=getattr(item, "icon_path", "") or component_data.get("iconPath", ""),
+        display_name_override=getattr(item, "display_name", "") or component_data.get("displayNameOverride", ""),
+        is_composite=_bool_int(component_data.get("isComposite", 0)),
+        composite_id=component_data.get("compositeId", ""),
+    )
+
+
+def _resolve_saved_component_definition(
+    component_data: dict,
+    palette_cache: dict[tuple[str, str | None], list],
+) -> ComponentDefinition:
+    """Resolve a saved component against the local plugin catalog when possible.
+
+    A ``.fse`` saved on another machine can contain target/component database row
+    ids that do not exist locally. If those stale ids are used directly,
+    ``ComponentNodeItem`` cannot find SST port metadata and the model opens with
+    blank ports and unrestorable links. Resolve through stable fields first and
+    fall back to the serialized data if no local catalog match exists.
+    """
+
+    fallback = _saved_component_definition(component_data)
+
+    # Composite ids are FUSE-owned stable identifiers rather than simulator
+    # catalog row ids, so they should be restored exactly as serialized.
+    if _bool_int(component_data.get("isComposite", 0)):
+        return fallback
+
+    plugin_id = _text(component_data.get("pluginId", component_data.get("plugin_id", "")))
+    if not plugin_id:
+        return fallback
+
+    for target_id in _candidate_target_ids_for_saved_component(component_data):
+        for item in _load_palette_items_for_target(plugin_id, target_id, palette_cache):
+            if _palette_item_matches_saved_component(item, component_data):
+                return _component_definition_from_palette_item(item, component_data)
+
+    return fallback
 
 
 def component_node_to_save_dict(node: ComponentNodeItem) -> dict:
@@ -289,212 +480,217 @@ def save_project_file(project: dict, file_path: str | Path) -> None:
 def load_project_into_scene(project: dict, scene: ModelScene) -> None:
     """Rebuild a model scene from an already-loaded project dictionary."""
     validate_project_dict(project)
-    scene.clear_model()
-    editor = project.get("editor", {}) or {}
-    suppressed_warnings = editor.get("suppressedCompatibilityWarnings", [])
-    if isinstance(suppressed_warnings, list):
-        scene.suppressed_compatibility_warnings = {
-            str(code).strip()
-            for code in suppressed_warnings
-            if str(code).strip()
-        }
-    else:
-        scene.suppressed_compatibility_warnings = set()
 
+    # Scene loading is a bulk operation. Build all items first, then schedule one
+    # final route pass. This avoids repeated history snapshots, model-outline
+    # refreshes, and route calculations while the file is still being restored.
+    scene.begin_model_load()
+    try:
+        scene.clear_model()
+        editor = project.get("editor", {}) or {}
+        suppressed_warnings = editor.get("suppressedCompatibilityWarnings", [])
+        if isinstance(suppressed_warnings, list):
+            scene.suppressed_compatibility_warnings = {
+                str(code).strip()
+                for code in suppressed_warnings
+                if str(code).strip()
+            }
+        else:
+            scene.suppressed_compatibility_warnings = set()
 
-    nodes_by_id: dict[int, ComponentNodeItem] = {}
+        nodes_by_id: dict[int, ComponentNodeItem] = {}
+        palette_cache: dict[tuple[str, str | None], list] = {}
+        metadata_cache: dict[tuple[str, str, str, str], list[dict]] = {}
 
-    for component_data in project["components"]:
-        icon_path = component_data.get("iconPath", "") or component_data.get("icon_path", "")
+        for component_data in project["components"]:
+            component = _resolve_saved_component_definition(component_data, palette_cache)
 
-        component = ComponentDefinition(
-            plugin_id=component_data.get("pluginId", component_data.get("plugin_id", "core")),
-            target_id=component_data.get("targetId", component_data.get("target_id", "")),
-            target_label=component_data.get("targetLabel", ""),
-            framework_version=component_data.get("frameworkVersion", ""),
-            component_id=component_data.get("componentId"),
-            element=component_data.get("element", ""),
-            name=component_data.get("name", ""),
-            is_subcomp=int(component_data.get("isSubcomponent", 0)),
-            category=component_data.get("category", ""),
-            functionality=component_data.get("functionality", ""),
-            description=component_data.get("description", ""),
-            iface=component_data.get("interface", ""),
-            icon_path=icon_path,
-            display_name_override=component_data.get("displayNameOverride", ""),
-            is_composite=int(component_data.get("isComposite", 0) or 0),
-            composite_id=component_data.get("compositeId", ""),
-        )
+            node_id = int(component_data["id"])
+            node = ComponentNodeItem(
+                component,
+                node_id=node_id,
+                parameters=component_data.get("parameters", {}),
+                instance_name=component_data.get("instanceName"),
+                variable_port_counts=component_data.get("variablePortCounts", {}),
+                instance_name_template=component_data.get("nameTemplate", ""),
+                metadata_cache=metadata_cache,
+            )
 
-        node_id = int(component_data["id"])
-        node = ComponentNodeItem(
-            component,
-            node_id=node_id,
-            parameters=component_data.get("parameters", {}),
-            instance_name=component_data.get("instanceName"),
-            variable_port_counts=component_data.get("variablePortCounts", {}),
-            instance_name_template=component_data.get("nameTemplate", ""),
-        )
+            composite_instance = component_data.get("compositeInstance", {}) or {}
+            if isinstance(composite_instance, dict):
+                mini_model = composite_instance.get("miniModel", {}) or {}
+                port_mappings = composite_instance.get("portMappings", []) or []
+                if isinstance(mini_model, dict) and bool(mini_model.get("components") or []):
+                    normalized_model, normalized_mappings = normalize_mini_model_and_port_mappings(
+                        mini_model,
+                        port_mappings if isinstance(port_mappings, list) else [],
+                    )
+                    node.composite_instance_model = normalized_model
+                    node.composite_port_mappings = normalized_mappings
+                    node.sync_composite_ports_from_mappings()
 
-        composite_instance = component_data.get("compositeInstance", {}) or {}
-        if isinstance(composite_instance, dict):
-            mini_model = composite_instance.get("miniModel", {}) or {}
-            port_mappings = composite_instance.get("portMappings", []) or []
-            if isinstance(mini_model, dict) and bool(mini_model.get("components") or []):
-                normalized_model, normalized_mappings = normalize_mini_model_and_port_mappings(
-                    mini_model,
-                    port_mappings if isinstance(port_mappings, list) else [],
+            position = component_data.get("position", {})
+            node.setPos(float(position.get("x", 0)), float(position.get("y", 0)))
+
+            scene.addItem(node)
+            nodes_by_id[node_id] = node
+
+        max_link_id = 0
+
+        for link_data in project["links"]:
+            source = link_data.get("source", {})
+            target = link_data.get("target", {})
+
+            source_node_id = int(source["nodeId"])
+            target_node_id = int(target["nodeId"])
+            source_port_name = _resolve_restored_link_port_name(
+                nodes_by_id[source_node_id],
+                source["port"],
+            )
+            target_port_name = _resolve_restored_link_port_name(
+                nodes_by_id[target_node_id],
+                target["port"],
+            )
+
+            source_port = scene.find_port(source_node_id, source_port_name)
+            target_port = scene.find_port(target_node_id, target_port_name)
+
+            if source_port is None:
+                raise ValueError(
+                    f"Could not restore link {link_data.get('name')}: "
+                    f"missing source port {source_node_id}.{source_port_name}"
                 )
-                node.composite_instance_model = normalized_model
-                node.composite_port_mappings = normalized_mappings
-                node.sync_composite_ports_from_mappings()
 
-        position = component_data.get("position", {})
-        node.setPos(float(position.get("x", 0)), float(position.get("y", 0)))
+            if target_port is None:
+                raise ValueError(
+                    f"Could not restore link {link_data.get('name')}: "
+                    f"missing target port {target_node_id}.{target_port_name}"
+                )
 
-        scene.addItem(node)
-        nodes_by_id[node_id] = node
+            link_id = int(link_data["id"])
+            max_link_id = max(max_link_id, link_id)
 
-    max_link_id = 0
+            legacy_latency = link_data.get("latency", "1ns")
+            compatibility = link_data.get("compatibility", {}) or {}
 
-    for link_data in project["links"]:
-        source = link_data.get("source", {})
-        target = link_data.get("target", {})
-
-        source_node_id = int(source["nodeId"])
-        target_node_id = int(target["nodeId"])
-        source_port_name = _resolve_restored_link_port_name(
-            nodes_by_id[source_node_id],
-            source["port"],
-        )
-        target_port_name = _resolve_restored_link_port_name(
-            nodes_by_id[target_node_id],
-            target["port"],
-        )
-
-        source_port = scene.find_port(source_node_id, source_port_name)
-        target_port = scene.find_port(target_node_id, target_port_name)
-
-        if source_port is None:
-            raise ValueError(
-                f"Could not restore link {link_data.get('name')}: "
-                f"missing source port {source_node_id}.{source_port_name}"
+            link = ModelLink(
+                link_id=link_id,
+                name=link_data.get("name", f"link_{link_id}"),
+                source_node_id=source_node_id,
+                source_component_name=source.get(
+                    "componentName",
+                    nodes_by_id[source_node_id].instance_name,
+                ),
+                source_port=source_port_name,
+                target_node_id=target_node_id,
+                target_component_name=target.get(
+                    "componentName",
+                    nodes_by_id[target_node_id].instance_name,
+                ),
+                target_port=target_port_name,
+                source_latency=link_data.get("sourceLatency", legacy_latency),
+                target_latency=link_data.get("targetLatency", legacy_latency),
+                link_type=link_data.get("type", "point_to_point"),
+                plugin_id=link_data.get("pluginId", ""),
+                compatibility_severity=compatibility.get("severity", "ok"),
+                compatibility_code=compatibility.get("code", ""),
+                compatibility_message=compatibility.get("message", ""),
+                plugin_metadata=link_data.get("pluginMetadata", {}) or {},
             )
 
-        if target_port is None:
-            raise ValueError(
-                f"Could not restore link {link_data.get('name')}: "
-                f"missing target port {target_node_id}.{target_port_name}"
+            scene.links.append(link)
+            connection = ConnectionItem(
+                link,
+                source_port,
+                target_port,
+                update_immediately=False,
+            )
+            scene.addItem(connection)
+
+            # Show a cheap visible path immediately. The final obstacle-avoiding
+            # route is scheduled once after the entire model is restored.
+            connection.update_position_fast()
+
+        scene._next_link_id = max_link_id + 1
+
+        max_attachment_id = 0
+
+        for attachment_data in project.get("subcompAttachments", []):
+            parent = attachment_data.get("parent", {})
+            child = attachment_data.get("child", {})
+
+            parent_node_id = int(parent["nodeId"])
+            child_node_id = int(child["nodeId"])
+            slot_name = parent["slotName"]
+
+            slot_connector = scene.find_subcomp_connector(
+                parent_node_id,
+                slot_name,
+                role="slot",
+            )
+            interface_connector = scene.find_subcomp_connector(
+                child_node_id,
+                child.get("connectorName", ""),
+                role="interface",
             )
 
-        link_id = int(link_data["id"])
-        max_link_id = max(max_link_id, link_id)
+            if interface_connector is None:
+                for candidate in getattr(nodes_by_id[child_node_id], "subcomp_connectors", []):
+                    if getattr(candidate, "role", "") == "interface":
+                        interface_connector = candidate
+                        break
 
-        legacy_latency = link_data.get("latency", "1ns")
-        compatibility = link_data.get("compatibility", {}) or {}
+            if slot_connector is None:
+                raise ValueError(
+                    f"Could not restore subcomponent attachment {attachment_data.get('name')}: "
+                    f"missing parent slot {parent_node_id}.{slot_name}"
+                )
 
-        link = ModelLink(
-            link_id=link_id,
-            name=link_data.get("name", f"link_{link_id}"),
-            source_node_id=source_node_id,
-            source_component_name=source.get(
-                "componentName",
-                nodes_by_id[source_node_id].instance_name,
-            ),
-            source_port=source_port_name,
-            target_node_id=target_node_id,
-            target_component_name=target.get(
-                "componentName",
-                nodes_by_id[target_node_id].instance_name,
-            ),
-            target_port=target_port_name,
-            source_latency=link_data.get("sourceLatency", legacy_latency),
-            target_latency=link_data.get("targetLatency", legacy_latency),
-            link_type=link_data.get("type", "point_to_point"),
-            plugin_id=link_data.get("pluginId", ""),
-            compatibility_severity=compatibility.get("severity", "ok"),
-            compatibility_code=compatibility.get("code", ""),
-            compatibility_message=compatibility.get("message", ""),
-            plugin_metadata=link_data.get("pluginMetadata", {}) or {},
-        )
+            if interface_connector is None:
+                raise ValueError(
+                    f"Could not restore subcomponent attachment {attachment_data.get('name')}: "
+                    f"missing child interface connector for node {child_node_id}"
+                )
 
-        scene.links.append(link)
-        connection = ConnectionItem(link, source_port, target_port)
-        scene.addItem(connection)
-        connection.update_position()
+            attachment_id = int(attachment_data["id"])
+            max_attachment_id = max(max_attachment_id, attachment_id)
+            compatibility = attachment_data.get("compatibility", {}) or {}
 
-    scene._next_link_id = max_link_id + 1
-
-    max_attachment_id = 0
-
-    for attachment_data in project.get("subcompAttachments", []):
-        parent = attachment_data.get("parent", {})
-        child = attachment_data.get("child", {})
-
-        parent_node_id = int(parent["nodeId"])
-        child_node_id = int(child["nodeId"])
-        slot_name = parent["slotName"]
-
-        slot_connector = scene.find_subcomp_connector(
-            parent_node_id,
-            slot_name,
-            role="slot",
-        )
-        interface_connector = scene.find_subcomp_connector(
-            child_node_id,
-            child.get("connectorName", ""),
-            role="interface",
-        )
-
-        if interface_connector is None:
-            for candidate in getattr(nodes_by_id[child_node_id], "subcomp_connectors", []):
-                if getattr(candidate, "role", "") == "interface":
-                    interface_connector = candidate
-                    break
-
-        if slot_connector is None:
-            raise ValueError(
-                f"Could not restore subcomponent attachment {attachment_data.get('name')}: "
-                f"missing parent slot {parent_node_id}.{slot_name}"
+            attachment = ModelSubcompAttachment(
+                attachment_id=attachment_id,
+                name=attachment_data.get("name", f"subcomp_attachment_{attachment_id}"),
+                parent_node_id=parent_node_id,
+                parent_component_name=parent.get(
+                    "componentName",
+                    nodes_by_id[parent_node_id].instance_name,
+                ),
+                slot_name=slot_name,
+                child_node_id=child_node_id,
+                child_component_name=child.get(
+                    "componentName",
+                    nodes_by_id[child_node_id].instance_name,
+                ),
+                required_interface=attachment_data.get("requiredInterface", ""),
+                provided_interface=attachment_data.get("providedInterface", ""),
+                compatibility_severity=compatibility.get("severity", "ok"),
+                compatibility_code=compatibility.get("code", ""),
+                compatibility_message=compatibility.get("message", ""),
+                plugin_id=attachment_data.get("pluginId", ""),
+                plugin_metadata=attachment_data.get("pluginMetadata", {}) or {},
             )
 
-        if interface_connector is None:
-            raise ValueError(
-                f"Could not restore subcomponent attachment {attachment_data.get('name')}: "
-                f"missing child interface connector for node {child_node_id}"
+            scene.subcomp_attachments.append(attachment)
+            item = SubcompAttachmentItem(
+                attachment,
+                slot_connector,
+                interface_connector,
+                update_immediately=False,
             )
+            scene.addItem(item)
+            item.update_position()
 
-        attachment_id = int(attachment_data["id"])
-        max_attachment_id = max(max_attachment_id, attachment_id)
-        compatibility = attachment_data.get("compatibility", {}) or {}
+        scene._next_subcomp_attachment_id = max_attachment_id + 1
+    finally:
+        scene.end_model_load()
 
-        attachment = ModelSubcompAttachment(
-            attachment_id=attachment_id,
-            name=attachment_data.get("name", f"subcomp_attachment_{attachment_id}"),
-            parent_node_id=parent_node_id,
-            parent_component_name=parent.get(
-                "componentName",
-                nodes_by_id[parent_node_id].instance_name,
-            ),
-            slot_name=slot_name,
-            child_node_id=child_node_id,
-            child_component_name=child.get(
-                "componentName",
-                nodes_by_id[child_node_id].instance_name,
-            ),
-            required_interface=attachment_data.get("requiredInterface", ""),
-            provided_interface=attachment_data.get("providedInterface", ""),
-            compatibility_severity=compatibility.get("severity", "ok"),
-            compatibility_code=compatibility.get("code", ""),
-            compatibility_message=compatibility.get("message", ""),
-            plugin_id=attachment_data.get("pluginId", ""),
-            plugin_metadata=attachment_data.get("pluginMetadata", {}) or {},
-        )
-
-        scene.subcomp_attachments.append(attachment)
-        item = SubcompAttachmentItem(attachment, slot_connector, interface_connector)
-        scene.addItem(item)
-        item.update_position()
-
-    scene._next_subcomp_attachment_id = max_attachment_id + 1
     scene.reroute_all_links()
