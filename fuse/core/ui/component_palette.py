@@ -297,8 +297,18 @@ class ComponentPalette(QWidget):
         layout.addWidget(self.tree, 1)
 
     def set_active_target(self, plugin_id: str | None, target_id: str | None):
+        same_target = (
+            self.active_plugin_id == plugin_id
+            and self.active_target_id == target_id
+        )
         self.active_plugin_id = plugin_id
         self.active_target_id = target_id
+
+        if same_target and self.components:
+            self.populate_tree()
+            self.refresh_quick_sections()
+            return
+
         self.load_components()
 
     def set_project_preferences(
@@ -307,6 +317,8 @@ class ComponentPalette(QWidget):
         sorting_mode: str = SORT_ALPHABETICAL,
         auto_expand_all: bool = False,
         catalog_expanded: bool = False,
+        *,
+        refresh: bool = True,
     ) -> None:
         self.preferred_grouping_mode = self.normalized_grouping_mode(grouping_mode)
         self.preferred_sorting_mode = self.normalized_sorting_mode(sorting_mode)
@@ -330,7 +342,8 @@ class ComponentPalette(QWidget):
         )
         self.expand_all_tree.blockSignals(False)
 
-        self.populate_tree()
+        if refresh:
+            self.populate_tree()
 
     def normalized_grouping_mode(self, grouping_mode: str) -> str:
         allowed = {self.VIEW_ELEMENT, self.VIEW_FUNCTION, self.VIEW_RECENT, self.VIEW_FLAT}

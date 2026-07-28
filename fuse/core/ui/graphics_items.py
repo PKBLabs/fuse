@@ -76,6 +76,11 @@ from fuse.core.routing.routing import (
 
 VALID_PORT_SIDES = {"left", "right", "top", "bottom"}
 
+# QPixmap loading/scaling is a GUI-thread operation and can be surprisingly
+# costly when opening large models with many repeated component types. Cache the
+# scaled icon by resolved path and size for the lifetime of the application.
+_SCALED_ICON_CACHE: dict[tuple[str, int, int], QPixmap] = {}
+
 
 def _safe_int(value, default: int = 1) -> int:
     try:
@@ -609,6 +614,10 @@ class ConnectionItem(QGraphicsPathItem):
         version of the visible path so the link is only selectable when the pointer
         is on or near the line.
         """
+        scene = self.scene()
+        if scene is not None and getattr(scene, "_suppress_link_hit_tests", False):
+            return QPainterPath()
+
         if self._shape_cache is None:
             stroker = QPainterPathStroker()
             stroker.setWidth(max(self.pen().widthF(), self.SELECTION_TOLERANCE))
@@ -899,6 +908,10 @@ class SubcompAttachmentItem(QGraphicsPathItem):
         super().setPen(pen)
 
     def shape(self) -> QPainterPath:
+        scene = self.scene()
+        if scene is not None and getattr(scene, "_suppress_link_hit_tests", False):
+            return QPainterPath()
+
         if self._shape_cache is None:
             stroker = QPainterPathStroker()
             stroker.setWidth(max(self.pen().widthF(), self.SELECTION_TOLERANCE))
@@ -2189,11 +2202,17 @@ class ComponentNodeItem(QGraphicsRectItem):
         scene = self.scene()
 
         if scene is not None:
-            if hasattr(scene, "select_component"):
-                scene.select_component(self)
-
             if hasattr(scene, "begin_node_drag"):
                 scene.begin_node_drag(self)
+
+            if self.isSelected() and hasattr(scene, "defer_component_selection_until_drag_end"):
+                # Pressing an already-selected node is usually the start of a
+                # drag. Do not refresh properties/link highlights until release
+                # proves it was a click; that work can dominate drag latency on
+                # components with long links or many subcomponent attachments.
+                scene.defer_component_selection_until_drag_end(self)
+            elif hasattr(scene, "select_component"):
+                scene.select_component(self)
 
         super().mousePressEvent(event)
 
@@ -2224,6 +2243,11 @@ class ComponentNodeItem(QGraphicsRectItem):
             scene = self.scene()
 
             if scene is not None and getattr(scene, "_model_loading_depth", 0) > 0:
+                return super().itemChange(change, value)
+
+            if scene is not None and getattr(scene, "_bulk_drag_fast_path_active", False):
+                if hasattr(scene, "note_bulk_drag_node_moved"):
+                    scene.note_bulk_drag_node_moved(self)
                 return super().itemChange(change, value)
 
             if scene is not None and hasattr(scene, "apply_group_drag"):
@@ -2266,16 +2290,20 @@ class ComponentNodeItem(QGraphicsRectItem):
         if not path.exists():
             return
 
-        pixmap = QPixmap(str(path))
-        if pixmap.isNull():
-            return
+        cache_key = (str(path), int(self.ICON_SIZE), int(self.ICON_SIZE))
+        pixmap = _SCALED_ICON_CACHE.get(cache_key)
+        if pixmap is None:
+            pixmap = QPixmap(str(path))
+            if pixmap.isNull():
+                return
 
-        pixmap = pixmap.scaled(
-            self.ICON_SIZE,
-            self.ICON_SIZE,
-            Qt.KeepAspectRatio,
-            Qt.SmoothTransformation,
-        )
+            pixmap = pixmap.scaled(
+                self.ICON_SIZE,
+                self.ICON_SIZE,
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation,
+            )
+            _SCALED_ICON_CACHE[cache_key] = pixmap
 
         self.icon_item = QGraphicsPixmapItem(pixmap, self)
 

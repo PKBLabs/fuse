@@ -17,6 +17,7 @@ This module provides compatibility functions used by legacy UI paths while newer
 
 from fuse.core.persistence.database import initialize_core_database, get_connection
 from fuse.core.plugin_runtime.manager import (
+    clear_plugin_runtime_caches,
     list_all_targets,
     load_enabled_plugins,
     load_all_palette_items,
@@ -72,6 +73,11 @@ def ensure_database_ready(run_plugin_bootstrap: bool = False) -> None:
 
             if hasattr(instance, "bootstrap_database"):
                 instance.bootstrap_database()
+
+    # Database initialization and plugin bootstrap can add or migrate targets,
+    # palette rows, and component details. Drop metadata caches so subsequent UI
+    # reads see the refreshed catalog while still keeping plugin objects loaded.
+    clear_plugin_runtime_caches()
 
 
 def load_framework_targets():

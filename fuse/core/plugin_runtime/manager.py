@@ -29,6 +29,27 @@ from typing import Any
 FUSE_PACKAGE_ROOT = Path(__file__).resolve().parents[2]
 PLUGIN_ROOT = FUSE_PACKAGE_ROOT / "plugins"
 
+_LOADED_PLUGINS_CACHE: list["LoadedPlugin"] | None = None
+_TARGETS_CACHE: list[Any] | None = None
+_PALETTE_ITEMS_CACHE: dict[tuple[str | None, str | None], list[Any]] = {}
+_ITEM_DETAILS_CACHE: dict[tuple[str, str, str | None], Any] = {}
+
+
+def clear_plugin_runtime_caches(*, include_plugins: bool = False) -> None:
+    """Clear cached plugin metadata.
+
+    Plugin discovery and SST catalog reads are relatively expensive on large
+    project load paths. Runtime metadata is cached for normal UI reads and can be
+    explicitly invalidated after catalog/bootstrap operations.
+    """
+    global _LOADED_PLUGINS_CACHE, _TARGETS_CACHE
+    if include_plugins:
+        _LOADED_PLUGINS_CACHE = None
+    _TARGETS_CACHE = None
+    _PALETTE_ITEMS_CACHE.clear()
+    _ITEM_DETAILS_CACHE.clear()
+
+
 
 @dataclass
 class LoadedPlugin:
@@ -60,8 +81,19 @@ def discover_plugin_manifests() -> list[Path]:
     return sorted(manifests)
 
 
-def load_enabled_plugins() -> list[LoadedPlugin]:
-    """Load all enabled plugins from discovered manifests."""
+def load_enabled_plugins(*, refresh: bool = False) -> list[LoadedPlugin]:
+    """Load all enabled plugins from discovered manifests.
+
+    The set of installed plugins is effectively static for a running FUSE
+    process. Cache the loaded plugin objects so hot paths such as project load,
+    port-metadata lookup, validation, and export do not repeatedly re-read
+    manifests, re-import modules, and re-instantiate plugin classes.
+    """
+    global _LOADED_PLUGINS_CACHE
+
+    if _LOADED_PLUGINS_CACHE is not None and not refresh:
+        return list(_LOADED_PLUGINS_CACHE)
+
     loaded: list[LoadedPlugin] = []
 
     for manifest_path in discover_plugin_manifests():
@@ -103,12 +135,14 @@ def load_enabled_plugins() -> list[LoadedPlugin]:
             )
         )
 
-    return loaded
+    _LOADED_PLUGINS_CACHE = list(loaded)
+    return list(_LOADED_PLUGINS_CACHE)
 
 
 def get_plugin_by_id(plugin_id: str):
     """Return a loaded plugin instance by plugin identifier."""
-    for plugin in load_enabled_plugins():
+    loaded_plugins = load_enabled_plugins()
+    for plugin in loaded_plugins:
         instance_plugin_id = getattr(plugin.instance, "plugin_id", None)
 
         if plugin.plugin_id == plugin_id or instance_plugin_id == plugin_id:
@@ -116,7 +150,7 @@ def get_plugin_by_id(plugin_id: str):
 
     loaded_ids = [
         f"{plugin.plugin_id} / {getattr(plugin.instance, 'plugin_id', '<no instance id>')}"
-        for plugin in load_enabled_plugins()
+        for plugin in loaded_plugins
     ]
 
     raise KeyError(
@@ -127,6 +161,11 @@ def get_plugin_by_id(plugin_id: str):
 
 def list_all_targets():
     """Return framework targets advertised by all loaded plugins."""
+    global _TARGETS_CACHE
+
+    if _TARGETS_CACHE is not None:
+        return list(_TARGETS_CACHE)
+
     targets = []
 
     for plugin in load_enabled_plugins():
@@ -135,11 +174,16 @@ def list_all_targets():
         if hasattr(instance, "list_targets"):
             targets.extend(instance.list_targets())
 
-    return targets
+    _TARGETS_CACHE = list(targets)
+    return list(_TARGETS_CACHE)
 
 
 def load_all_palette_items(plugin_id: str | None = None, target_id: str | None = None):
     """Load palette items for all framework targets associated with a plugin."""
+    cache_key = (plugin_id, target_id)
+    if cache_key in _PALETTE_ITEMS_CACHE:
+        return list(_PALETTE_ITEMS_CACHE[cache_key])
+
     items = []
 
     for plugin in load_enabled_plugins():
@@ -153,14 +197,21 @@ def load_all_palette_items(plugin_id: str | None = None, target_id: str | None =
         if hasattr(instance, "load_palette_items"):
             items.extend(instance.load_palette_items(target_id=target_id))
 
-    return items
+    _PALETTE_ITEMS_CACHE[cache_key] = list(items)
+    return list(items)
 
 
 def load_item_details(plugin_id: str, item_id: str, target_id: str | None = None):
     """Load detailed palette metadata for one component item."""
+    cache_key = (str(plugin_id or ""), str(item_id or ""), str(target_id) if target_id is not None else None)
+    if cache_key in _ITEM_DETAILS_CACHE:
+        return _ITEM_DETAILS_CACHE[cache_key]
+
     plugin = get_plugin_by_id(plugin_id)
 
     if not hasattr(plugin, "load_item_details"):
         raise KeyError(f"Plugin '{plugin_id}' does not provide item details.")
 
-    return plugin.load_item_details(item_id, target_id=target_id)
+    details = plugin.load_item_details(item_id, target_id=target_id)
+    _ITEM_DETAILS_CACHE[cache_key] = details
+    return details

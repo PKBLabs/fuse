@@ -1258,6 +1258,7 @@ class MainWindow(QMainWindow):
             sorting_mode=self.project_settings.preferred_component_sorting_mode,
             auto_expand_all=self.project_settings.auto_expand_all_component_tree,
             catalog_expanded=self.project_settings.component_catalog_expanded,
+            refresh=False,
         )
 
         active = self.project_settings.active_plugin_settings()
@@ -1545,6 +1546,16 @@ class MainWindow(QMainWindow):
 
     def reset_undo_history(self, mark_clean: bool = True):
         snapshot = self.history_snapshot()
+        self.reset_undo_history_from_snapshot(snapshot, mark_clean=mark_clean)
+
+    def reset_undo_history_from_snapshot(self, snapshot: dict, mark_clean: bool = True):
+        """Reset undo history from an existing project snapshot.
+
+        Opening a project already has a parsed, validated project dictionary.
+        Reusing it avoids immediately walking the freshly rebuilt QGraphicsScene
+        just to create the initial clean undo snapshot.
+        """
+        snapshot = copy.deepcopy(snapshot)
         signature = self.history_signature(snapshot)
         self._undo_stack = [snapshot]
         self._redo_stack = []
@@ -2122,11 +2133,29 @@ class MainWindow(QMainWindow):
         try:
             project = load_project_file(file_path)
             self.project_settings = ProjectSettings.from_project_dict(project)
-            self.close_all_composite_model_tabs()
-            load_project_into_scene(project, self.scene)
-            self.properties_panel.set_validation_issues([])
-            self.properties_panel.show_empty()
+
+            # Opening a project is a bulk reconstruction. Suppress repaint and
+            # history callbacks until the scene has been rebuilt and the caller
+            # performs one explicit outline/history refresh below.
+            self._restoring_history = True
+            self.setUpdatesEnabled(False)
+            self.model_view.setUpdatesEnabled(False)
+            self.model_outline.setUpdatesEnabled(False)
+            try:
+                self.close_all_composite_model_tabs()
+                load_project_into_scene(project, self.scene)
+                self.properties_panel.set_validation_issues([])
+                self.properties_panel.show_empty()
+            finally:
+                self.model_outline.setUpdatesEnabled(True)
+                self.model_view.setUpdatesEnabled(True)
+                self.setUpdatesEnabled(True)
+                self._restoring_history = False
         except Exception as exc:
+            self._restoring_history = False
+            self.setUpdatesEnabled(True)
+            self.model_view.setUpdatesEnabled(True)
+            self.model_outline.setUpdatesEnabled(True)
             QMessageBox.critical(self, "Open Failed", str(exc))
             return
 
@@ -2136,7 +2165,7 @@ class MainWindow(QMainWindow):
         self.refresh_project_model_tab_title()
         self.model_view.apply_editor_state(project.get("editor", {}))
         self.update_model_outline()
-        self.reset_undo_history(mark_clean=True)
+        self.reset_undo_history_from_snapshot(project, mark_clean=True)
 
         self.statusBar().showMessage(f"Opened {file_path}", 3000)
 

@@ -96,13 +96,19 @@ def _palette_item_is_subcomponent(item) -> int:
     return 1 if _text(getattr(item, "raw_kind", "")).lower() == "subcomponent" else 0
 
 
-def _candidate_target_ids_for_saved_component(component_data: dict) -> list[str | None]:
+def _candidate_target_ids_for_saved_component(
+    component_data: dict,
+    targets: list | None = None,
+) -> list[str | None]:
     """Return local target ids likely to contain the saved component.
 
     Project files store database row ids for targets and components. Those ids are
     only reliable on the machine that saved the file. Prefer the saved target id
     first for same-machine loads, then look up a local target with the same
     plugin/framework version for cross-machine loads.
+
+    ``targets`` is supplied by the project loader so opening a model does not
+    re-query plugin target metadata for every saved component.
     """
 
     plugin_id = _text(component_data.get("pluginId", component_data.get("plugin_id", "")))
@@ -123,10 +129,11 @@ def _candidate_target_ids_for_saved_component(component_data: dict) -> list[str 
         add_candidate(saved_target_id)
 
     if framework_version:
-        try:
-            targets = list_all_targets()
-        except Exception:
-            targets = []
+        if targets is None:
+            try:
+                targets = list_all_targets()
+            except Exception:
+                targets = []
 
         for target in targets:
             target_plugin_id = _text(getattr(target, "plugin_id", ""))
@@ -186,6 +193,52 @@ def _palette_item_matches_saved_component(item, component_data: dict) -> bool:
     return True
 
 
+
+def _palette_lookup_key(
+    plugin_id: str,
+    element: str,
+    name: str,
+    framework_version: str,
+    is_subcomponent: int,
+) -> tuple[str, str, str, str, int]:
+    """Return the stable component lookup key used during project restore."""
+
+    return (
+        _text(plugin_id),
+        _text(element),
+        _text(name),
+        _text(framework_version),
+        int(is_subcomponent or 0),
+    )
+
+
+def _palette_lookup_for_target(
+    plugin_id: str,
+    target_id: str | None,
+    palette_cache: dict[tuple[str, str | None], list],
+    lookup_cache: dict[tuple[str, str | None], dict[tuple[str, str, str, str, int], object]],
+) -> dict[tuple[str, str, str, str, int], object]:
+    """Return an indexed palette lookup for one plugin/target pair."""
+
+    cache_key = (plugin_id, target_id)
+    if cache_key in lookup_cache:
+        return lookup_cache[cache_key]
+
+    lookup: dict[tuple[str, str, str, str, int], object] = {}
+    for item in _load_palette_items_for_target(plugin_id, target_id, palette_cache):
+        key = _palette_lookup_key(
+            getattr(item, "plugin_id", ""),
+            getattr(item, "element_name", ""),
+            getattr(item, "type_name", ""),
+            getattr(item, "framework_version", ""),
+            _palette_item_is_subcomponent(item),
+        )
+        lookup.setdefault(key, item)
+
+    lookup_cache[cache_key] = lookup
+    return lookup
+
+
 def _component_definition_from_palette_item(item, component_data: dict) -> ComponentDefinition:
     """Build a fresh definition using local catalog ids and saved UI fallbacks."""
 
@@ -212,6 +265,8 @@ def _component_definition_from_palette_item(item, component_data: dict) -> Compo
 def _resolve_saved_component_definition(
     component_data: dict,
     palette_cache: dict[tuple[str, str | None], list],
+    palette_lookup_cache: dict[tuple[str, str | None], dict[tuple[str, str, str, str, int], object]] | None = None,
+    targets: list | None = None,
 ) -> ComponentDefinition:
     """Resolve a saved component against the local plugin catalog when possible.
 
@@ -233,7 +288,28 @@ def _resolve_saved_component_definition(
     if not plugin_id:
         return fallback
 
-    for target_id in _candidate_target_ids_for_saved_component(component_data):
+    palette_lookup_cache = palette_lookup_cache if palette_lookup_cache is not None else {}
+    lookup_key = _palette_lookup_key(
+        plugin_id,
+        component_data.get("element", ""),
+        component_data.get("name", ""),
+        component_data.get("frameworkVersion", ""),
+        _bool_int(component_data.get("isSubcomponent", 0)),
+    )
+
+    for target_id in _candidate_target_ids_for_saved_component(component_data, targets):
+        lookup = _palette_lookup_for_target(
+            plugin_id,
+            target_id,
+            palette_cache,
+            palette_lookup_cache,
+        )
+        item = lookup.get(lookup_key)
+        if item is not None:
+            return _component_definition_from_palette_item(item, component_data)
+
+        # Fallback scan preserves compatibility for older project files that may
+        # have partial or non-normalized fields.
         for item in _load_palette_items_for_target(plugin_id, target_id, palette_cache):
             if _palette_item_matches_saved_component(item, component_data):
                 return _component_definition_from_palette_item(item, component_data)
@@ -500,10 +576,20 @@ def load_project_into_scene(project: dict, scene: ModelScene) -> None:
 
         nodes_by_id: dict[int, ComponentNodeItem] = {}
         palette_cache: dict[tuple[str, str | None], list] = {}
+        palette_lookup_cache: dict[tuple[str, str | None], dict[tuple[str, str, str, str, int], object]] = {}
         metadata_cache: dict[tuple[str, str, str, str], list[dict]] = {}
+        try:
+            target_cache = list_all_targets()
+        except Exception:
+            target_cache = []
 
         for component_data in project["components"]:
-            component = _resolve_saved_component_definition(component_data, palette_cache)
+            component = _resolve_saved_component_definition(
+                component_data,
+                palette_cache,
+                palette_lookup_cache,
+                target_cache,
+            )
 
             node_id = int(component_data["id"])
             node = ComponentNodeItem(
@@ -691,6 +777,10 @@ def load_project_into_scene(project: dict, scene: ModelScene) -> None:
 
         scene._next_subcomp_attachment_id = max_attachment_id + 1
     finally:
-        scene.end_model_load()
+        scene.end_model_load(emit_model_changed=False)
 
-    scene.reroute_all_links()
+    reroute_timer = getattr(scene, "_reroute_timer", None)
+    if reroute_timer is not None:
+        reroute_timer.start(75)
+    else:
+        scene.reroute_all_links()

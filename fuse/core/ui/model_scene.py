@@ -29,11 +29,13 @@ from __future__ import annotations
 from typing import Optional
 from copy import deepcopy
 
-from PySide6.QtCore import QPointF, Qt, QThreadPool, QTimer
-from PySide6.QtGui import QKeySequence, QPen, QColor
+from PySide6.QtCore import QPointF, QRectF, Qt, QThreadPool, QTimer
+from PySide6.QtGui import QBrush, QKeySequence, QPen, QColor
 from PySide6.QtWidgets import (
     QCheckBox,
+    QGraphicsItem,
     QGraphicsLineItem,
+    QGraphicsRectItem,
     QGraphicsScene,
     QMessageBox,
 )
@@ -142,6 +144,9 @@ class ModelScene(QGraphicsScene):
         self._drag_preview_timer.timeout.connect(self.update_drag_preview_links)
         self._drag_preview_node_ids: set[int] = set()
         self._drag_moved_node_ids: set[int] = set()
+        self._drag_node_count = 0
+        self._bulk_drag_preview_suppressed = False
+        self._bulk_drag_preview_threshold = 12
 
         # Full orthogonal routing can be expensive on dense diagrams. Keep Qt
         # graphics mutation on the GUI thread, but compute numeric route points
@@ -156,6 +161,29 @@ class ModelScene(QGraphicsScene):
         # callbacks, incremental routing, and model-change snapshots until the
         # complete model has been restored.
         self._model_loading_depth = 0
+        self._model_load_previous_index_method = None
+
+        # Large-selection drags need a more aggressive fast path than ordinary
+        # link-preview throttling.  When many nodes are selected, the cost is no
+        # longer just routing: every mouse-move can invoke Python itemChange()
+        # handlers, update the scene spatial index, repaint long link paths, and
+        # recompute link hit-test shapes.  For those drags, temporarily suppress
+        # geometry-change callbacks on the moving nodes and hide link visuals.
+        # Release-time code restores everything and schedules one route batch.
+        self._bulk_drag_fast_path_active = False
+        self._bulk_drag_geometry_flag_state: dict[int, bool] = {}
+        self._bulk_drag_movable_flag_state: dict[int, bool] = {}
+        self._bulk_drag_hidden_item_state: dict[object, bool] = {}
+        self._bulk_drag_hidden_node_state: dict[int, bool] = {}
+        self._bulk_drag_anchor_node_id: int | None = None
+        self._bulk_drag_proxy_item: QGraphicsRectItem | None = None
+        self._bulk_drag_previous_index_method = None
+        self._drag_nodes_by_id: dict[int, ComponentNodeItem] = {}
+        self._deferred_drag_select_node: ComponentNodeItem | None = None
+        self._highlighted_link_items: set[ConnectionItem] = set()
+        self._highlighted_attachment_items: set[SubcompAttachmentItem] = set()
+        self._suppress_link_hit_tests = False
+        self._drag_model_change_pending = False
 
     def connection_items(self) -> list[ConnectionItem]:
         items = [item for item in self.items() if isinstance(item, ConnectionItem)]
@@ -177,9 +205,13 @@ class ModelScene(QGraphicsScene):
         self.cancel_pending_connection()
         self.cancel_pending_subcomp_attachment()
         self.invalidate_pending_link_routes()
+        self.restore_bulk_drag_fast_path()
         self._reroute_timer.stop()
         self._drag_preview_timer.stop()
         self.clear()
+        self._highlighted_link_items.clear()
+        self._highlighted_attachment_items.clear()
+        self._suppress_link_hit_tests = False
         self.links = []
         self.subcomp_attachments = []
         self._next_link_id = 1
@@ -196,18 +228,44 @@ class ModelScene(QGraphicsScene):
         Qt graphics items are still created on the GUI thread, but their
         position-change handlers should not trigger routing/history work until
         all nodes, links, and subcomponent attachments have been restored.
+
+        Loading many items is much faster when QGraphicsScene does not maintain
+        its spatial index after every addItem()/setPos(). Restore the previous
+        indexing policy once the bulk load is complete.
         """
         self._model_loading_depth += 1
         self.begin_model_change_batch()
+        if self._model_loading_depth == 1:
+            try:
+                self._model_load_previous_index_method = self.itemIndexMethod()
+                self.setItemIndexMethod(QGraphicsScene.ItemIndexMethod.NoIndex)
+            except Exception:
+                self._model_load_previous_index_method = None
         self.invalidate_pending_link_routes()
         self._reroute_timer.stop()
         self._drag_preview_timer.stop()
 
-    def end_model_load(self) -> None:
-        """Leave a project-load batch."""
+    def end_model_load(self, *, emit_model_changed: bool = False) -> None:
+        """Leave a project-load batch.
+
+        By default, project open/undo paths perform their own explicit outline
+        and history reset after the model is restored. Emitting the normal
+        model_changed callback here would immediately walk the fresh scene to
+        build an undo snapshot, then the caller would do the same work again.
+        """
         if self._model_loading_depth > 0:
             self._model_loading_depth -= 1
-        self.end_model_change_batch()
+
+        if self._model_loading_depth == 0:
+            previous_index_method = self._model_load_previous_index_method
+            self._model_load_previous_index_method = None
+            if previous_index_method is not None:
+                try:
+                    self.setItemIndexMethod(previous_index_method)
+                except Exception:
+                    pass
+
+        self.end_model_change_batch(emit_changed=emit_model_changed)
 
     def invalidate_pending_link_routes(self) -> None:
         """Drop stale asynchronous route batches.
@@ -271,17 +329,38 @@ class ModelScene(QGraphicsScene):
         if self.model_changed_callback is not None:
             self.model_changed_callback()
 
+    def request_deferred_model_changed(self) -> None:
+        """Emit the model-changed callback after the current UI event returns.
+
+        Drag release should make the canvas responsive before history/sidebar
+        bookkeeping runs. Coalesce repeated release-time requests into one
+        callback.
+        """
+        if self._drag_model_change_pending:
+            return
+
+        self._drag_model_change_pending = True
+        QTimer.singleShot(0, self._emit_deferred_model_changed)
+
+    def _emit_deferred_model_changed(self) -> None:
+        if not self._drag_model_change_pending:
+            return
+
+        self._drag_model_change_pending = False
+        self.notify_model_changed()
+
     def begin_model_change_batch(self) -> None:
         self._model_change_batch_depth += 1
 
-    def end_model_change_batch(self) -> None:
+    def end_model_change_batch(self, *, emit_changed: bool = True) -> None:
         if self._model_change_batch_depth <= 0:
             return
 
         self._model_change_batch_depth -= 1
         if self._model_change_batch_depth == 0 and self._batched_model_change_pending:
             self._batched_model_change_pending = False
-            self.notify_model_changed()
+            if emit_changed:
+                self.notify_model_changed()
 
     def notify_component_added(self, node: ComponentNodeItem):
         if self._model_change_batch_depth > 0:
@@ -853,27 +932,40 @@ class ModelScene(QGraphicsScene):
     def clear_link_highlights(self):
         self.selected_connection = None
 
-        for connection in self.connection_items():
-            connection.set_highlighted(False)
+        for connection in list(self._highlighted_link_items):
+            if connection.scene() is self:
+                connection.set_highlighted(False)
+        self._highlighted_link_items.clear()
 
     def clear_subcomp_attachment_highlights(self):
         self.selected_subcomp_attachment = None
 
-        for attachment in self.subcomp_attachment_items():
-            attachment.set_highlighted(False)
+        for attachment in list(self._highlighted_attachment_items):
+            if attachment.scene() is self:
+                attachment.set_highlighted(False)
+        self._highlighted_attachment_items.clear()
 
     def clear_all_selection_highlights(self):
         self.clear_link_highlights()
         self.clear_subcomp_attachment_highlights()
 
     def highlight_links_for_node(self, node: "ComponentNodeItem"):
+        # Do not walk and restyle every link in the model on every component
+        # click. Only clear the items that were previously highlighted, then
+        # touch the links/attachments actually connected to the newly selected
+        # node.
+        self.clear_link_highlights()
         self.clear_subcomp_attachment_highlights()
 
-        for connection in self.connection_items():
-            connection.set_highlighted(connection.is_connected_to_node(node))
+        for connection in self.links_attached_to_node(node):
+            if connection.scene() is self:
+                connection.set_highlighted(True)
+                self._highlighted_link_items.add(connection)
 
-        for attachment in self.subcomp_attachment_items():
-            attachment.set_highlighted(attachment.is_connected_to_node(node))
+        for attachment in self.attachments_attached_to_node(node):
+            if attachment.scene() is self:
+                attachment.set_highlighted(True)
+                self._highlighted_attachment_items.add(attachment)
 
     def select_component(self, node: "ComponentNodeItem"):
         self.selected_component = node
@@ -892,6 +984,7 @@ class ModelScene(QGraphicsScene):
         self.selected_component = None
         self.selected_connection = connection
         connection.set_highlighted(True)
+        self._highlighted_link_items.add(connection)
 
         if self.properties_panel is not None:
             self.properties_panel.show_link(connection)
@@ -904,6 +997,7 @@ class ModelScene(QGraphicsScene):
         self.selected_component = None
         self.selected_subcomp_attachment = attachment
         attachment.set_highlighted(True)
+        self._highlighted_attachment_items.add(attachment)
 
         if self.properties_panel is not None:
             self.properties_panel.show_subcomp_attachment(attachment)
@@ -922,8 +1016,10 @@ class ModelScene(QGraphicsScene):
         # Invalidate any pending background route batch so stale paths do not
         # overwrite drag previews while the user is moving components.
         self._route_generation += 1
+        self._suppress_link_hit_tests = True
         self._dragging_node = True
         self._drag_changed = False
+        self.restore_bulk_drag_fast_path()
 
         drag_nodes: set[ComponentNodeItem] = set()
         if node is not None:
@@ -936,14 +1032,259 @@ class ModelScene(QGraphicsScene):
         if not drag_nodes:
             drag_nodes = set(self.component_items())
 
+        self._drag_nodes_by_id = {
+            drag_node.node_id: drag_node
+            for drag_node in drag_nodes
+        }
         self._drag_start_positions = {
             drag_node.node_id: (drag_node.pos().x(), drag_node.pos().y())
             for drag_node in drag_nodes
         }
+        self._drag_node_count = len(drag_nodes)
+        self._bulk_drag_preview_suppressed = (
+            self._drag_node_count >= self._bulk_drag_preview_threshold
+        )
         self._reroute_timer.stop()
         self._drag_preview_timer.stop()
         self._drag_preview_node_ids.clear()
         self._drag_moved_node_ids.clear()
+
+        if self._bulk_drag_preview_suppressed:
+            self.begin_bulk_drag_fast_path(drag_nodes, anchor_node=node)
+
+    def _scene_rect_for_nodes(self, nodes: set["ComponentNodeItem"]) -> QRectF:
+        """Return one scene-coordinate rectangle covering the given nodes."""
+        rect: QRectF | None = None
+        for node in nodes:
+            node_rect = node.mapRectToScene(node.rect())
+            rect = node_rect if rect is None else rect.united(node_rect)
+        return rect if rect is not None else QRectF()
+
+    def begin_bulk_drag_fast_path(
+        self,
+        drag_nodes: set["ComponentNodeItem"],
+        *,
+        anchor_node: "ComponentNodeItem" | None = None,
+    ) -> None:
+        """Enable the very-low-overhead path for large selection moves.
+
+        Qt still performs the actual item movement on the GUI thread, but FUSE
+        stops doing Python work for every tiny mouse-move step.  The final
+        release handler compares positions against ``_drag_start_positions`` and
+        reroutes once.
+        """
+        if self._bulk_drag_fast_path_active:
+            return
+
+        self._bulk_drag_fast_path_active = True
+
+        try:
+            self._bulk_drag_previous_index_method = self.itemIndexMethod()
+            self.setItemIndexMethod(QGraphicsScene.ItemIndexMethod.NoIndex)
+        except Exception:
+            self._bulk_drag_previous_index_method = None
+
+        if anchor_node not in drag_nodes:
+            anchor_node = sorted(drag_nodes, key=lambda item: item.node_id)[0] if drag_nodes else None
+        self._bulk_drag_anchor_node_id = int(getattr(anchor_node, "node_id", 0) or 0) if anchor_node else None
+
+        # For very large selections, letting Qt move every selected component on
+        # every mouse event is still expensive even if Python routing callbacks
+        # are disabled. Keep only the grabbed/anchor node movable and show one
+        # lightweight outline representing the whole moved block. On release,
+        # apply the final anchor delta to the rest of the nodes exactly once.
+        self._bulk_drag_geometry_flag_state = {}
+        self._bulk_drag_movable_flag_state = {}
+        self._bulk_drag_hidden_node_state = {}
+        for drag_node in drag_nodes:
+            try:
+                self._bulk_drag_geometry_flag_state[drag_node.node_id] = bool(
+                    drag_node.flags() & QGraphicsItem.ItemSendsGeometryChanges
+                )
+                self._bulk_drag_movable_flag_state[drag_node.node_id] = bool(
+                    drag_node.flags() & QGraphicsItem.ItemIsMovable
+                )
+                drag_node.setFlag(QGraphicsItem.ItemSendsGeometryChanges, False)
+                if anchor_node is not None and drag_node is not anchor_node:
+                    drag_node.setFlag(QGraphicsItem.ItemIsMovable, False)
+                    self._bulk_drag_hidden_node_state[drag_node.node_id] = bool(drag_node.isVisible())
+                    drag_node.setVisible(False)
+            except Exception:
+                pass
+
+        if anchor_node is not None:
+            try:
+                scene_rect = self._scene_rect_for_nodes(drag_nodes).adjusted(-24.0, -24.0, 24.0, 24.0)
+                local_rect = QRectF(
+                    anchor_node.mapFromScene(scene_rect.topLeft()),
+                    anchor_node.mapFromScene(scene_rect.bottomRight()),
+                ).normalized()
+                proxy = QGraphicsRectItem(local_rect, anchor_node)
+                proxy.setPen(QPen(QColor(40, 120, 220, 180), 2.0, Qt.PenStyle.DashLine))
+                proxy.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+                proxy.setZValue(10000)
+                proxy.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
+                self._bulk_drag_proxy_item = proxy
+            except Exception:
+                self._bulk_drag_proxy_item = None
+
+        # Hide only graphics attached to the moving nodes. Hiding the entire
+        # model's link layer made unrelated links blink out and made release
+        # restoration scale with total model size instead of the moved cluster.
+        self._bulk_drag_hidden_item_state = {}
+        hidden_items: set[object] = set()
+        for drag_node in drag_nodes:
+            hidden_items.update(self.links_attached_to_node(drag_node))
+            hidden_items.update(self.attachments_attached_to_node(drag_node))
+
+        for item in hidden_items:
+            try:
+                self._bulk_drag_hidden_item_state[item] = bool(item.isVisible())
+                item.setVisible(False)
+            except Exception:
+                pass
+
+    def restore_bulk_drag_fast_path(self) -> None:
+        """Restore scene state after a large-selection drag fast path."""
+        if not self._bulk_drag_fast_path_active and not self._bulk_drag_geometry_flag_state:
+            return
+
+        proxy = self._bulk_drag_proxy_item
+        self._bulk_drag_proxy_item = None
+        if proxy is not None:
+            try:
+                if proxy.scene() is self:
+                    self.removeItem(proxy)
+                else:
+                    proxy.setParentItem(None)
+            except Exception:
+                pass
+
+        for node_id, was_visible in list(self._bulk_drag_hidden_node_state.items()):
+            node = self._drag_nodes_by_id.get(node_id) or self.find_node_by_id(node_id)
+            if node is None:
+                continue
+            try:
+                node.setVisible(bool(was_visible))
+            except Exception:
+                pass
+        self._bulk_drag_hidden_node_state = {}
+
+        for node_id, was_movable in list(self._bulk_drag_movable_flag_state.items()):
+            node = self._drag_nodes_by_id.get(node_id) or self.find_node_by_id(node_id)
+            if node is None:
+                continue
+            try:
+                node.setFlag(QGraphicsItem.ItemIsMovable, bool(was_movable))
+            except Exception:
+                pass
+        self._bulk_drag_movable_flag_state = {}
+
+        for node_id, was_enabled in list(self._bulk_drag_geometry_flag_state.items()):
+            node = self._drag_nodes_by_id.get(node_id) or self.find_node_by_id(node_id)
+            if node is None:
+                continue
+            try:
+                node.setFlag(QGraphicsItem.ItemSendsGeometryChanges, bool(was_enabled))
+            except Exception:
+                pass
+        self._bulk_drag_geometry_flag_state = {}
+
+        self._bulk_drag_anchor_node_id = None
+
+        for item, was_visible in list(self._bulk_drag_hidden_item_state.items()):
+            try:
+                if item.scene() is self:
+                    item.setVisible(bool(was_visible))
+            except Exception:
+                pass
+        self._bulk_drag_hidden_item_state = {}
+
+        previous_index_method = self._bulk_drag_previous_index_method
+        self._bulk_drag_previous_index_method = None
+        if previous_index_method is not None:
+            try:
+                self.setItemIndexMethod(previous_index_method)
+            except Exception:
+                pass
+
+        self._bulk_drag_fast_path_active = False
+
+    def is_bulk_drag_fast_path_active(self) -> bool:
+        """Return whether the current mouse gesture is a large-selection drag."""
+        return bool(self._bulk_drag_fast_path_active)
+
+    def defer_component_selection_until_drag_end(self, node: "ComponentNodeItem") -> None:
+        """Delay expensive single-node link highlighting until we know it was a click."""
+        self._deferred_drag_select_node = node
+
+    def maybe_apply_deferred_drag_selection(self, changed: bool) -> None:
+        node = self._deferred_drag_select_node
+        self._deferred_drag_select_node = None
+        if changed or node is None or node.scene() is not self:
+            return
+        self.select_component(node)
+
+    def note_bulk_drag_node_moved(self, node: "ComponentNodeItem") -> None:
+        """Record a move seen while the fast path is active."""
+        if node is None:
+            return
+        node_id = int(getattr(node, "node_id", 0) or 0)
+        if node_id > 0:
+            self._drag_moved_node_ids.add(node_id)
+
+    def commit_bulk_drag_proxy_delta(self) -> None:
+        """Apply the anchor-node drag delta to hidden bulk-drag members once.
+
+        During the large-selection fast path, only the grabbed anchor item moves
+        interactively. The rest of the selection is hidden/frozen while a cheap
+        outline follows the anchor. At release, commit the final delta to the
+        frozen nodes before moved-node detection and rerouting.
+        """
+        if not self._bulk_drag_fast_path_active:
+            return
+
+        anchor_id = self._bulk_drag_anchor_node_id
+        if anchor_id is None:
+            return
+
+        anchor = self._drag_nodes_by_id.get(anchor_id) or self.find_node_by_id(anchor_id)
+        start = self._drag_start_positions.get(anchor_id)
+        if anchor is None or start is None:
+            return
+
+        dx = anchor.pos().x() - start[0]
+        dy = anchor.pos().y() - start[1]
+        if abs(dx) < 0.001 and abs(dy) < 0.001:
+            return
+
+        for node_id, node_start in list(self._drag_start_positions.items()):
+            if node_id == anchor_id:
+                continue
+            node = self._drag_nodes_by_id.get(node_id) or self.find_node_by_id(node_id)
+            if node is None:
+                continue
+            try:
+                node.setPos(node_start[0] + dx, node_start[1] + dy)
+                self._drag_moved_node_ids.add(node_id)
+            except Exception:
+                pass
+
+    def _moved_drag_nodes_from_start_positions(self) -> list["ComponentNodeItem"]:
+        """Return drag nodes whose current position differs from drag start."""
+        moved_nodes: list[ComponentNodeItem] = []
+
+        for node_id, start in self._drag_start_positions.items():
+            node = self._drag_nodes_by_id.get(node_id) or self.find_node_by_id(node_id)
+            if node is None:
+                continue
+
+            dx = abs(node.pos().x() - start[0])
+            dy = abs(node.pos().y() - start[1])
+            if dx > 0.001 or dy > 0.001:
+                moved_nodes.append(node)
+
+        return moved_nodes
 
     def end_node_drag(self, node: Optional["ComponentNodeItem"] = None):
         """
@@ -951,48 +1292,70 @@ class ModelScene(QGraphicsScene):
 
         Scalability rule: do NOT reroute the entire model automatically here.
         Instead, reroute:
-          1. links attached to the moved node,
-          2. subcomponent attachment edges attached to the moved node, and
-          3. existing links whose current route now intersects the moved node box.
+          1. links attached to moved nodes,
+          2. subcomponent attachment edges attached to moved nodes, and
+          3. for small drags only, existing links whose current route now
+             intersects a moved node box.
 
-        Snap-to-grid intentionally happens here, not during ItemPositionChange,
-        so dragged components move smoothly while the mouse button is held and
-        settle onto the grid only when the user drops them.
+        Large-selection drags use a fast path that suppresses per-mouse-move
+        Python callbacks.  Therefore release detection compares all tracked
+        start positions against current positions instead of relying solely on
+        ItemPositionHasChanged.
         """
-        changed = self._drag_changed
-        if node is not None:
-            start = self._drag_start_positions.get(node.node_id)
-            if start is not None:
-                changed = changed or (node.pos().x(), node.pos().y()) != start
+        self.commit_bulk_drag_proxy_delta()
 
-        if changed and node is not None and self.snap_to_grid_enabled:
-            snapped_position = self.snap_position_to_grid(node.pos())
-            if snapped_position != node.pos():
-                node.setPos(snapped_position)
-                changed = True
+        moved_nodes = self._moved_drag_nodes_from_start_positions()
+        changed = self._drag_changed or bool(moved_nodes)
 
-        moved_node_ids = set(self._drag_moved_node_ids)
+        if changed and self.snap_to_grid_enabled:
+            # Geometry-change callbacks may still be disabled here for the bulk
+            # fast path.  That is intentional: snap all moved nodes without
+            # triggering per-node routing, then reroute once below.
+            for moved_node in moved_nodes:
+                snapped_position = self.snap_position_to_grid(moved_node.pos())
+                if snapped_position != moved_node.pos():
+                    moved_node.setPos(snapped_position)
+
+            moved_nodes = self._moved_drag_nodes_from_start_positions()
+            changed = changed or bool(moved_nodes)
+
+        moved_node_ids = {
+            int(moved_node.node_id)
+            for moved_node in moved_nodes
+        }
+        moved_node_ids.update(self._drag_moved_node_ids)
         if changed and node is not None:
             moved_node_ids.add(node.node_id)
 
+        moved_nodes = [
+            self._drag_nodes_by_id.get(moved_node_id) or self.find_node_by_id(moved_node_id)
+            for moved_node_id in moved_node_ids
+        ]
+        moved_nodes = [moved_node for moved_node in moved_nodes if moved_node is not None]
+
+        # Restore hidden links and geometry-change notifications before applying
+        # release-time visual updates.
+        self.restore_bulk_drag_fast_path()
+
         self._dragging_node = False
+        self._suppress_link_hit_tests = False
+        self._bulk_drag_preview_suppressed = False
+        self._drag_node_count = 0
         self._drag_preview_timer.stop()
         self._drag_preview_node_ids.clear()
         self._drag_moved_node_ids.clear()
 
-        moved_nodes = [
-            moved_node
-            for moved_node_id in moved_node_ids
-            if (moved_node := self.find_node_by_id(moved_node_id)) is not None
-        ]
         if changed and moved_nodes:
             self.reroute_links_affected_by_nodes(moved_nodes)
 
         self._drag_changed = False
         self._drag_start_positions = {}
+        self._drag_nodes_by_id = {}
+
+        self.maybe_apply_deferred_drag_selection(changed)
 
         if changed:
-            self.notify_model_changed()
+            self.request_deferred_model_changed()
 
     def request_reroute_all_links(self):
         """
@@ -1018,12 +1381,23 @@ class ModelScene(QGraphicsScene):
 
         self._drag_preview_node_ids.add(node_id)
         self._drag_moved_node_ids.add(node_id)
+
+        # For large selections, even "cheap" preview routing can dominate the
+        # mouse-move path because every moved node fires ItemPositionHasChanged.
+        # Record the moved nodes, but defer all visual rerouting until release.
+        if self._bulk_drag_preview_suppressed:
+            return
+
         if not self._drag_preview_timer.isActive():
             self._drag_preview_timer.start()
 
     def update_drag_preview_links(self) -> None:
         """Update attached link previews for nodes moved since the last tick."""
         if not self._dragging_node:
+            self._drag_preview_node_ids.clear()
+            return
+
+        if self._bulk_drag_preview_suppressed:
             self._drag_preview_node_ids.clear()
             return
 
@@ -1315,6 +1689,13 @@ class ModelScene(QGraphicsScene):
 
         return seen
 
+    def attachments_attached_to_node(self, node: "ComponentNodeItem") -> set[SubcompAttachmentItem]:
+        return {
+            attachment
+            for attachment in self.subcomp_attachment_items()
+            if attachment.is_connected_to_node(node)
+        }
+
     def link_route_intersects_node(self, connection: ConnectionItem, node: "ComponentNodeItem") -> bool:
         """
         Return True if an existing rendered link path crosses the moved node's
@@ -1353,13 +1734,11 @@ class ModelScene(QGraphicsScene):
         for node in moved_nodes:
             affected.update(self.links_attached_to_node(node))
 
-        for connection in self.connection_items():
-            if connection in affected:
-                continue
-
-            if any(self.link_route_intersects_node(connection, node) for node in moved_nodes):
-                affected.add(connection)
-
+        # Release-time work must be bounded by the moved selection, not by total
+        # diagram size. Do not scan every unrelated link for crossing tests here;
+        # that made even one-node drags feel like a full-model operation on dense
+        # canvases. Attached links are reconnected immediately, then accurately
+        # rerouted by the background worker.
         affected_connections = sorted(affected, key=lambda item: item.link.link_id)
         for connection in affected_connections:
             connection.update_position_fast()
