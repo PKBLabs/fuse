@@ -479,6 +479,85 @@ PORT_VISIBILITY_RULES: dict[tuple[str, str], PortVisibilityRule] = {
             "memHierarchy.MemNIC or MemNICFour and connect the child port(s)."
         ),
     ),
+    _key("mmu.tlb_wrapper", "cpu_if"): PortVisibilityRule(
+        component_type="mmu.tlb_wrapper",
+        port_name="cpu_if",
+        mode="advanced_raw",
+        default_visible=False,
+        use_slot="highlink",
+        explanation=(
+            "Deprecated TLB wrapper CPU-side port name. Use highlink for "
+            "naming consistency with memHierarchy."
+        ),
+    ),
+    _key("mmu.tlb_wrapper", "cache_if"): PortVisibilityRule(
+        component_type="mmu.tlb_wrapper",
+        port_name="cache_if",
+        mode="advanced_raw",
+        default_visible=False,
+        use_slot="lowlink",
+        explanation=(
+            "Deprecated TLB wrapper cache/memory-side port name. Use lowlink "
+            "for naming consistency with memHierarchy."
+        ),
+    ),
+
+    _key("carcosa.CarcosaMemCtrl", "direct_link"): PortVisibilityRule(
+        component_type="carcosa.CarcosaMemCtrl",
+        port_name="direct_link",
+        mode="advanced_raw",
+        default_visible=False,
+        use_slot="highlink",
+        child_type="memHierarchy.MemLink",
+        explanation="Deprecated Carcosa memory-controller direct-link port; use highlink.",
+    ),
+    _key("carcosa.CarcosaMemCtrl", "network"): PortVisibilityRule(
+        component_type="carcosa.CarcosaMemCtrl",
+        port_name="network",
+        mode="advanced_raw",
+        default_visible=False,
+        use_slot="highlink",
+        child_type="memHierarchy.MemNIC",
+        explanation=(
+            "Deprecated Carcosa memory-controller network port. Use the "
+            "highlink slot with memHierarchy.MemNIC or MemNICFour and connect "
+            "the child port(s)."
+        ),
+    ),
+    _key("carcosa.CarcosaMemCtrl", "network_ack"): PortVisibilityRule(
+        component_type="carcosa.CarcosaMemCtrl",
+        port_name="network_ack",
+        mode="advanced_raw",
+        default_visible=False,
+        use_slot="highlink",
+        child_type="memHierarchy.MemNICFour",
+        explanation="Deprecated Carcosa split-network ack port; use highlink -> MemNICFour.",
+    ),
+    _key("carcosa.CarcosaMemCtrl", "network_fwd"): PortVisibilityRule(
+        component_type="carcosa.CarcosaMemCtrl",
+        port_name="network_fwd",
+        mode="advanced_raw",
+        default_visible=False,
+        use_slot="highlink",
+        child_type="memHierarchy.MemNICFour",
+        explanation="Deprecated Carcosa split-network fwd port; use highlink -> MemNICFour.",
+    ),
+    _key("carcosa.CarcosaMemCtrl", "network_data"): PortVisibilityRule(
+        component_type="carcosa.CarcosaMemCtrl",
+        port_name="network_data",
+        mode="advanced_raw",
+        default_visible=False,
+        use_slot="highlink",
+        child_type="memHierarchy.MemNICFour",
+        explanation="Deprecated Carcosa split-network data port; use highlink -> MemNICFour.",
+    ),
+    _key("carcosa.CarcosaMemCtrl", "cube_link"): PortVisibilityRule(
+        component_type="carcosa.CarcosaMemCtrl",
+        port_name="cube_link",
+        mode="advanced_raw",
+        default_visible=False,
+        explanation="Deprecated Carcosa memory-controller cube_link port.",
+    ),
 }
 
 
@@ -828,6 +907,102 @@ DEPRECATED_CONNECTOR_RULES: dict[tuple[str, str, str], DeprecatedConnectorRule] 
         replacement_kind="slot",
         deprecated_since="15.0.0",
         explanation="Use a MemNIC/MemNICFour in the appropriate highlink or lowlink slot for scratchpad network links.",
+    ),
+    _connector_key("memHierarchy.MemCacheController", "slot", "cpulink"): DeprecatedConnectorRule(
+        component_type="memHierarchy.MemCacheController",
+        connector_name="cpulink",
+        connector_kind="slot",
+        replacement_name="highlink",
+        replacement_kind="slot",
+        deprecated_since="15.0.0",
+        explanation="The MemCacheController cpulink slot was renamed to highlink.",
+    ),
+
+    _connector_key("mmu.tlb_wrapper", "port", "cpu_if"): DeprecatedConnectorRule(
+        component_type="mmu.tlb_wrapper",
+        connector_name="cpu_if",
+        connector_kind="port",
+        replacement_name="highlink",
+        replacement_kind="port",
+        deprecated_since="16.0.0",
+        explanation=(
+            "The TLB wrapper cpu_if port was renamed to highlink for naming "
+            "consistency with memHierarchy."
+        ),
+    ),
+    _connector_key("mmu.tlb_wrapper", "port", "cache_if"): DeprecatedConnectorRule(
+        component_type="mmu.tlb_wrapper",
+        connector_name="cache_if",
+        connector_kind="port",
+        replacement_name="lowlink",
+        replacement_kind="port",
+        deprecated_since="16.0.0",
+        explanation=(
+            "The TLB wrapper cache_if port was renamed to lowlink for naming "
+            "consistency with memHierarchy."
+        ),
+    ),
+
+    _connector_key("carcosa.CarcosaMemCtrl", "slot", "cpulink"): DeprecatedConnectorRule(
+        component_type="carcosa.CarcosaMemCtrl",
+        connector_name="cpulink",
+        connector_kind="slot",
+        replacement_name="highlink",
+        replacement_kind="slot",
+        deprecated_since="16.0.0",
+        explanation="The CarcosaMemCtrl cpulink slot was renamed to highlink.",
+    ),
+    _connector_key("carcosa.CarcosaMemCtrl", "port", "direct_link"): DeprecatedConnectorRule(
+        component_type="carcosa.CarcosaMemCtrl",
+        connector_name="direct_link",
+        connector_kind="port",
+        replacement_name="highlink",
+        replacement_kind="port",
+        deprecated_since="16.0.0",
+        explanation="Use highlink for direct Carcosa memory-controller links.",
+    ),
+    _connector_key("carcosa.CarcosaMemCtrl", "port", "network"): DeprecatedConnectorRule(
+        component_type="carcosa.CarcosaMemCtrl",
+        connector_name="network",
+        connector_kind="port",
+        replacement_name="highlink",
+        replacement_kind="slot",
+        deprecated_since="16.0.0",
+        explanation="Use highlink -> memHierarchy.MemNIC or MemNICFour for Carcosa network links.",
+    ),
+    _connector_key("carcosa.CarcosaMemCtrl", "port", "network_ack"): DeprecatedConnectorRule(
+        component_type="carcosa.CarcosaMemCtrl",
+        connector_name="network_ack",
+        connector_kind="port",
+        replacement_name="highlink",
+        replacement_kind="slot",
+        deprecated_since="16.0.0",
+        explanation="Use highlink -> memHierarchy.MemNICFour for split-network ack traffic.",
+    ),
+    _connector_key("carcosa.CarcosaMemCtrl", "port", "network_fwd"): DeprecatedConnectorRule(
+        component_type="carcosa.CarcosaMemCtrl",
+        connector_name="network_fwd",
+        connector_kind="port",
+        replacement_name="highlink",
+        replacement_kind="slot",
+        deprecated_since="16.0.0",
+        explanation="Use highlink -> memHierarchy.MemNICFour for split-network fwd traffic.",
+    ),
+    _connector_key("carcosa.CarcosaMemCtrl", "port", "network_data"): DeprecatedConnectorRule(
+        component_type="carcosa.CarcosaMemCtrl",
+        connector_name="network_data",
+        connector_kind="port",
+        replacement_name="highlink",
+        replacement_kind="slot",
+        deprecated_since="16.0.0",
+        explanation="Use highlink -> memHierarchy.MemNICFour for split-network data traffic.",
+    ),
+    _connector_key("carcosa.CarcosaMemCtrl", "port", "cube_link"): DeprecatedConnectorRule(
+        component_type="carcosa.CarcosaMemCtrl",
+        connector_name="cube_link",
+        connector_kind="port",
+        deprecated_since="16.0.0",
+        explanation="cube_link is a deprecated Carcosa memory-controller port.",
     ),
 }
 
