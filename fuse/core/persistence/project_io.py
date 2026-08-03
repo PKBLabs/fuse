@@ -775,6 +775,10 @@ def load_project_into_scene(project: dict, scene: ModelScene) -> None:
             scene.addItem(item)
             item.update_position()
 
+        for node in nodes_by_id.values():
+            if hasattr(node, "apply_subcomp_connector_visibility"):
+                node.apply_subcomp_connector_visibility()
+
         scene._next_subcomp_attachment_id = max_attachment_id + 1
     finally:
         scene.end_model_load(emit_model_changed=False)

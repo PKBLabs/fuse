@@ -1398,6 +1398,168 @@ def node_is_sst(node) -> bool:
     return (getattr(node.component, "plugin_id", "") or "core") == "sst"
 
 
+def shadowed_raw_port_rule_for_endpoint(node, port_name: str):
+    """Return the SST port-visibility rule for a link endpoint, if any."""
+    if node is None:
+        return None
+
+    try:
+        if not node_is_sst(node):
+            return None
+    except Exception:
+        return None
+
+    try:
+        from fuse.plugins.community.sst.port_visibility import rule_for_node_port
+
+        return rule_for_node_port(node, str(port_name or "").strip())
+    except Exception:
+        return None
+
+
+def shadowed_raw_port_export_message(
+    node,
+    port_name: str,
+    rule,
+    *,
+    peer_node=None,
+    peer_port: str = "",
+) -> str:
+    """Build validation copy for raw/advanced SST port endpoints."""
+    label = f"{getattr(node, 'instance_name', '')}.{port_name}"
+    peer_label = ""
+    if peer_node is not None and peer_port:
+        peer_label = f"{getattr(peer_node, 'instance_name', '')}.{peer_port}"
+
+    slot_name = str(getattr(rule, "use_slot", "") or "").strip()
+    child_type = str(getattr(rule, "child_type", "") or "").strip()
+    child_port = str(getattr(rule, "child_port", "") or "").strip()
+
+    if getattr(rule, "mode", "") == "runtime_slot_shadow":
+        if slot_name:
+            message = (
+                f"{label} is a raw SST catalog port shadowed by runtime slot "
+                f"{slot_name}."
+            )
+        else:
+            message = f"{label} is a raw SST catalog port shadowed by a runtime slot."
+
+        if slot_name and child_type and child_port:
+            message += (
+                f" Use {getattr(node, 'instance_name', '')}.{slot_name} -> "
+                f"{child_type}, then connect {child_type}.{child_port}"
+            )
+            if peer_label:
+                message += f" to {peer_label}."
+            else:
+                message += " to the peer port."
+        elif slot_name:
+            message += f" Use the {slot_name} SubComponent slot instead."
+
+        return message
+
+    message = (
+        f"{label} is an advanced/raw SST port. This direct port path may be valid, "
+        "but guided models prefer the slot-based construction"
+    )
+    if slot_name:
+        message += f" through the {slot_name} SubComponent slot"
+    message += "."
+
+    return message
+
+
+
+def deprecated_port_rule_for_endpoint(node, port_name: str):
+    """Return a deprecated-connector rule for a link endpoint port, if any."""
+    if node is None:
+        return None
+
+    try:
+        if not node_is_sst(node):
+            return None
+    except Exception:
+        return None
+
+    try:
+        from fuse.plugins.community.sst.port_visibility import deprecated_port_rule_for_node
+
+        return deprecated_port_rule_for_node(node, str(port_name or "").strip())
+    except Exception:
+        return None
+
+
+def deprecated_slot_rule_for_endpoint(node, slot_name: str):
+    """Return a deprecated-connector rule for a SubComponent attachment slot."""
+    if node is None:
+        return None
+
+    try:
+        if not node_is_sst(node):
+            return None
+    except Exception:
+        return None
+
+    try:
+        from fuse.plugins.community.sst.port_visibility import deprecated_slot_rule_for_node
+
+        return deprecated_slot_rule_for_node(node, str(slot_name or "").strip())
+    except Exception:
+        return None
+
+
+def deprecated_connector_stage_for_endpoint(node, rule) -> str:
+    try:
+        from fuse.plugins.community.sst.port_visibility import (
+            deprecated_connector_stage_for_node,
+        )
+
+        return deprecated_connector_stage_for_node(node, rule)
+    except Exception:
+        return "deprecated"
+
+
+def deprecated_connector_export_message(
+    node,
+    connector_name: str,
+    rule,
+    *,
+    connector_kind: str,
+) -> str:
+    """Build validation copy for deprecated SST ports and slots."""
+    label = f"{getattr(node, 'instance_name', '')}.{connector_name}"
+    kind = "SubComponent slot" if connector_kind == "slot" else "port"
+    stage = deprecated_connector_stage_for_endpoint(node, rule)
+
+    if stage == "legacy_deprecated":
+        message = f"{label} is a deprecated/legacy SST {kind}."
+    elif stage == "removed":
+        message = f"{label} was removed from this SST target."
+    else:
+        message = f"{label} is a deprecated SST {kind}."
+
+    deprecated_since = str(getattr(rule, "deprecated_since", "") or "").strip()
+    if deprecated_since:
+        message += f" It has been deprecated since SST {deprecated_since}."
+
+    replacement_name = str(getattr(rule, "replacement_name", "") or "").strip()
+    replacement_kind = str(getattr(rule, "replacement_kind", "") or "").strip()
+    if replacement_name:
+        message += f" Use {replacement_name}"
+        if replacement_kind:
+            message += f" {replacement_kind}"
+        message += " instead."
+
+    explanation = str(getattr(rule, "explanation", "") or "").strip()
+    if explanation:
+        message += f" {explanation}"
+
+    if stage != "removed":
+        message += " This remains editable for legacy models, but new models should avoid it."
+
+    return message
+
+
 def node_is_subcomponent(node) -> bool:
     return bool(int(getattr(node.component, "is_subcomp", 0) or 0))
 
@@ -1802,6 +1964,230 @@ def _runtime_path_exists(
     return True
 
 
+
+def _link_endpoint_matches_node_port(link, side: str, node, port_name: str) -> bool:
+    """Return true when one side of a FUSE link names node.port_name."""
+    return (
+        getattr(link, f"{side}_node_id", None) == getattr(node, "node_id", None)
+        and str(getattr(link, f"{side}_port", "") or "").strip() == str(port_name or "").strip()
+    )
+
+
+def _link_other_endpoint_node(link, side: str, nodes_by_id: dict[int, object]):
+    """Return the node on the opposite side of link side='source'/'target'."""
+    other_side = "target" if side == "source" else "source"
+    return nodes_by_id.get(getattr(link, f"{other_side}_node_id", None))
+
+
+def _node_port_connections(
+    links: list,
+    nodes_by_id: dict[int, object],
+    node,
+    port_name: str,
+) -> list[tuple[object, str, object]]:
+    """Return (link, side, other_node) entries connected to node.port_name."""
+    matches: list[tuple[object, str, object]] = []
+    for link in links:
+        for side in ("source", "target"):
+            if not _link_endpoint_matches_node_port(link, side, node, port_name):
+                continue
+            matches.append((link, side, _link_other_endpoint_node(link, side, nodes_by_id)))
+    return matches
+
+
+def _safe_sst_component_type_for_node(node) -> str:
+    try:
+        return sst_component_type_for_node(node)
+    except Exception:
+        return ""
+
+
+def _is_memhierarchy_slot_port_mode_type(component_type: str) -> bool:
+    """Return true for memHierarchy components that support port/slot link modes."""
+    return str(component_type or "").startswith("memHierarchy.")
+
+
+def _memhierarchy_slot_port_mode_conflict_message(
+    *,
+    node,
+    slot_name: str,
+    child,
+    link,
+    side: str,
+    other_node,
+) -> str:
+    """Build validation copy for same-name memHierarchy port/slot conflicts."""
+    node_name = str(getattr(node, "instance_name", "") or "memHierarchy component")
+    child_name = str(getattr(child, "instance_name", "") or "the attached SubComponent")
+    other_label = "the peer port"
+    if other_node is not None:
+        other_side = "target" if side == "source" else "source"
+        other_port = str(getattr(link, f"{other_side}_port", "") or "").strip()
+        if other_port:
+            other_label = f"{getattr(other_node, 'instance_name', '')}.{other_port}"
+
+    return (
+        f"{node_name}.{slot_name} is being used in both memHierarchy construction "
+        f"modes: the direct port is linked to {other_label}, and the same-named "
+        f"SubComponent slot owns {child_name}. Use exactly one mode on this side. "
+        f"For direct-port mode, delete the {node_name}.{slot_name} slot attachment. "
+        f"For slot-manager mode, delete the direct {node_name}.{slot_name} link and "
+        "connect the MemLink/MemNIC child ports instead."
+    )
+
+
+def _add_memhierarchy_slot_port_mode_guidance(
+    *,
+    nodes: list,
+    links: list,
+    nodes_by_id: dict[int, object],
+    attachments_by_parent_id: dict[int, list],
+    add_issue,
+) -> None:
+    """Reject memHierarchy models that use the same side as both port and slot.
+
+    memHierarchy highlink/lowlink-style names can be either first-class direct
+    ports or SubComponent slots that load MemLink/MemNIC-style managers.  Both
+    modes are valid, but a single component side should not use both at once.
+    """
+    for node in nodes:
+        component_type = _safe_sst_component_type_for_node(node)
+        if not _is_memhierarchy_slot_port_mode_type(component_type):
+            continue
+
+        available_ports = port_names_for_node(node)
+        if not available_ports:
+            continue
+
+        node_name = str(getattr(node, "instance_name", "") or "<unnamed component>")
+        for attachment in attachments_by_parent_id.get(getattr(node, "node_id", None), []):
+            if _is_visual_parameter_attachment(node, attachment, nodes_by_id):
+                continue
+
+            slot_name = str(getattr(attachment, "slot_name", "") or "").strip()
+            if not slot_name or slot_name not in available_ports:
+                continue
+
+            connections = _node_port_connections(links, nodes_by_id, node, slot_name)
+            if not connections:
+                continue
+
+            child = nodes_by_id.get(getattr(attachment, "child_node_id", None))
+            for link, side, other_node in connections:
+                add_issue(
+                    validation_issue(
+                        "sst_export_memhierarchy_slot_port_mode_conflict",
+                        node_name,
+                        _memhierarchy_slot_port_mode_conflict_message(
+                            node=node,
+                            slot_name=slot_name,
+                            child=child,
+                            link=link,
+                            side=side,
+                            other_node=other_node,
+                        ),
+                        node_id=getattr(node, "node_id", None),
+                        link_id=getattr(link, "link_id", None),
+                        attachment_id=getattr(attachment, "attachment_id", None),
+                        parameter_name=slot_name,
+                    )
+                )
+
+
+def _runtime_child_port_target_types(parent_type: str, slot_name: str) -> set[str]:
+    """Return known expected target component types for a guided child port."""
+    return {
+        ("firefly.nic", "rtrLink"): {"merlin.hr_router"},
+        ("firefly.hades", "virtNic"): {"firefly.nic"},
+        ("firefly.CtrlMsgProto", "process"): {"firefly.loopBack"},
+    }.get((parent_type, slot_name), set())
+
+
+def _runtime_child_port_target_description(parent_type: str, slot_name: str, fallback: str) -> str:
+    """Return a user-facing target description for a guided child port."""
+    return {
+        ("firefly.nic", "rtrLink"): "a merlin.hr_router port",
+        ("firefly.hades", "virtNic"): "the matching firefly.nic core port",
+        ("firefly.CtrlMsgProto", "process"): "firefly.loopBack.nic0core0",
+    }.get((parent_type, slot_name), fallback or "the correct peer port")
+
+
+def _add_runtime_child_port_guidance(
+    *,
+    parent,
+    slot_name: str,
+    child,
+    guide,
+    links: list,
+    nodes_by_id: dict[int, object],
+    add_issue,
+) -> None:
+    """Validate the real port that must be connected after a runtime child exists."""
+    child_port = str(getattr(guide, "quick_fix_child_port", "") or "").strip()
+    if not child_port:
+        return
+
+    child_name = str(getattr(child, "instance_name", "") or "SST SubComponent")
+    parent_name = str(getattr(parent, "instance_name", "") or "parent component")
+    parent_type = _safe_sst_component_type_for_node(parent)
+    expected_types = _runtime_child_port_target_types(parent_type, slot_name)
+    expected_target = _runtime_child_port_target_description(
+        parent_type,
+        slot_name,
+        str(getattr(guide, "quick_fix_target_hint", "") or ""),
+    )
+
+    connections = _node_port_connections(links, nodes_by_id, child, child_port)
+    if not connections:
+        example = str(getattr(guide, "example", "") or "").strip()
+        example_hint = f" Example: {example}." if example else ""
+        add_issue(
+            validation_issue(
+                "sst_export_runtime_child_port",
+                child_name,
+                (
+                    f"{child_name} is attached to {parent_name}.{slot_name}, but "
+                    f"its required real port '{child_port}' is not connected. "
+                    f"Connect {child_name}.{child_port} to {expected_target}."
+                    f"{example_hint}"
+                ),
+                node_id=getattr(child, "node_id", None),
+                parameter_name=child_port,
+            )
+        )
+        return
+
+    if not expected_types:
+        return
+
+    for _link, _side, other_node in connections:
+        other_type = _safe_sst_component_type_for_node(other_node)
+        if other_type in expected_types:
+            return
+
+    connected_types = sorted(
+        item
+        for _link, _side, other_node in connections
+        for item in [_safe_sst_component_type_for_node(other_node)]
+        if item
+    )
+    connected_text = ", ".join(connected_types) if connected_types else "unknown component type"
+    add_issue(
+        validation_issue(
+            "sst_export_runtime_child_port",
+            child_name,
+            (
+                f"{child_name}.{child_port} is connected, but not to the expected "
+                f"SST component type for {parent_name}.{slot_name}. Expected "
+                f"{expected_target}; currently connected to {connected_text}."
+            ),
+            node_id=getattr(child, "node_id", None),
+            parameter_name=child_port,
+        )
+    )
+
+
+
 def _add_runtime_overlay_guidance(
     nodes: list,
     links: list,
@@ -1837,6 +2223,30 @@ def _add_runtime_overlay_guidance(
                         parameter_name=slot_name,
                     )
                 )
+
+            if child is not None:
+                try:
+                    from fuse.plugins.community.sst.construction_guidance import (
+                        guide_for_slot,
+                        guide_has_quick_fix,
+                    )
+
+                    guide = guide_for_slot(sst_component_type_for_node(node), slot_name)
+                    can_check_child_port = guide_has_quick_fix(guide)
+                except Exception:
+                    guide = None
+                    can_check_child_port = False
+
+                if can_check_child_port:
+                    _add_runtime_child_port_guidance(
+                        parent=node,
+                        slot_name=slot_name,
+                        child=child,
+                        guide=guide,
+                        links=links,
+                        nodes_by_id=nodes_by_id,
+                        add_issue=add_issue,
+                    )
 
         logical_ports = logical_ports_for_node(node)
         for port_name, mapping in sorted(logical_ports.items()):
@@ -2409,6 +2819,67 @@ def validate_sst_json_export(scene) -> SSTExportReport:
                 )
             )
 
+        endpoint_rules = (
+            (source, source_port, target, target_port),
+            (target, target_port, source, source_port),
+        )
+        for endpoint_node, endpoint_port, peer_node, peer_port in endpoint_rules:
+            if endpoint_node is None or not endpoint_port:
+                continue
+
+            deprecated_rule = deprecated_port_rule_for_endpoint(endpoint_node, endpoint_port)
+            if deprecated_rule is not None:
+                stage = deprecated_connector_stage_for_endpoint(endpoint_node, deprecated_rule)
+                add_issue(
+                    validation_issue(
+                        "sst_export_deprecated_connector",
+                        object_name,
+                        deprecated_connector_export_message(
+                            endpoint_node,
+                            endpoint_port,
+                            deprecated_rule,
+                            connector_kind="port",
+                        ),
+                        severity="error" if stage == "removed" else "warning",
+                        link_id=getattr(link, "link_id", None),
+                        node_id=getattr(endpoint_node, "node_id", None),
+                        parameter_name=endpoint_port,
+                    )
+                )
+
+            rule = shadowed_raw_port_rule_for_endpoint(endpoint_node, endpoint_port)
+            rule_mode = str(getattr(rule, "mode", "") or "")
+            if rule_mode not in {"runtime_slot_shadow", "advanced_raw"}:
+                continue
+
+            # Deprecated advanced/raw memHierarchy aliases get the more specific
+            # deprecated-connector warning above rather than a duplicate generic
+            # advanced/raw warning.  Runtime-slot shadows remain errors.
+            if rule_mode == "advanced_raw" and deprecated_rule is not None:
+                continue
+
+            severity = "warning"
+            if rule_mode == "runtime_slot_shadow":
+                severity = "error"
+
+            add_issue(
+                validation_issue(
+                    "sst_export_shadowed_raw_port",
+                    object_name,
+                    shadowed_raw_port_export_message(
+                        endpoint_node,
+                        endpoint_port,
+                        rule,
+                        peer_node=peer_node,
+                        peer_port=peer_port,
+                    ),
+                    severity=severity,
+                    link_id=getattr(link, "link_id", None),
+                    node_id=getattr(endpoint_node, "node_id", None),
+                    parameter_name=endpoint_port,
+                )
+            )
+
         if not has_explicit_source_latency(link):
             add_issue(
                 validation_issue(
@@ -2480,6 +2951,54 @@ def validate_sst_json_export(scene) -> SSTExportReport:
                     link_id=getattr(link, "link_id", None),
                 )
             )
+
+
+    for attachment in attachments:
+        parent_node = nodes_by_id.get(getattr(attachment, "parent_node_id", None))
+        if parent_node is None:
+            continue
+
+        if _is_visual_parameter_attachment(parent_node, attachment, nodes_by_id):
+            continue
+
+        slot_name = str(getattr(attachment, "slot_name", "") or "").strip()
+        if not slot_name:
+            continue
+
+        deprecated_rule = deprecated_slot_rule_for_endpoint(parent_node, slot_name)
+        if deprecated_rule is None:
+            continue
+
+        stage = deprecated_connector_stage_for_endpoint(parent_node, deprecated_rule)
+        object_name = (
+            f"{getattr(parent_node, 'instance_name', '')}.{slot_name}"
+            if getattr(parent_node, "instance_name", "")
+            else slot_name
+        )
+        add_issue(
+            validation_issue(
+                "sst_export_deprecated_connector",
+                object_name,
+                deprecated_connector_export_message(
+                    parent_node,
+                    slot_name,
+                    deprecated_rule,
+                    connector_kind="slot",
+                ),
+                severity="error" if stage == "removed" else "warning",
+                node_id=getattr(parent_node, "node_id", None),
+                attachment_id=getattr(attachment, "attachment_id", None),
+                parameter_name=slot_name,
+            )
+        )
+
+    _add_memhierarchy_slot_port_mode_guidance(
+        nodes=nodes,
+        links=links,
+        nodes_by_id=nodes_by_id,
+        attachments_by_parent_id=attachments_by_parent_id,
+        add_issue=add_issue,
+    )
 
     _add_runtime_overlay_guidance(
         nodes,

@@ -389,6 +389,25 @@ class MainWindow(QMainWindow):
         self.validation_filter.addItems(["All", "Errors", "Warnings", "Info"])
         self.validation_filter.currentTextChanged.connect(self.refresh_validation_results_view)
         validation_toolbar.addWidget(self.validation_filter)
+
+        self.apply_validation_fix_button = QToolButton()
+        self.apply_validation_fix_button.setText("Apply Fix")
+        self.apply_validation_fix_button.setToolTip(
+            "Apply the selected validation issue's automatic repair, when available."
+        )
+        self.apply_validation_fix_button.setEnabled(False)
+        self.apply_validation_fix_button.clicked.connect(self.apply_selected_validation_fix)
+        validation_toolbar.addWidget(self.apply_validation_fix_button)
+
+        self.apply_all_validation_fixes_button = QToolButton()
+        self.apply_all_validation_fixes_button.setText("Apply All Fixes")
+        self.apply_all_validation_fixes_button.setToolTip(
+            "Apply every available automatic repair in the current validation result set."
+        )
+        self.apply_all_validation_fixes_button.setEnabled(False)
+        self.apply_all_validation_fixes_button.clicked.connect(self.apply_all_validation_fixes)
+        validation_toolbar.addWidget(self.apply_all_validation_fixes_button)
+
         validation_toolbar.addStretch(1)
 
         self.validation_results = QTreeWidget()
@@ -396,6 +415,9 @@ class MainWindow(QMainWindow):
         self.validation_results.setRootIsDecorated(False)
         self.validation_results.setAlternatingRowColors(True)
         self.validation_results.itemDoubleClicked.connect(self.on_validation_result_activated)
+        self.validation_results.itemSelectionChanged.connect(
+            self.update_validation_fix_button_state
+        )
 
         validation_layout.addLayout(validation_toolbar)
         validation_layout.addWidget(self.validation_results)
@@ -2194,13 +2216,14 @@ class MainWindow(QMainWindow):
         issues_by_attachment: dict[int, list[str]] = {}
 
         for issue in issues:
+            issue_text = self.validation_issue_message(issue)
             if issue.node_id is not None:
-                issues_by_node.setdefault(issue.node_id, []).append(issue.message)
+                issues_by_node.setdefault(issue.node_id, []).append(issue_text)
             if issue.link_id is not None:
-                issues_by_link.setdefault(issue.link_id, []).append(issue.message)
+                issues_by_link.setdefault(issue.link_id, []).append(issue_text)
             attachment_id = getattr(issue, "attachment_id", None)
             if attachment_id is not None:
-                issues_by_attachment.setdefault(attachment_id, []).append(issue.message)
+                issues_by_attachment.setdefault(attachment_id, []).append(issue_text)
 
         for node in self.scene.component_items():
             node.set_validation_warnings(issues_by_node.get(node.node_id, []))
@@ -2217,11 +2240,24 @@ class MainWindow(QMainWindow):
 
         self.properties_panel.set_validation_issues(issues)
 
+    def validation_issue_message(self, issue) -> str:
+        """Return a canvas/properties tooltip message with actionable guidance."""
+        message = str(getattr(issue, "message", "") or "")
+        fix = self.issue_suggested_fix(issue)
+
+        if fix and fix != "Review the affected model object.":
+            return f"{message}\n\nSuggested fix: {fix}"
+
+        return message
+
     def format_validation_message(self, issues, title: str = "The model has issues") -> str:
         lines = [f"{title}:", ""]
 
         for issue in issues[:25]:
             lines.append(f"• {issue.object_name}: {issue.message}")
+            fix = self.issue_suggested_fix(issue)
+            if fix and fix != "Review the affected model object.":
+                lines.append(f"  Suggested fix: {fix}")
 
         if len(issues) > 25:
             lines.append("")
@@ -2252,6 +2288,17 @@ class MainWindow(QMainWindow):
         return "Project"
 
     def issue_suggested_fix(self, issue) -> str:
+        try:
+            from fuse.plugins.community.sst.construction_guidance import (
+                suggested_fix_for_issue,
+            )
+
+            guided_fix = suggested_fix_for_issue(self.active_model_scene(), issue)
+            if guided_fix:
+                return guided_fix
+        except Exception:
+            pass
+
         parameter_name = getattr(issue, "parameter_name", None)
         issue_type = getattr(issue, "issue_type", "")
 
@@ -2280,11 +2327,7 @@ class MainWindow(QMainWindow):
     def refresh_validation_results_view(self):
         self.validation_results.clear()
 
-        issues = [
-            issue
-            for issue in getattr(self, "_last_validation_issues", [])
-            if self.validation_filter_accepts(issue)
-        ]
+        issues = self.validation_issues_after_filter()
 
         if not getattr(self, "_last_validation_issues", []):
             item = QTreeWidgetItem(["Info", "Project", "Project", "No validation issues found.", ""])
@@ -2293,13 +2336,17 @@ class MainWindow(QMainWindow):
         else:
             for index, issue in enumerate(issues):
                 severity = self.issue_severity(issue)
+                suggested_fix = self.issue_suggested_fix(issue)
+                if self.validation_issue_has_quick_fix(issue):
+                    suggested_fix = f"Apply Fix: {suggested_fix}"
+
                 item = QTreeWidgetItem(
                     [
                         severity.capitalize(),
                         self.issue_scope(issue),
                         issue.object_name or "Project",
                         issue.message,
-                        self.issue_suggested_fix(issue),
+                        suggested_fix,
                     ]
                 )
                 item.setData(0, VALIDATION_ROLE_ISSUE_INDEX, index)
@@ -2307,12 +2354,14 @@ class MainWindow(QMainWindow):
                 item.setData(0, VALIDATION_ROLE_NODE_ID, getattr(issue, "node_id", None))
                 item.setData(0, VALIDATION_ROLE_LINK_ID, getattr(issue, "link_id", None))
                 item.setData(0, VALIDATION_ROLE_ATTACHMENT_ID, getattr(issue, "attachment_id", None))
-                item.setToolTip(3, issue.message)
+                item.setToolTip(3, self.validation_issue_message(issue))
                 item.setToolTip(4, self.issue_suggested_fix(issue))
                 self.validation_results.addTopLevelItem(item)
 
         for column in range(self.validation_results.columnCount()):
             self.validation_results.resizeColumnToContents(column)
+
+        self.update_validation_fix_button_state()
 
     def show_validation_results(self, issues, title: str):
         self._last_validation_issues = list(issues)
@@ -2323,6 +2372,260 @@ class MainWindow(QMainWindow):
             self.validation_results_dock.setWindowTitle(title)
             self.validation_results_dock.show()
             self.validation_results_dock.raise_()
+
+
+    def validation_issues_after_filter(self) -> list:
+        """Return validation issues accepted by the current severity filter."""
+        return [
+            issue
+            for issue in getattr(self, "_last_validation_issues", [])
+            if self.validation_filter_accepts(issue)
+        ]
+
+    def selected_validation_issue(self):
+        """Return the validation issue represented by the selected results row."""
+        item = self.validation_results.currentItem()
+        if item is None:
+            selected = self.validation_results.selectedItems()
+            item = selected[0] if selected else None
+
+        if item is None:
+            return None
+
+        issue_index = item.data(0, VALIDATION_ROLE_ISSUE_INDEX)
+        if issue_index is None:
+            return None
+
+        filtered = self.validation_issues_after_filter()
+        if 0 <= issue_index < len(filtered):
+            return filtered[issue_index]
+
+        return None
+
+    def validation_issue_slot_connector_and_guide(self, issue):
+        """Return the missing slot connector and SST guide for a repairable issue."""
+        if issue is None:
+            return None, None
+
+        try:
+            from fuse.plugins.community.sst.construction_guidance import (
+                guide_can_create_child,
+                guide_for_issue,
+                parse_slot_name,
+            )
+        except Exception:
+            return None, None
+
+        guide = guide_for_issue(self.active_model_scene(), issue)
+        if not guide_can_create_child(guide):
+            return None, None
+
+        node_id = getattr(issue, "node_id", None)
+        if node_id is None:
+            return None, None
+
+        node = self.scene.find_node_by_id(node_id)
+        if node is None:
+            return None, None
+
+        slot_name = parse_slot_name(issue)
+        if not slot_name:
+            return None, None
+
+        slot_connector = self.scene.find_subcomp_connector(
+            node.node_id,
+            slot_name,
+            role="slot",
+        )
+        if slot_connector is None:
+            return None, None
+
+        return slot_connector, guide
+
+    def validation_issue_has_quick_fix(self, issue) -> bool:
+        """Return whether the issue can be repaired by the validation panel."""
+        if issue is None:
+            return False
+
+        issue_type = str(getattr(issue, "issue_type", "") or "")
+
+        if issue_type == "sst_export_shadowed_raw_port":
+            repairable = getattr(
+                self.scene,
+                "can_repair_sst_shadowed_raw_port_issue",
+                None,
+            )
+            return bool(callable(repairable) and repairable(issue))
+
+        if issue_type == "sst_export_deprecated_connector":
+            repairable = getattr(
+                self.scene,
+                "can_repair_sst_deprecated_slot_issue",
+                None,
+            )
+            return bool(callable(repairable) and repairable(issue))
+
+        slot_connector, guide = self.validation_issue_slot_connector_and_guide(issue)
+        if slot_connector is None or guide is None:
+            return False
+
+        if not self.scene.subcomp_connector_has_available_capacity(slot_connector):
+            return False
+
+        return True
+
+    def update_validation_fix_button_state(self):
+        """Enable or disable validation quick-fix toolbar actions."""
+        selected_issue = self.selected_validation_issue()
+        selected_fixable = self.validation_issue_has_quick_fix(selected_issue)
+
+        if hasattr(self, "apply_validation_fix_button"):
+            self.apply_validation_fix_button.setEnabled(selected_fixable)
+
+        any_fixable = any(
+            self.validation_issue_has_quick_fix(issue)
+            for issue in getattr(self, "_last_validation_issues", [])
+        )
+        if hasattr(self, "apply_all_validation_fixes_button"):
+            self.apply_all_validation_fixes_button.setEnabled(any_fixable)
+
+    def refresh_validation_after_quick_fix(self):
+        """Re-run the same validation mode after an automatic repair."""
+        title = str(getattr(self, "_last_validation_title", "") or "")
+        if title.startswith("Export validation"):
+            self.validate_current_model_for_export()
+        else:
+            self.validate_current_model()
+
+    def apply_validation_issue_quick_fix(
+        self,
+        issue,
+        *,
+        refresh: bool = True,
+        show_no_fix_message: bool = True,
+    ) -> bool:
+        """Apply one known validation repair, returning True when it changed the model."""
+        issue_type = str(getattr(issue, "issue_type", "") or "")
+
+        if issue_type == "sst_export_shadowed_raw_port":
+            repair_raw_link = getattr(
+                self.scene,
+                "apply_sst_shadowed_raw_port_validation_fix",
+                None,
+            )
+            if callable(repair_raw_link) and repair_raw_link(issue):
+                if refresh:
+                    self.refresh_validation_after_quick_fix()
+                self.statusBar().showMessage(
+                    "Replaced raw SST port link with slot-based construction",
+                    5000,
+                )
+                return True
+
+            if show_no_fix_message:
+                QMessageBox.information(
+                    self,
+                    "No Automatic Fix Available",
+                    "FUSE could not automatically repair this raw SST port link.",
+                )
+            return False
+
+        if issue_type == "sst_export_deprecated_connector":
+            repair_deprecated_slot = getattr(
+                self.scene,
+                "apply_sst_deprecated_slot_validation_fix",
+                None,
+            )
+            if callable(repair_deprecated_slot) and repair_deprecated_slot(issue):
+                if refresh:
+                    self.refresh_validation_after_quick_fix()
+                self.statusBar().showMessage(
+                    "Moved deprecated SST SubComponent attachment to its preferred slot",
+                    5000,
+                )
+                return True
+
+            if show_no_fix_message:
+                QMessageBox.information(
+                    self,
+                    "No Automatic Fix Available",
+                    "FUSE could not automatically repair this deprecated SST connector.",
+                )
+            return False
+
+        slot_connector, guide = self.validation_issue_slot_connector_and_guide(issue)
+
+        if slot_connector is None or guide is None:
+            if show_no_fix_message:
+                QMessageBox.information(
+                    self,
+                    "No Automatic Fix Available",
+                    "FUSE does not have an automatic repair for this validation issue.",
+                )
+            return False
+
+        child_node = self.scene.create_sst_slot_child_quick_fix(
+            slot_connector,
+            guide,
+            select_child=True,
+        )
+        if child_node is None:
+            return False
+
+        if refresh:
+            self.refresh_validation_after_quick_fix()
+
+        self.statusBar().showMessage(
+            (
+                f"Created {child_node.instance_name} and attached it to "
+                f"{slot_connector.node.instance_name}.{slot_connector.name}"
+            ),
+            5000,
+        )
+        return True
+
+    def apply_selected_validation_fix(self):
+        """Apply the selected validation result's automatic fix, if available."""
+        issue = self.selected_validation_issue()
+        if issue is None:
+            QMessageBox.information(
+                self,
+                "No Validation Issue Selected",
+                "Select a validation result that has an available automatic fix.",
+            )
+            return
+
+        self.apply_validation_issue_quick_fix(issue, refresh=True)
+
+    def apply_all_validation_fixes(self):
+        """Apply every available SST construction fix in the current result set."""
+        issues = list(getattr(self, "_last_validation_issues", []))
+        applied = 0
+
+        for issue in issues:
+            if not self.validation_issue_has_quick_fix(issue):
+                continue
+
+            if self.apply_validation_issue_quick_fix(
+                issue,
+                refresh=False,
+                show_no_fix_message=False,
+            ):
+                applied += 1
+
+        if applied:
+            self.refresh_validation_after_quick_fix()
+            self.statusBar().showMessage(
+                f"Applied {applied} validation fix(es)",
+                5000,
+            )
+        else:
+            QMessageBox.information(
+                self,
+                "No Automatic Fixes Available",
+                "No current validation issues have automatic repairs.",
+            )
+
 
     def focus_validation_issue(self, issue):
         if getattr(issue, "node_id", None) is not None:
@@ -2352,11 +2655,7 @@ class MainWindow(QMainWindow):
         if issue_index is None:
             return
 
-        filtered = [
-            issue
-            for issue in getattr(self, "_last_validation_issues", [])
-            if self.validation_filter_accepts(issue)
-        ]
+        filtered = self.validation_issues_after_filter()
 
         if 0 <= issue_index < len(filtered):
             self.focus_validation_issue(filtered[issue_index])

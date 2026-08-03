@@ -26,6 +26,7 @@ items provide interaction and rendering.
 """
 from __future__ import annotations
 
+import re
 from typing import Optional
 from copy import deepcopy
 
@@ -53,7 +54,7 @@ from fuse.core.model.composite_mini_model import (
     collect_mini_model_component_names,
     uniquify_mini_model_component_names,
 )
-from fuse.core.plugin_runtime.manager import get_plugin_by_id
+from fuse.core.plugin_runtime.manager import get_plugin_by_id, load_all_palette_items
 from fuse.core.ui.async_link_routing import (
     LinkRouteRequest,
     LinkRouteResult,
@@ -1863,6 +1864,20 @@ class ModelScene(QGraphicsScene):
                 if port.is_connected():
                     continue
 
+                if (
+                    self.sst_runtime_slot_shadow_rule_for_port(source_port) is not None
+                    or self.sst_runtime_slot_shadow_rule_for_port(port) is not None
+                ):
+                    port.set_compatibility_highlight("incompatible")
+                    continue
+
+                if self.sst_memhierarchy_slot_port_mode_link_would_conflict(
+                    source_port,
+                    port,
+                ):
+                    port.set_compatibility_highlight("incompatible")
+                    continue
+
                 result = self.check_link_compatibility(source_port, port)
 
                 if result.severity == "error" or not result.can_create:
@@ -2161,6 +2176,18 @@ class ModelScene(QGraphicsScene):
             self.cancel_pending_connection()
             return
 
+        if self.sst_memhierarchy_slot_port_mode_link_guard(source_port, target_port):
+            self.cancel_pending_connection()
+            return
+
+        if self.sst_shadowed_raw_port_link_guard(source_port, target_port):
+            self.cancel_pending_connection()
+            return
+
+        if not self.confirm_sst_deprecated_port_link_use(source_port, target_port):
+            self.cancel_pending_connection()
+            return
+
         compatibility = self.check_link_compatibility(source_port, target_port)
 
         if compatibility.severity == "error" or not compatibility.can_create:
@@ -2247,6 +2274,1364 @@ class ModelScene(QGraphicsScene):
 
         return self.subcomp_connector_allows_multiple(connector)
 
+
+    def sst_port_visibility_rule_for_port(self, port: PortItem):
+        """Return the SST raw/advanced visibility rule for a normal port."""
+        if port is None:
+            return None
+
+        node = getattr(port, "node", None)
+        component = getattr(node, "component", None)
+        if getattr(component, "plugin_id", "") != "sst":
+            return None
+
+        try:
+            from fuse.plugins.community.sst.port_visibility import rule_for_node_port
+
+            return rule_for_node_port(node, getattr(port, "name", ""))
+        except Exception:
+            return None
+
+    def sst_runtime_slot_shadow_rule_for_port(self, port: PortItem):
+        """Return a shadowed raw-port rule that must not be linked directly."""
+        rule = self.sst_port_visibility_rule_for_port(port)
+        if getattr(rule, "mode", "") == "runtime_slot_shadow":
+            return rule
+        return None
+
+
+    def sst_deprecated_port_rule_for_port(self, port: PortItem):
+        """Return a deprecated-connector rule for an SST normal port."""
+        if port is None:
+            return None
+
+        node = getattr(port, "node", None)
+        component = getattr(node, "component", None)
+        if getattr(component, "plugin_id", "") != "sst":
+            return None
+
+        try:
+            from fuse.plugins.community.sst.port_visibility import (
+                deprecated_port_rule_for_node,
+            )
+
+            return deprecated_port_rule_for_node(node, getattr(port, "name", ""))
+        except Exception:
+            return None
+
+    def sst_deprecated_slot_rule_for_connector(
+        self,
+        connector: SubcompConnectorItem,
+    ):
+        """Return a deprecated-connector rule for an SST SubComponent slot."""
+        if connector is None or getattr(connector, "role", "") != "slot":
+            return None
+
+        node = getattr(connector, "node", None)
+        component = getattr(node, "component", None)
+        if getattr(component, "plugin_id", "") != "sst":
+            return None
+
+        try:
+            from fuse.plugins.community.sst.port_visibility import (
+                deprecated_slot_rule_for_node,
+            )
+
+            return deprecated_slot_rule_for_node(node, getattr(connector, "name", ""))
+        except Exception:
+            return None
+
+    def sst_deprecated_connector_stage(self, node: ComponentNodeItem, rule) -> str:
+        try:
+            from fuse.plugins.community.sst.port_visibility import (
+                deprecated_connector_stage_for_node,
+            )
+
+            return deprecated_connector_stage_for_node(node, rule)
+        except Exception:
+            return "deprecated"
+
+    def sst_deprecated_connector_warning_details(
+        self,
+        *,
+        node: ComponentNodeItem,
+        connector_name: str,
+        connector_kind: str,
+        rule,
+    ) -> tuple[str, str]:
+        """Build link/attachment warning copy for a deprecated SST connector."""
+        label = f"{node.instance_name}.{connector_name}"
+        kind = "SubComponent slot" if connector_kind == "slot" else "port"
+        stage = self.sst_deprecated_connector_stage(node, rule)
+
+        if stage == "legacy_deprecated":
+            text = f"{label} is a deprecated/legacy SST {kind}."
+        elif stage == "removed":
+            text = f"{label} was removed from this SST target."
+        else:
+            text = f"{label} is a deprecated SST {kind}."
+
+        details = []
+        deprecated_since = str(getattr(rule, "deprecated_since", "") or "").strip()
+        if deprecated_since:
+            details.append(f"Deprecated since SST {deprecated_since}.")
+
+        replacement = str(getattr(rule, "replacement_name", "") or "").strip()
+        replacement_kind = str(getattr(rule, "replacement_kind", "") or "").strip()
+        if replacement:
+            replacement_label = replacement_kind or connector_kind
+            details.append(f"Preferred {replacement_label}: {replacement}.")
+
+        explanation = str(getattr(rule, "explanation", "") or "").strip()
+        if explanation:
+            details.append("")
+            details.append(explanation)
+
+        details.append("")
+        details.append(
+            "FUSE will keep legacy projects editable, but new SST models should "
+            "use the preferred connector because this one may be removed in a "
+            "future SST Elements version."
+        )
+        details.append("")
+        details.append("Use this deprecated connector anyway?")
+
+        return text, "\n".join(details)
+
+    def confirm_sst_deprecated_connector_use(
+        self,
+        *,
+        node: ComponentNodeItem,
+        connector_name: str,
+        connector_kind: str,
+        rule,
+    ) -> bool:
+        """Ask before a user creates a new link/attachment to a deprecated connector."""
+        if rule is None:
+            return True
+
+        text, details = self.sst_deprecated_connector_warning_details(
+            node=node,
+            connector_name=connector_name,
+            connector_kind=connector_kind,
+            rule=rule,
+        )
+
+        message_box = QMessageBox()
+        message_box.setIcon(QMessageBox.Warning)
+        message_box.setWindowTitle("Deprecated SST Connector")
+        message_box.setText(text)
+        message_box.setInformativeText(details)
+        message_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        message_box.setDefaultButton(QMessageBox.No)
+
+        return message_box.exec() == QMessageBox.Yes
+
+    def confirm_sst_deprecated_port_link_use(
+        self,
+        source_port: PortItem,
+        target_port: PortItem,
+    ) -> bool:
+        """Warn before creating a normal link that uses a deprecated SST port."""
+        for port in (source_port, target_port):
+            rule = self.sst_deprecated_port_rule_for_port(port)
+            if rule is None:
+                continue
+
+            if not self.confirm_sst_deprecated_connector_use(
+                node=port.node,
+                connector_name=port.name,
+                connector_kind="port",
+                rule=rule,
+            ):
+                return False
+
+        return True
+
+    def confirm_sst_deprecated_slot_attachment_use(
+        self,
+        slot_connector: SubcompConnectorItem,
+    ) -> bool:
+        """Warn before creating a SubComponent attachment to a deprecated slot."""
+        rule = self.sst_deprecated_slot_rule_for_connector(slot_connector)
+        if rule is None:
+            return True
+
+        return self.confirm_sst_deprecated_connector_use(
+            node=slot_connector.node,
+            connector_name=slot_connector.name,
+            connector_kind="slot",
+            rule=rule,
+        )
+
+    def sst_memhierarchy_node_uses_port_slot_modes(
+        self,
+        node: ComponentNodeItem | None,
+    ) -> bool:
+        """Return whether a node is a memHierarchy component with port/slot modes."""
+        return self.sst_node_type(node).startswith("memHierarchy.")
+
+    def sst_memhierarchy_same_name_slot_for_port(
+        self,
+        port: PortItem,
+    ) -> SubcompConnectorItem | None:
+        """Return the same-named memHierarchy slot connector for a direct port."""
+        node = getattr(port, "node", None)
+        if not self.sst_memhierarchy_node_uses_port_slot_modes(node):
+            return None
+
+        return self.find_subcomp_connector(
+            node.node_id,
+            str(getattr(port, "name", "") or "").strip(),
+            role="slot",
+        )
+
+    def sst_memhierarchy_port_slot_conflicts_with_attached_slot(
+        self,
+        port: PortItem,
+    ) -> bool:
+        """Return true if linking this port would mix direct and slot modes."""
+        slot_connector = self.sst_memhierarchy_same_name_slot_for_port(port)
+        return bool(
+            slot_connector is not None
+            and self.subcomp_connector_is_connected(slot_connector)
+        )
+
+    def sst_memhierarchy_slot_conflicts_with_connected_port(
+        self,
+        slot_connector: SubcompConnectorItem,
+    ) -> bool:
+        """Return true if attaching this slot would mix direct and slot modes."""
+        if getattr(slot_connector, "role", "") != "slot":
+            return False
+
+        node = getattr(slot_connector, "node", None)
+        if not self.sst_memhierarchy_node_uses_port_slot_modes(node):
+            return False
+
+        port = self.find_port(
+            node.node_id,
+            str(getattr(slot_connector, "name", "") or "").strip(),
+        )
+        return bool(port is not None and port.is_connected())
+
+    def sst_memhierarchy_slot_port_mode_link_would_conflict(
+        self,
+        source_port: PortItem,
+        target_port: PortItem,
+    ) -> bool:
+        return any(
+            self.sst_memhierarchy_port_slot_conflicts_with_attached_slot(port)
+            for port in (source_port, target_port)
+        )
+
+    def show_sst_memhierarchy_slot_port_mode_block(
+        self,
+        *,
+        node: ComponentNodeItem,
+        side_name: str,
+        attempted_mode: str,
+    ) -> None:
+        """Explain that same-name memHierarchy port and slot modes are exclusive."""
+        node_label = f"{node.instance_name}.{side_name}"
+        if attempted_mode == "slot":
+            text = f"{node_label} already has a direct port link."
+            action = (
+                "Delete the direct port link before attaching a MemLink/MemNIC "
+                "child to this same-named slot."
+            )
+        else:
+            text = f"{node_label} already has a SubComponent slot attachment."
+            action = (
+                "Delete the same-named SubComponent attachment before using the "
+                "direct port link."
+            )
+
+        details = (
+            "memHierarchy supports two valid construction modes for highlink/"
+            "lowlink-style sides:\n\n"
+            f"  Direct-port mode: connect {node_label} directly to another "
+            "memHierarchy port.\n"
+            f"  Slot-manager mode: attach MemLink/MemNIC/MemNICFour to "
+            f"{node_label}, then connect the child port(s).\n\n"
+            "Use exactly one mode on a given side; do not use the same name as "
+            "both a direct port and a SubComponent slot.\n\n"
+            f"{action}"
+        )
+
+        message_box = QMessageBox()
+        message_box.setIcon(QMessageBox.Warning)
+        message_box.setWindowTitle("Choose One memHierarchy Link Mode")
+        message_box.setText(text)
+        message_box.setInformativeText(details)
+        message_box.setStandardButtons(QMessageBox.Ok)
+        message_box.exec()
+
+    def sst_memhierarchy_slot_port_mode_link_guard(
+        self,
+        source_port: PortItem,
+        target_port: PortItem,
+    ) -> bool:
+        """Block links that would use both memHierarchy port and slot modes."""
+        for port in (source_port, target_port):
+            if not self.sst_memhierarchy_port_slot_conflicts_with_attached_slot(port):
+                continue
+
+            self.show_sst_memhierarchy_slot_port_mode_block(
+                node=port.node,
+                side_name=port.name,
+                attempted_mode="port",
+            )
+            return True
+
+        return False
+
+    def sst_memhierarchy_slot_port_mode_attachment_guard(
+        self,
+        slot_connector: SubcompConnectorItem,
+    ) -> bool:
+        """Block attachments that would use both memHierarchy port and slot modes."""
+        if not self.sst_memhierarchy_slot_conflicts_with_connected_port(slot_connector):
+            return False
+
+        self.show_sst_memhierarchy_slot_port_mode_block(
+            node=slot_connector.node,
+            side_name=slot_connector.name,
+            attempted_mode="slot",
+        )
+        return True
+
+    def sst_shadowed_raw_port_link_guard(
+        self,
+        source_port: PortItem,
+        target_port: PortItem,
+    ) -> bool:
+        """Block or guide links that target raw SST ports shadowed by slots.
+
+        Returns True when the attempted link has been handled and the normal
+        link creation path should stop.
+        """
+        for raw_port, peer_port in (
+            (source_port, target_port),
+            (target_port, source_port),
+        ):
+            rule = self.sst_runtime_slot_shadow_rule_for_port(raw_port)
+            if rule is not None:
+                return self.offer_sst_shadowed_raw_port_quick_fix(
+                    raw_port,
+                    peer_port,
+                    rule,
+                )
+
+        return False
+
+    def sst_node_type(self, node: ComponentNodeItem | None) -> str:
+        """Return the SST element.component type string for a scene node."""
+        component = getattr(node, "component", None)
+        if component is None:
+            return ""
+
+        element = str(getattr(component, "element", "") or "").strip()
+        name = str(getattr(component, "name", "") or "").strip()
+        if element and name:
+            return f"{element}.{name}"
+
+        return name
+
+    def sst_attached_child_for_slot(
+        self,
+        slot_connector: SubcompConnectorItem,
+    ) -> tuple[ComponentNodeItem | None, SubcompAttachmentItem | None]:
+        """Return the existing child attached to a slot connector, if any."""
+        if slot_connector is None:
+            return None, None
+
+        parent_node_id = getattr(slot_connector.node, "node_id", None)
+        slot_name = str(getattr(slot_connector, "name", "") or "").strip()
+
+        for item in self.subcomp_attachment_items():
+            attachment = getattr(item, "attachment", None)
+            if attachment is None:
+                continue
+            if getattr(attachment, "parent_node_id", None) != parent_node_id:
+                continue
+            if str(getattr(attachment, "slot_name", "") or "").strip() != slot_name:
+                continue
+
+            child_node = self.find_node_by_id(getattr(attachment, "child_node_id", None))
+            return child_node, item
+
+        return None, None
+
+    def sst_shadowed_raw_port_repair_candidate(self, issue) -> dict | None:
+        """Return repair context for an existing shadowed raw-port validation issue."""
+        if str(getattr(issue, "issue_type", "") or "") != "sst_export_shadowed_raw_port":
+            return None
+
+        connection = self.find_connection_by_link_id(getattr(issue, "link_id", None))
+        if connection is None:
+            return None
+
+        issue_node_id = getattr(issue, "node_id", None)
+        issue_port_name = str(getattr(issue, "parameter_name", "") or "").strip()
+
+        endpoint_pairs = [
+            (connection.source_port, connection.target_port),
+            (connection.target_port, connection.source_port),
+        ]
+        if issue_node_id is not None and issue_port_name:
+            endpoint_pairs = [
+                (raw_port, peer_port)
+                for raw_port, peer_port in endpoint_pairs
+                if (
+                    getattr(getattr(raw_port, "node", None), "node_id", None) == issue_node_id
+                    and str(getattr(raw_port, "name", "") or "").strip() == issue_port_name
+                )
+            ] + [
+                (raw_port, peer_port)
+                for raw_port, peer_port in endpoint_pairs
+                if not (
+                    getattr(getattr(raw_port, "node", None), "node_id", None) == issue_node_id
+                    and str(getattr(raw_port, "name", "") or "").strip() == issue_port_name
+                )
+            ]
+
+        for raw_port, peer_port in endpoint_pairs:
+            rule = self.sst_runtime_slot_shadow_rule_for_port(raw_port)
+            if rule is None:
+                continue
+
+            slot_name = str(getattr(rule, "use_slot", "") or "").strip()
+            child_type = str(getattr(rule, "child_type", "") or "").strip()
+            child_port_name = str(getattr(rule, "child_port", "") or "").strip()
+            if not slot_name or not child_type or not child_port_name:
+                continue
+
+            slot_connector = self.find_subcomp_connector(
+                raw_port.node.node_id,
+                slot_name,
+                role="slot",
+            )
+            if slot_connector is None:
+                continue
+
+            guide = self.sst_construction_guide_for_connector(slot_connector)
+            if guide is None:
+                continue
+
+            if str(getattr(guide, "child_type", "") or "").strip() != child_type:
+                continue
+            if str(getattr(guide, "quick_fix_child_port", "") or "").strip() != child_port_name:
+                continue
+
+            try:
+                from fuse.plugins.community.sst.construction_guidance import (
+                    guide_has_quick_fix,
+                )
+            except Exception:
+                guide_has_quick_fix = lambda item: False
+
+            if not guide_has_quick_fix(guide):
+                continue
+
+            child_node, attachment_item = self.sst_attached_child_for_slot(slot_connector)
+            child_component = None
+            if child_node is None:
+                if not self.subcomp_connector_has_available_capacity(slot_connector):
+                    continue
+                child_component = self.sst_palette_component_by_type(
+                    child_type,
+                    getattr(raw_port.node.component, "target_id", ""),
+                )
+                if child_component is None:
+                    continue
+            elif self.sst_node_type(child_node) != child_type:
+                continue
+
+            return {
+                "connection": connection,
+                "raw_port": raw_port,
+                "peer_port": peer_port,
+                "rule": rule,
+                "slot_connector": slot_connector,
+                "guide": guide,
+                "child_node": child_node,
+                "child_component": child_component,
+                "attachment_item": attachment_item,
+            }
+
+        return None
+
+    def can_repair_sst_shadowed_raw_port_issue(self, issue) -> bool:
+        """Return whether an existing raw-port validation issue can be repaired."""
+        return self.sst_shadowed_raw_port_repair_candidate(issue) is not None
+
+    def apply_sst_shadowed_raw_port_validation_fix(self, issue) -> bool:
+        """Rewrite an existing shadowed raw-port link into slot-child-port form."""
+        candidate = self.sst_shadowed_raw_port_repair_candidate(issue)
+        if candidate is None:
+            return False
+
+        connection: ConnectionItem = candidate["connection"]
+        raw_port: PortItem = candidate["raw_port"]
+        peer_port: PortItem = candidate["peer_port"]
+        slot_connector: SubcompConnectorItem = candidate["slot_connector"]
+        guide = candidate["guide"]
+        child_node: ComponentNodeItem | None = candidate["child_node"]
+        child_component = candidate["child_component"]
+
+        raw_extra_connections = [
+            item for item in getattr(raw_port, "connections", []) if item is not connection
+        ]
+        peer_extra_connections = [
+            item for item in getattr(peer_port, "connections", []) if item is not connection
+        ]
+        if raw_extra_connections or peer_extra_connections:
+            QMessageBox.information(
+                None,
+                "Cannot Repair Raw SST Link",
+                (
+                    "FUSE can only replace this raw-port link when both endpoints "
+                    "are connected solely by the validation issue's link."
+                ),
+            )
+            return False
+
+        self.begin_model_change_batch()
+        try:
+            if child_node is None:
+                parent_node = slot_connector.node
+                child_pos = parent_node.pos() + QPointF(ComponentNodeItem.WIDTH + 120.0, 0.0)
+                child_name = self.default_sst_quickfix_child_name(
+                    slot_connector,
+                    child_component,
+                )
+                child_node = self.create_component_node(
+                    child_component,
+                    child_pos,
+                    instance_name=child_name,
+                    notify=True,
+                )
+
+                interface_connector = None
+                for connector in getattr(child_node, "subcomp_connectors", []):
+                    if getattr(connector, "role", "") == "interface":
+                        interface_connector = connector
+                        break
+
+                if interface_connector is None:
+                    QMessageBox.critical(
+                        None,
+                        "Cannot Attach SubComponent",
+                        (
+                            f"Created {child_node.instance_name}, but it does not "
+                            "have a SubComponent interface connector."
+                        ),
+                    )
+                    return False
+
+                compatibility = self.check_subcomp_connector_compatibility(
+                    slot_connector,
+                    interface_connector,
+                )
+                if compatibility.severity == "error" or not compatibility.can_create:
+                    QMessageBox.critical(
+                        None,
+                        compatibility.title or "Cannot Attach SubComponent",
+                        compatibility.message
+                        or "The selected subcomponent is not compatible with this slot.",
+                    )
+                    return False
+
+                if compatibility.severity == "warning":
+                    if not self.confirm_subcomp_compatibility_warning(compatibility):
+                        return False
+
+                self.create_subcomp_attachment(
+                    slot_connector,
+                    interface_connector,
+                    compatibility,
+                )
+
+            child_port = self.find_port(
+                child_node.node_id,
+                getattr(guide, "quick_fix_child_port", ""),
+            )
+            if child_port is None:
+                QMessageBox.information(
+                    None,
+                    "SubComponent Created",
+                    (
+                        f"Created or found {child_node.instance_name}, but could "
+                        f"not find port {getattr(guide, 'quick_fix_child_port', '')!r} on it.\n\n"
+                        "Connect the child subcomponent's real port manually, then "
+                        "delete the raw-port link."
+                    ),
+                )
+                return False
+
+            if child_port.is_connected():
+                QMessageBox.information(
+                    None,
+                    "Cannot Repair Raw SST Link",
+                    (
+                        f"{child_node.instance_name}.{child_port.name} is already "
+                        "connected. Delete or review that link before applying this fix."
+                    ),
+                )
+                return False
+
+            link_compatibility = self.check_link_compatibility(child_port, peer_port)
+            if (
+                link_compatibility.severity == "error"
+                or not link_compatibility.can_create
+            ):
+                QMessageBox.critical(
+                    None,
+                    link_compatibility.title or "Cannot Create Link",
+                    link_compatibility.message
+                    or "The child subcomponent's real port cannot be linked to the peer port.",
+                )
+                return False
+
+            if link_compatibility.severity == "warning":
+                if not self.confirm_link_compatibility_warning(link_compatibility):
+                    return False
+
+            old_link = connection.link
+            old_name = str(getattr(old_link, "name", "") or "").strip()
+            old_source_latency = getattr(old_link, "source_latency", "1ns")
+            old_target_latency = getattr(old_link, "target_latency", "1ns")
+            old_link_type = getattr(old_link, "link_type", "point_to_point")
+            old_plugin_id = getattr(old_link, "plugin_id", "")
+
+            self.delete_link(connection)
+            new_connection = self.create_link_between_ports(
+                child_port,
+                peer_port,
+                link_compatibility,
+            )
+
+            if old_name:
+                new_connection.link.name = old_name
+            new_connection.link.source_latency = old_source_latency
+            new_connection.link.target_latency = old_target_latency
+            new_connection.link.link_type = old_link_type
+            new_connection.link.plugin_id = old_plugin_id
+
+            self.select_component(child_node)
+            return True
+        finally:
+            self.end_model_change_batch()
+
+
+    def sst_deprecated_slot_repair_candidate(self, issue):
+        """Return the replacement slot information for a deprecated-slot issue."""
+        if str(getattr(issue, "issue_type", "") or "") != "sst_export_deprecated_connector":
+            return None
+
+        attachment_id = getattr(issue, "attachment_id", None)
+        if attachment_id is None:
+            return None
+
+        attachment_item = self.find_subcomp_attachment_by_id(attachment_id)
+        if attachment_item is None:
+            return None
+
+        old_slot = getattr(attachment_item, "source_connector", None)
+        if old_slot is None or getattr(old_slot, "role", "") != "slot":
+            return None
+
+        rule = self.sst_deprecated_slot_rule_for_connector(old_slot)
+        if rule is None:
+            return None
+
+        replacement_name = str(getattr(rule, "replacement_name", "") or "").strip()
+        replacement_kind = str(getattr(rule, "replacement_kind", "") or "").strip()
+        if not replacement_name or replacement_kind not in {"", "slot"}:
+            return None
+
+        replacement_slot = self.find_subcomp_connector(
+            old_slot.node.node_id,
+            replacement_name,
+            role="slot",
+        )
+        if replacement_slot is None:
+            return None
+
+        if self.subcomp_connector_is_connected(replacement_slot):
+            return None
+
+        if self.sst_memhierarchy_slot_conflicts_with_connected_port(replacement_slot):
+            return None
+
+        return {
+            "attachment_item": attachment_item,
+            "old_slot": old_slot,
+            "replacement_slot": replacement_slot,
+            "rule": rule,
+        }
+
+    def can_repair_sst_deprecated_slot_issue(self, issue) -> bool:
+        """Return whether a deprecated-slot validation issue can be auto-repaired."""
+        return self.sst_deprecated_slot_repair_candidate(issue) is not None
+
+    def apply_sst_deprecated_slot_validation_fix(self, issue) -> bool:
+        """Move an existing SubComponent attachment from a deprecated slot alias."""
+        candidate = self.sst_deprecated_slot_repair_candidate(issue)
+        if candidate is None:
+            return False
+
+        attachment_item: SubcompAttachmentItem = candidate["attachment_item"]
+        old_slot: SubcompConnectorItem = candidate["old_slot"]
+        replacement_slot: SubcompConnectorItem = candidate["replacement_slot"]
+
+        attachment = attachment_item.attachment
+        replacement_metadata = getattr(replacement_slot, "metadata", {}) or {}
+
+        self.begin_model_change_batch()
+        try:
+            attachment.slot_name = replacement_slot.name
+            attachment.required_interface = (
+                replacement_metadata.get("required_interface", "")
+                or replacement_metadata.get("iface", "")
+                or replacement_metadata.get("interface", "")
+                or attachment.required_interface
+                or ""
+            )
+
+            attachment_item.source_connector = replacement_slot
+            attachment_item.update_position()
+            attachment_item.update_tooltip()
+
+            for connector in (old_slot, replacement_slot):
+                node = getattr(connector, "node", None)
+                if node is not None and hasattr(node, "apply_subcomp_connector_visibility"):
+                    node.apply_subcomp_connector_visibility()
+
+            self.select_subcomp_attachment(attachment_item)
+            self.notify_model_changed()
+            return True
+        finally:
+            self.end_model_change_batch()
+
+
+    def sst_shadowed_raw_port_message(
+        self,
+        raw_port: PortItem,
+        peer_port: PortItem,
+        rule,
+        *,
+        can_quick_fix: bool,
+    ) -> tuple[str, str]:
+        raw_label = f"{raw_port.node.instance_name}.{raw_port.name}"
+        peer_label = f"{peer_port.node.instance_name}.{peer_port.name}"
+        slot_name = str(getattr(rule, "use_slot", "") or "")
+        child_type = str(getattr(rule, "child_type", "") or "")
+        child_port = str(getattr(rule, "child_port", "") or "")
+
+        if slot_name:
+            text = (
+                f"{raw_label} is a raw SST catalog port shadowed by runtime "
+                f"slot {slot_name}."
+            )
+        else:
+            text = f"{raw_label} is a raw SST catalog port shadowed by a runtime slot."
+
+        details = [str(getattr(rule, "explanation", "") or "").strip()]
+        details.append("")
+        details.append("Use the slot-based construction instead:")
+
+        if slot_name and child_type:
+            details.append(f"  {raw_port.node.instance_name}.{slot_name} -> {child_type}")
+        elif slot_name:
+            details.append(f"  {raw_port.node.instance_name}.{slot_name} -> required SubComponent")
+        else:
+            details.append("  Attach the required runtime SubComponent to the owning slot.")
+
+        if child_type and child_port:
+            details.append(f"  {child_type}.{child_port} <-> {peer_label}")
+        elif child_port:
+            details.append(f"  child.{child_port} <-> {peer_label}")
+        else:
+            details.append(f"  child real port <-> {peer_label}")
+
+        if can_quick_fix:
+            details.append("")
+            details.append("Create the required child subcomponent and link now?")
+
+        return text, "\n".join(line for line in details if line is not None)
+
+    def show_sst_shadowed_raw_port_block(
+        self,
+        raw_port: PortItem,
+        peer_port: PortItem,
+        rule,
+        *,
+        reason: str = "",
+    ) -> None:
+        text, details = self.sst_shadowed_raw_port_message(
+            raw_port,
+            peer_port,
+            rule,
+            can_quick_fix=False,
+        )
+        if reason:
+            details = f"{details}\n\n{reason}"
+
+        message_box = QMessageBox()
+        message_box.setIcon(QMessageBox.Warning)
+        message_box.setWindowTitle("Invalid Raw SST Port Connection")
+        message_box.setText(text)
+        message_box.setInformativeText(details)
+        message_box.setStandardButtons(QMessageBox.Ok)
+        message_box.exec()
+
+    def offer_sst_shadowed_raw_port_quick_fix(
+        self,
+        raw_port: PortItem,
+        peer_port: PortItem,
+        rule,
+    ) -> bool:
+        """Explain a shadowed raw-port link and optionally apply a guided fix."""
+        slot_name = str(getattr(rule, "use_slot", "") or "")
+        child_type = str(getattr(rule, "child_type", "") or "")
+        child_port = str(getattr(rule, "child_port", "") or "")
+
+        if not slot_name:
+            self.show_sst_shadowed_raw_port_block(raw_port, peer_port, rule)
+            return True
+
+        slot_connector = self.find_subcomp_connector(
+            raw_port.node.node_id,
+            slot_name,
+            role="slot",
+        )
+        if slot_connector is None:
+            self.show_sst_shadowed_raw_port_block(
+                raw_port,
+                peer_port,
+                rule,
+                reason=(
+                    f"FUSE could not find the {slot_name!r} SubComponent slot on "
+                    f"{raw_port.node.instance_name}. Create the slot-based "
+                    "construction manually."
+                ),
+            )
+            return True
+
+        guide = self.sst_construction_guide_for_connector(slot_connector)
+        if guide is None:
+            self.show_sst_shadowed_raw_port_block(
+                raw_port,
+                peer_port,
+                rule,
+                reason="FUSE does not have enough guidance to auto-create this slot child.",
+            )
+            return True
+
+        if child_type and str(getattr(guide, "child_type", "") or "") != child_type:
+            self.show_sst_shadowed_raw_port_block(
+                raw_port,
+                peer_port,
+                rule,
+                reason="The raw-port visibility rule and slot construction guide do not agree.",
+            )
+            return True
+
+        if child_port and str(getattr(guide, "quick_fix_child_port", "") or "") != child_port:
+            self.show_sst_shadowed_raw_port_block(
+                raw_port,
+                peer_port,
+                rule,
+                reason="The slot construction guide does not provide a compatible child port.",
+            )
+            return True
+
+        try:
+            from fuse.plugins.community.sst.construction_guidance import (
+                guide_has_quick_fix,
+            )
+        except Exception:
+            guide_has_quick_fix = lambda item: False
+
+        if not guide_has_quick_fix(guide):
+            self.show_sst_shadowed_raw_port_block(raw_port, peer_port, rule)
+            return True
+
+        if not self.subcomp_connector_has_available_capacity(slot_connector):
+            self.show_sst_shadowed_raw_port_block(
+                raw_port,
+                peer_port,
+                rule,
+                reason=(
+                    f"{raw_port.node.instance_name}.{slot_name} already has a "
+                    "SubComponent attachment. Connect the existing child "
+                    f"{getattr(guide, 'quick_fix_child_port', 'port')} to "
+                    f"{peer_port.node.instance_name}.{peer_port.name} instead."
+                ),
+            )
+            return True
+
+        child_component = self.sst_palette_component_by_type(
+            getattr(guide, "child_type", ""),
+            getattr(raw_port.node.component, "target_id", ""),
+        )
+        if child_component is None:
+            self.show_sst_shadowed_raw_port_block(
+                raw_port,
+                peer_port,
+                rule,
+                reason=(
+                    f"FUSE could not find {getattr(guide, 'child_type', '')} in "
+                    "the active SST palette, so create that subcomponent from "
+                    "the palette and attach it to this slot manually."
+                ),
+            )
+            return True
+
+        text, details = self.sst_shadowed_raw_port_message(
+            raw_port,
+            peer_port,
+            rule,
+            can_quick_fix=True,
+        )
+        message_box = QMessageBox()
+        message_box.setIcon(QMessageBox.Warning)
+        message_box.setWindowTitle("Invalid Raw SST Port Connection")
+        message_box.setText(text)
+        message_box.setInformativeText(details)
+
+        create_button = message_box.addButton(
+            f"Create {getattr(guide, 'child_type', '')} and Connect",
+            QMessageBox.AcceptRole,
+        )
+        message_box.addButton(QMessageBox.Cancel)
+        message_box.exec()
+
+        if message_box.clickedButton() is not create_button:
+            return True
+
+        return self.create_sst_slot_port_quick_fix(
+            slot_connector,
+            peer_port,
+            guide,
+            child_component,
+        )
+
+
+    def sst_construction_guide_for_connector(self, connector: SubcompConnectorItem):
+        """Return SST construction guidance for a subcomponent slot connector."""
+        try:
+            from fuse.plugins.community.sst.construction_guidance import (
+                guide_for_slot_connector,
+            )
+
+            return guide_for_slot_connector(connector)
+        except Exception:
+            return None
+
+    def sst_palette_component_by_type(self, full_type: str, target_id: str | None = None):
+        """Find a palette ComponentDefinition for an SST element.component type."""
+        element, _, name = str(full_type or "").partition(".")
+        if not element or not name:
+            return None
+
+        plugin_id = getattr(self, "active_plugin_id", "") or "sst"
+        target_candidates = []
+        if target_id:
+            target_candidates.append(str(target_id))
+        target_candidates.extend([None, ""])
+
+        seen_targets: set[str | None] = set()
+        for candidate_target_id in target_candidates:
+            if candidate_target_id in seen_targets:
+                continue
+            seen_targets.add(candidate_target_id)
+
+            try:
+                items = load_all_palette_items(
+                    plugin_id=plugin_id,
+                    target_id=candidate_target_id,
+                )
+            except Exception:
+                items = []
+
+            for item in items:
+                if (
+                    str(getattr(item, "element", "") or "") == element
+                    and str(getattr(item, "name", "") or "") == name
+                ):
+                    return item
+
+        return None
+
+    def default_sst_quickfix_child_name(
+        self,
+        slot_connector: SubcompConnectorItem,
+        child_component,
+    ) -> str:
+        """Choose a readable instance name for an auto-created SST child."""
+        parent_name = str(getattr(slot_connector.node, "instance_name", "") or "")
+        slot_name = str(getattr(slot_connector, "name", "") or "")
+        child_name = str(getattr(child_component, "name", "") or "subcomponent")
+
+        suffix = ""
+        match = re.search(r"(\d+)(?!.*\d)", parent_name)
+        if match:
+            suffix = match.group(1)
+
+        if child_name == "linkcontrol":
+            base = "linkcontrol"
+        elif child_name == "VirtNic":
+            base = "VirtNic"
+        elif child_name == "ctrlMsg":
+            base = "ctrlMsg"
+        else:
+            base = child_name or slot_name or "subcomponent"
+
+        if suffix:
+            requested = f"{base}_{suffix}"
+        else:
+            requested = base
+
+        used = self.existing_component_and_composite_internal_names()
+        return self.allocate_component_name_from_template(
+            template_for_source_name(requested),
+            used,
+        )[0]
+
+    def slot_port_quickfix_message(
+        self,
+        slot_connector: SubcompConnectorItem,
+        target_port: PortItem,
+        guide,
+    ) -> tuple[str, str]:
+        """Build the explanation shown when a slot is dragged to a real port."""
+        slot_label = (
+            f"{slot_connector.node.instance_name}.{slot_connector.name}"
+        )
+        target_label = f"{target_port.node.instance_name}.{target_port.name}"
+        child_short_name = str(getattr(guide, "child_type", "") or "").split(".")[-1]
+        child_instance = self.default_sst_quickfix_child_name(
+            slot_connector,
+            self.sst_palette_component_by_type(
+                getattr(guide, "child_type", ""),
+                getattr(slot_connector.node.component, "target_id", ""),
+            )
+            or type("_ComponentName", (), {"name": child_short_name})(),
+        )
+
+        text = f"{slot_label} is a SubComponent slot, not a real SST link port."
+        details = (
+            f"{getattr(guide, 'explanation', '')}\n\n"
+            "FUSE can create the required child subcomponent and then connect "
+            "that child's real port to the port you clicked.\n\n"
+            "Planned construction:\n"
+            f"  {slot_label} -> {child_instance} : {getattr(guide, 'child_type', '')}\n"
+            f"  {child_instance}.{getattr(guide, 'quick_fix_child_port', '')} <-> {target_label}\n\n"
+            "Create this subcomponent and link now?"
+        )
+        return text, details
+
+    def offer_sst_slot_to_port_quick_fix(
+        self,
+        slot_connector: SubcompConnectorItem,
+        target_port: PortItem,
+    ) -> bool:
+        """Offer to create the child subcomponent required between a slot and port.
+
+        Returns True when the mixed endpoint gesture was handled, whether the
+        user accepted the quick fix or cancelled the guided dialog. Returning
+        False lets the normal generic mixed-endpoint warning run.
+        """
+        if slot_connector is None or target_port is None:
+            return False
+
+        if getattr(slot_connector, "role", "") != "slot":
+            return False
+
+        guide = self.sst_construction_guide_for_connector(slot_connector)
+        try:
+            from fuse.plugins.community.sst.construction_guidance import (
+                guide_has_quick_fix,
+            )
+        except Exception:
+            guide_has_quick_fix = lambda item: False
+
+        if not guide_has_quick_fix(guide):
+            return False
+
+        if target_port.is_connected():
+            self.warn_port_already_connected()
+            return True
+
+        child_component = self.sst_palette_component_by_type(
+            getattr(guide, "child_type", ""),
+            getattr(slot_connector.node.component, "target_id", ""),
+        )
+        if child_component is None:
+            QMessageBox.information(
+                None,
+                "Create SubComponent First",
+                (
+                    f"{slot_connector.node.instance_name}.{slot_connector.name} "
+                    "is a SubComponent slot, not a real SST link port.\n\n"
+                    f"{getattr(guide, 'concise_fix', '')}\n\n"
+                    f"FUSE could not find {getattr(guide, 'child_type', '')} in "
+                    "the active SST palette, so create that subcomponent from the "
+                    "palette and attach it to this slot manually."
+                ),
+            )
+            return True
+
+        text, details = self.slot_port_quickfix_message(
+            slot_connector,
+            target_port,
+            guide,
+        )
+
+        message_box = QMessageBox()
+        message_box.setIcon(QMessageBox.Information)
+        message_box.setWindowTitle("Create Required SST SubComponent?")
+        message_box.setText(text)
+        message_box.setInformativeText(details)
+
+        create_button = message_box.addButton(
+            f"Create {getattr(guide, 'child_type', '')} and Connect",
+            QMessageBox.AcceptRole,
+        )
+        message_box.addButton(QMessageBox.Cancel)
+        message_box.exec()
+
+        if message_box.clickedButton() is not create_button:
+            return True
+
+        return self.create_sst_slot_port_quick_fix(
+            slot_connector,
+            target_port,
+            guide,
+            child_component,
+        )
+
+    def create_sst_slot_port_quick_fix(
+        self,
+        slot_connector: SubcompConnectorItem,
+        target_port: PortItem,
+        guide,
+        child_component,
+    ) -> bool:
+        """Create the SST child subcomponent and real link for a guided fix."""
+        parent_node = slot_connector.node
+        child_pos = parent_node.pos() + QPointF(ComponentNodeItem.WIDTH + 120.0, 0.0)
+        child_name = self.default_sst_quickfix_child_name(
+            slot_connector,
+            child_component,
+        )
+
+        self.begin_model_change_batch()
+        try:
+            child_node = self.create_component_node(
+                child_component,
+                child_pos,
+                instance_name=child_name,
+                notify=True,
+            )
+
+            interface_connector = None
+            for connector in getattr(child_node, "subcomp_connectors", []):
+                if getattr(connector, "role", "") == "interface":
+                    interface_connector = connector
+                    break
+
+            if interface_connector is None:
+                QMessageBox.critical(
+                    None,
+                    "Cannot Attach SubComponent",
+                    (
+                        f"Created {child_node.instance_name}, but it does not "
+                        "have a SubComponent interface connector."
+                    ),
+                )
+                return True
+
+            compatibility = self.check_subcomp_connector_compatibility(
+                slot_connector,
+                interface_connector,
+            )
+            if compatibility.severity == "error" or not compatibility.can_create:
+                QMessageBox.critical(
+                    None,
+                    compatibility.title or "Cannot Attach SubComponent",
+                    compatibility.message
+                    or "The selected subcomponent is not compatible with this slot.",
+                )
+                return True
+
+            if compatibility.severity == "warning":
+                if not self.confirm_subcomp_compatibility_warning(compatibility):
+                    return True
+
+            self.create_subcomp_attachment(
+                slot_connector,
+                interface_connector,
+                compatibility,
+            )
+
+            child_port = self.find_port(
+                child_node.node_id,
+                getattr(guide, "quick_fix_child_port", ""),
+            )
+            if child_port is None:
+                QMessageBox.information(
+                    None,
+                    "SubComponent Created",
+                    (
+                        f"Created and attached {child_node.instance_name}, but "
+                        f"could not find port "
+                        f"{getattr(guide, 'quick_fix_child_port', '')!r} on it.\n\n"
+                        "Connect the child subcomponent's real port manually."
+                    ),
+                )
+                return True
+
+            if child_port.is_connected() or target_port.is_connected():
+                self.warn_port_already_connected()
+                return True
+
+            link_compatibility = self.check_link_compatibility(child_port, target_port)
+            if (
+                link_compatibility.severity == "error"
+                or not link_compatibility.can_create
+            ):
+                QMessageBox.critical(
+                    None,
+                    link_compatibility.title or "Cannot Create Link",
+                    link_compatibility.message
+                    or "The created child port cannot be linked to the target port.",
+                )
+                return True
+
+            if link_compatibility.severity == "warning":
+                if not self.confirm_link_compatibility_warning(link_compatibility):
+                    return True
+
+            self.create_link_between_ports(child_port, target_port, link_compatibility)
+            self.select_component(child_node)
+            return True
+        finally:
+            self.end_model_change_batch()
+
+
+
+    def create_sst_slot_child_quick_fix(
+        self,
+        slot_connector: SubcompConnectorItem,
+        guide,
+        *,
+        select_child: bool = True,
+    ) -> ComponentNodeItem | None:
+        """Create and attach the child subcomponent described by an SST guide."""
+        if slot_connector is None or guide is None:
+            return None
+
+        if getattr(slot_connector, "role", "") != "slot":
+            return None
+
+        if not self.subcomp_connector_has_available_capacity(slot_connector):
+            QMessageBox.information(
+                None,
+                "Slot Already Filled",
+                (
+                    f"{slot_connector.node.instance_name}.{slot_connector.name} "
+                    "already has the required SubComponent attachment."
+                ),
+            )
+            return None
+
+        child_component = self.sst_palette_component_by_type(
+            getattr(guide, "child_type", ""),
+            getattr(slot_connector.node.component, "target_id", ""),
+        )
+        if child_component is None:
+            QMessageBox.information(
+                None,
+                "Create SubComponent Manually",
+                (
+                    f"FUSE knows that {slot_connector.node.instance_name}."
+                    f"{slot_connector.name} should contain "
+                    f"{getattr(guide, 'child_type', '')}, but that component was "
+                    "not found in the active SST palette.\n\n"
+                    "Create the child subcomponent from the palette and attach it "
+                    "to this slot manually."
+                ),
+            )
+            return None
+
+        parent_node = slot_connector.node
+        child_pos = parent_node.pos() + QPointF(ComponentNodeItem.WIDTH + 120.0, 0.0)
+        child_name = self.default_sst_quickfix_child_name(
+            slot_connector,
+            child_component,
+        )
+
+        self.begin_model_change_batch()
+        try:
+            child_node = self.create_component_node(
+                child_component,
+                child_pos,
+                instance_name=child_name,
+                notify=True,
+            )
+
+            interface_connector = None
+            for connector in getattr(child_node, "subcomp_connectors", []):
+                if getattr(connector, "role", "") == "interface":
+                    interface_connector = connector
+                    break
+
+            if interface_connector is None:
+                QMessageBox.critical(
+                    None,
+                    "Cannot Attach SubComponent",
+                    (
+                        f"Created {child_node.instance_name}, but it does not "
+                        "have a SubComponent interface connector."
+                    ),
+                )
+                return None
+
+            compatibility = self.check_subcomp_connector_compatibility(
+                slot_connector,
+                interface_connector,
+            )
+            if compatibility.severity == "error" or not compatibility.can_create:
+                QMessageBox.critical(
+                    None,
+                    compatibility.title or "Cannot Attach SubComponent",
+                    compatibility.message
+                    or "The selected subcomponent is not compatible with this slot.",
+                )
+                return None
+
+            if compatibility.severity == "warning":
+                if not self.confirm_subcomp_compatibility_warning(compatibility):
+                    return None
+
+            self.create_subcomp_attachment(
+                slot_connector,
+                interface_connector,
+                compatibility,
+            )
+
+            if select_child:
+                self.select_component(child_node)
+
+            return child_node
+        finally:
+            self.end_model_change_batch()
+
+
     def warn_mixed_endpoint_types(self):
         if self.suppress_mixed_endpoint_warning:
             return
@@ -2312,6 +3697,12 @@ class ModelScene(QGraphicsScene):
                     continue
 
                 slot_connector, interface_connector = pair
+                if self.sst_memhierarchy_slot_conflicts_with_connected_port(
+                    slot_connector,
+                ):
+                    connector.set_compatibility_highlight("incompatible")
+                    continue
+
                 compatibility = self.check_subcomp_connector_compatibility(
                     slot_connector,
                     interface_connector,
@@ -2441,6 +3832,12 @@ class ModelScene(QGraphicsScene):
         item.update_position()
         self.select_subcomp_attachment(item)
         self.notify_plugin_subcomp_attachment_created(attachment)
+
+        if hasattr(slot_connector.node, "apply_subcomp_connector_visibility"):
+            slot_connector.node.apply_subcomp_connector_visibility()
+        if hasattr(interface_connector.node, "apply_subcomp_connector_visibility"):
+            interface_connector.node.apply_subcomp_connector_visibility()
+
         self.notify_model_changed()
 
         return item
@@ -2512,6 +3909,15 @@ class ModelScene(QGraphicsScene):
             self.properties_panel.show_empty()
 
         self.notify_plugin_subcomp_attachment_deleted(attachment)
+
+        for connector in (
+            getattr(item, "source_connector", None),
+            getattr(item, "target_connector", None),
+        ):
+            node = getattr(connector, "node", None)
+            if node is not None and hasattr(node, "apply_subcomp_connector_visibility"):
+                node.apply_subcomp_connector_visibility()
+
         self.notify_model_changed()
 
     def subcomp_connector_clicked(self, connector: SubcompConnectorItem):
@@ -2562,6 +3968,14 @@ class ModelScene(QGraphicsScene):
             return
 
         if not self.subcomp_connector_has_available_capacity(interface_connector):
+            self.cancel_pending_subcomp_attachment()
+            return
+
+        if self.sst_memhierarchy_slot_port_mode_attachment_guard(slot_connector):
+            self.cancel_pending_subcomp_attachment()
+            return
+
+        if not self.confirm_sst_deprecated_slot_attachment_use(slot_connector):
             self.cancel_pending_subcomp_attachment()
             return
 
@@ -2678,12 +4092,46 @@ class ModelScene(QGraphicsScene):
         # Do this here because the scene may otherwise cancel the pending state before
         # the clicked item receives its own mouse event.
         if self.pending_source_port is not None and clicked_a_subcomp_connector:
+            clicked_connector = next(
+                (
+                    item
+                    for item in clicked_items
+                    if isinstance(item, SubcompConnectorItem)
+                ),
+                None,
+            )
+            if (
+                clicked_connector is not None
+                and self.offer_sst_slot_to_port_quick_fix(
+                    clicked_connector,
+                    self.pending_source_port,
+                )
+            ):
+                self.cancel_pending_connection()
+                event.accept()
+                return
+
             self.warn_mixed_endpoint_types()
             self.cancel_pending_connection()
             event.accept()
             return
 
         if self.pending_subcomp_connector is not None and clicked_a_port:
+            clicked_port = next(
+                (item for item in clicked_items if isinstance(item, PortItem)),
+                None,
+            )
+            if (
+                clicked_port is not None
+                and self.offer_sst_slot_to_port_quick_fix(
+                    self.pending_subcomp_connector,
+                    clicked_port,
+                )
+            ):
+                self.cancel_pending_subcomp_attachment()
+                event.accept()
+                return
+
             self.warn_mixed_endpoint_types()
             self.cancel_pending_subcomp_attachment()
             event.accept()

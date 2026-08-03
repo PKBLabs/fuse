@@ -131,10 +131,20 @@ class PortItem(QGraphicsEllipseItem):
         )
         self.connections: list[ConnectionItem] = []
         self.is_composite_exposed_port = False
+        self.is_deprecated_connector = False
+
+        self.default_port_brush = QBrush(QColor("#2f80ed"))
+        self.default_port_pen = QPen(QColor("#1f4e79"), 1)
+        self.composite_port_brush = QBrush(QColor("#f97316"))
+        self.composite_port_pen = QPen(QColor("#c2410c"), 2)
+        self.deprecated_port_brush = QBrush(QColor("#f97316"))
+        self.deprecated_port_pen = QPen(QColor("#9a3412"), 2.2)
+        self.connected_port_brush = QBrush(QColor("#6b7280"))
+        self.connected_port_pen = QPen(QColor("#4b5563"), 1.2)
 
         self.setPos(x, y)
-        self.setBrush(QBrush(QColor("#2f80ed")))
-        self.setPen(QPen(QColor("#1f4e79"), 1))
+        self.setBrush(self.default_port_brush)
+        self.setPen(self.default_port_pen)
         self.setFlag(QGraphicsItem.ItemSendsScenePositionChanges, True)
         self.setAcceptHoverEvents(True)
         tooltip = f"Port: {name}"
@@ -144,7 +154,9 @@ class PortItem(QGraphicsEllipseItem):
         self.setZValue(30)
 
         self.label = QGraphicsTextItem(name, node)
-        self.label.setDefaultTextColor(QColor("#333333"))
+        self.default_label_color = QColor("#333333")
+        self.deprecated_label_color = QColor("#9a3412")
+        self.label.setDefaultTextColor(self.default_label_color)
         self.label.setScale(self.LABEL_SCALE)
         self.label.setZValue(31)
 
@@ -222,23 +234,59 @@ class PortItem(QGraphicsEllipseItem):
         """Each SST port may participate in at most one link."""
         return len(self.connections) > 0
 
-    def update_connection_state(self):
+    def apply_visual_state(self):
+        """Apply the base port glyph colors for normal, deprecated, and occupied states."""
         if self.is_connected():
-            self.setBrush(QBrush(QColor("#6b7280")))
+            self.setBrush(self.connected_port_brush)
+            if self.is_deprecated_connector:
+                self.setPen(self.deprecated_port_pen)
+                self.label.setDefaultTextColor(self.deprecated_label_color)
+            else:
+                self.setPen(self.connected_port_pen)
+                self.label.setDefaultTextColor(self.default_label_color)
+            return
+
+        if self.is_deprecated_connector:
+            self.setBrush(self.deprecated_port_brush)
+            self.setPen(self.deprecated_port_pen)
+            self.label.setDefaultTextColor(self.deprecated_label_color)
+            return
+
+        if bool(getattr(self, "is_composite_exposed_port", False)):
+            self.setBrush(self.composite_port_brush)
+            self.setPen(self.composite_port_pen)
+        else:
+            self.setBrush(self.default_port_brush)
+            self.setPen(self.default_port_pen)
+
+        self.label.setDefaultTextColor(self.default_label_color)
+
+    def set_deprecated_visual_state(self, deprecated: bool):
+        """Style a visible port as deprecated without changing its name."""
+        self.is_deprecated_connector = bool(deprecated)
+        self.apply_visual_state()
+
+    def update_connection_state(self):
+        self.apply_visual_state()
+
+        if self.is_connected():
             self.setToolTip(f"⚠ Port Occupied\n{self.name}")
         else:
-            if bool(getattr(self, "is_composite_exposed_port", False)):
-                self.setBrush(QBrush(QColor("#f97316")))
-                self.setPen(QPen(QColor("#c2410c"), 2))
-            else:
-                self.setBrush(QBrush(QColor("#2f80ed")))
-                self.setPen(QPen(QColor("#1f4e79"), 1))
             tooltip = f"Port: {self.name}"
             if self.interface:
                 tooltip += f"\nInterface: {self.interface}"
             if bool(getattr(self, "is_composite_exposed_port", False)):
                 tooltip += "\nExposed on composite boundary"
             self.setToolTip(tooltip)
+
+        # If a hidden advanced/raw SST port becomes connected while a project is
+        # loading or a user creates a raw-port link in advanced mode, reveal and
+        # relayout it so existing models remain visible/editable.
+        if self.is_connected() and hasattr(self.node, "apply_port_visibility"):
+            try:
+                self.node.apply_port_visibility()
+            except Exception:
+                pass
 
     def contextMenuEvent(self, event):
         scene = self.scene()
@@ -776,8 +824,13 @@ class SubcompConnectorItem(QGraphicsPolygonItem):
         )
         self.interface = interface
 
-        self.normal_brush = QBrush(QColor("#8b5cf6"))
-        self.normal_pen = QPen(QColor("#5b21b6"), 1.5)
+        self.default_normal_brush = QBrush(QColor("#8b5cf6"))
+        self.default_normal_pen = QPen(QColor("#5b21b6"), 1.5)
+        self.deprecated_normal_brush = QBrush(QColor("#f97316"))
+        self.deprecated_normal_pen = QPen(QColor("#9a3412"), 2.0)
+        self.normal_brush = self.default_normal_brush
+        self.normal_pen = self.default_normal_pen
+        self.is_deprecated_connector = False
 
         self.compatible_brush = QBrush(QColor("#22c55e"))
         self.compatible_pen = QPen(QColor("#15803d"), 2.0)
@@ -805,7 +858,9 @@ class SubcompConnectorItem(QGraphicsPolygonItem):
 
         label_text = name if role == "slot" else (interface or name)
         self.label = QGraphicsTextItem(label_text, node)
-        self.label.setDefaultTextColor(QColor("#4c1d95"))
+        self.default_label_color = QColor("#4c1d95")
+        self.deprecated_label_color = QColor("#9a3412")
+        self.label.setDefaultTextColor(self.default_label_color)
         self.label.setScale(self.LABEL_SCALE)
         self.label.setZValue(13)
 
@@ -816,6 +871,20 @@ class SubcompConnectorItem(QGraphicsPolygonItem):
         self.side = side if side in VALID_PORT_SIDES else self.side
         self.setPos(x, y)
         self.update_label_position()
+
+    def set_deprecated_visual_state(self, deprecated: bool):
+        """Style a visible connector as deprecated without changing its name."""
+        self.is_deprecated_connector = bool(deprecated)
+        if self.is_deprecated_connector:
+            self.normal_brush = self.deprecated_normal_brush
+            self.normal_pen = self.deprecated_normal_pen
+            self.label.setDefaultTextColor(self.deprecated_label_color)
+        else:
+            self.normal_brush = self.default_normal_brush
+            self.normal_pen = self.default_normal_pen
+            self.label.setDefaultTextColor(self.default_label_color)
+
+        self.set_compatibility_highlight("")
 
     def update_label_position(self):
         x = self.pos().x()
@@ -1006,11 +1075,11 @@ class SubcompAttachmentItem(QGraphicsPathItem):
 
 
 class AddPortsButtonItem(QGraphicsTextItem):
-    """Small canvas control for increasing a variable port count.
+    """Small canvas control for variable ports and advanced/raw port visibility.
 
-    The button is shown next to components that expose expandable port groups.
-    Clicking it delegates to the owning ``ComponentNodeItem`` so the node can
-    update its port list and notify connected links.
+    The button is shown next to components that expose expandable port groups or
+    SST ports hidden by the guided view.  Clicking it delegates to the owning
+    ``ComponentNodeItem`` so the node can update its visible port list.
     """
     def __init__(self, node: "ComponentNodeItem"):
         super().__init__("+", node)
@@ -1020,12 +1089,13 @@ class AddPortsButtonItem(QGraphicsTextItem):
         self.setPos(node.WIDTH - 24, node.HEIGHT - 30)
         self.setZValue(30)
         self.setAcceptHoverEvents(True)
-        self.setToolTip("Add Ports")
+        self.setToolTip("Add Ports / Show Advanced Ports")
 
     def mousePressEvent(self, event):
         templates = self.node.variable_port_templates
+        has_advanced_ports = self.node.has_advanced_or_hidden_ports()
 
-        if not templates:
+        if not templates and not has_advanced_ports:
             event.accept()
             return
 
@@ -1045,6 +1115,16 @@ class AddPortsButtonItem(QGraphicsTextItem):
                 lambda checked=False, name=base_name: self.node.decrement_variable_port(
                     name
                 )
+            )
+
+        if has_advanced_ports:
+            if templates:
+                menu.addSeparator()
+
+            advanced_action = menu.addAction(self.node.advanced_ports_menu_label())
+            advanced_action.setToolTip(self.node.advanced_ports_tooltip())
+            advanced_action.triggered.connect(
+                lambda checked=False: self.node.toggle_advanced_ports()
             )
 
         menu.exec(QCursor.pos())
@@ -1115,6 +1195,8 @@ class ComponentNodeItem(QGraphicsRectItem):
             str(key): max(0, _safe_int(value, 1))
             for key, value in (variable_port_counts or {}).items()
         }
+        self.show_advanced_ports = False
+        self.show_deprecated_connectors = False
         self.port_templates: list[dict] = []
         self.variable_port_templates: list[dict] = []
         self.subcomp_connector_templates: list[dict] = []
@@ -1249,6 +1331,8 @@ class ComponentNodeItem(QGraphicsRectItem):
         group_action = None
         ungroup_action = None
         composite_action = None
+        advanced_ports_action = None
+        deprecated_connectors_action = None
 
         if scene is not None:
             menu.addSeparator()
@@ -1268,6 +1352,20 @@ class ComponentNodeItem(QGraphicsRectItem):
             if can_create_composite_from_selection(scene):
                 menu.addSeparator()
                 composite_action = menu.addAction("Create Composite Component from Selection")
+
+        if self.has_advanced_or_hidden_ports():
+            menu.addSeparator()
+            advanced_ports_action = menu.addAction(self.advanced_ports_menu_label())
+            advanced_ports_action.setToolTip(self.advanced_ports_tooltip())
+
+        if self.has_deprecated_connectors():
+            menu.addSeparator()
+            deprecated_connectors_action = menu.addAction(
+                self.deprecated_connectors_menu_label()
+            )
+            deprecated_connectors_action.setToolTip(
+                self.deprecated_connectors_tooltip()
+            )
 
         menu.addSeparator()
 
@@ -1308,6 +1406,15 @@ class ComponentNodeItem(QGraphicsRectItem):
                     scene,
                     getattr(scene, "composite_creation_requested_callback", None),
                 )
+
+        elif advanced_ports_action is not None and action == advanced_ports_action:
+            self.toggle_advanced_ports()
+
+        elif (
+            deprecated_connectors_action is not None
+            and action == deprecated_connectors_action
+        ):
+            self.toggle_deprecated_connectors()
 
         elif action == remove_action:
             if scene is not None:
@@ -1398,7 +1505,7 @@ class ComponentNodeItem(QGraphicsRectItem):
                 )
             )
 
-        self.layout_subcomp_connectors()
+        self.apply_subcomp_connector_visibility()
 
     def remove_subcomp_connector_item(self, connector: SubcompConnectorItem):
         if connector in self.subcomp_connectors:
@@ -1415,8 +1522,16 @@ class ComponentNodeItem(QGraphicsRectItem):
             connector.setParentItem(None)
 
     def layout_subcomp_connectors(self):
-        slots = [item for item in self.subcomp_connectors if item.role == "slot"]
-        interfaces = [item for item in self.subcomp_connectors if item.role == "interface"]
+        slots = [
+            item
+            for item in self.subcomp_connectors
+            if item.role == "slot" and item.isVisible()
+        ]
+        interfaces = [
+            item
+            for item in self.subcomp_connectors
+            if item.role == "interface" and item.isVisible()
+        ]
         self.layout_subcomp_connector_side(slots, "bottom")
         self.layout_subcomp_connector_side(interfaces, "top")
 
@@ -1540,6 +1655,448 @@ class ComponentNodeItem(QGraphicsRectItem):
                 ]
 
         return self.cached_metadata_list("ports", loader)
+
+    def port_visibility_rules(self) -> dict[str, object]:
+        """Return SST UI visibility rules for this node's raw/catalog ports."""
+        if getattr(self.component, "plugin_id", "") != "sst":
+            return {}
+
+        try:
+            from fuse.plugins.community.sst.port_visibility import rules_for_node
+
+            return dict(rules_for_node(self))
+        except Exception:
+            return {}
+
+    def port_visibility_rule_for_name(self, port_name: str):
+        """Return the SST visibility rule for an expanded port name, if any."""
+        requested = str(port_name or "").strip()
+        if not requested:
+            return None
+
+        rules = self.port_visibility_rules()
+        if requested in rules:
+            return rules[requested]
+
+        for template in self.port_templates:
+            template_name = str(template.get("name", "") or "")
+            base_name = str(template.get("base_name", "") or template_name)
+            if requested in self.expanded_names_for_port_template(template):
+                return rules.get(template_name) or rules.get(base_name)
+
+        return None
+
+
+    def deprecated_connector_rule_for_name(self, connector_kind: str, connector_name: str):
+        """Return a version-aware deprecation rule for an SST connector."""
+        if getattr(self.component, "plugin_id", "") != "sst":
+            return None
+
+        try:
+            from fuse.plugins.community.sst.port_visibility import (
+                deprecated_connector_rule_for_node,
+            )
+
+            return deprecated_connector_rule_for_node(
+                self,
+                str(connector_name or "").strip(),
+                str(connector_kind or "").strip(),
+            )
+        except Exception:
+            return None
+
+    def deprecated_port_rule_for_name(self, port_name: str):
+        """Return a deprecation rule for a possibly-expanded port name.
+
+        SST's memHierarchy catalog can carry legacy alias information in the
+        template ``base_name`` even when the rendered port name is the modern
+        replacement.  A concrete port such as ``highlink`` must not inherit the
+        deprecation rule for an older alias such as ``high_network_0`` merely
+        because it came from that template metadata.  Only apply the template or
+        base-name rule when the requested name is directly deprecated, or when a
+        variable/printf template expands into the concrete name.
+        """
+        requested = str(port_name or "").strip()
+        if not requested:
+            return None
+
+        direct = self.deprecated_connector_rule_for_name("port", requested)
+        if direct is not None:
+            return direct
+
+        for template in self.port_templates:
+            template_name = str(template.get("name", "") or "")
+            base_name = str(template.get("base_name", "") or template_name)
+            if requested not in self.expanded_names_for_port_template(template):
+                continue
+
+            template_rule = self.deprecated_connector_rule_for_name("port", template_name)
+            if template_rule is not None and requested == template_name:
+                return template_rule
+
+            is_variable_value = template.get("is_variable", 0)
+            is_variable = str(is_variable_value).strip().lower() not in {"", "0", "false", "no"}
+            is_parametric = "%(" in template_name or "%d" in template_name
+            if not (is_variable or is_parametric):
+                continue
+
+            return (
+                template_rule
+                or self.deprecated_connector_rule_for_name("port", base_name)
+            )
+
+        return None
+
+    def deprecated_slot_rule_for_connector(self, connector: SubcompConnectorItem):
+        """Return a deprecation rule for a SubComponent slot connector."""
+        if connector is None or getattr(connector, "role", "") != "slot":
+            return None
+        return self.deprecated_connector_rule_for_name("slot", connector.name)
+
+    def deprecated_connector_stage(self, rule) -> str:
+        try:
+            from fuse.plugins.community.sst.port_visibility import (
+                deprecated_connector_stage_for_node,
+            )
+
+            return deprecated_connector_stage_for_node(self, rule)
+        except Exception:
+            return "deprecated"
+
+    def deprecated_connector_default_visible(self, rule) -> bool:
+        try:
+            from fuse.plugins.community.sst.port_visibility import (
+                deprecated_connector_default_visible_for_node,
+            )
+
+            return deprecated_connector_default_visible_for_node(self, rule)
+        except Exception:
+            return True
+
+    def deprecated_connector_tooltip_for_rule(self, rule) -> str:
+        if rule is None:
+            return ""
+
+        try:
+            from fuse.plugins.community.sst.port_visibility import (
+                deprecated_connector_tooltip,
+            )
+
+            return deprecated_connector_tooltip(
+                rule,
+                stage=self.deprecated_connector_stage(rule),
+            )
+        except Exception:
+            return "Deprecated SST connector."
+
+    def deprecated_port_tooltip(self, port_name: str) -> str:
+        return self.deprecated_connector_tooltip_for_rule(
+            self.deprecated_port_rule_for_name(port_name)
+        )
+
+    def deprecated_slot_tooltip(self, connector: SubcompConnectorItem) -> str:
+        return self.deprecated_connector_tooltip_for_rule(
+            self.deprecated_slot_rule_for_connector(connector)
+        )
+
+    def deprecated_port_default_visible(self, port_name: str) -> bool:
+        rule = self.deprecated_port_rule_for_name(port_name)
+        if rule is None:
+            return True
+        return self.deprecated_connector_default_visible(rule)
+
+    def deprecated_slot_default_visible(self, connector: SubcompConnectorItem) -> bool:
+        rule = self.deprecated_slot_rule_for_connector(connector)
+        if rule is None:
+            return True
+        return self.deprecated_connector_default_visible(rule)
+
+    def subcomp_connector_is_attached(self, connector: SubcompConnectorItem) -> bool:
+        scene = self.scene()
+        if scene is not None and hasattr(scene, "subcomp_connector_is_connected"):
+            try:
+                return bool(scene.subcomp_connector_is_connected(connector))
+            except Exception:
+                return False
+        return False
+
+    def deprecated_connector_hidden_names(self) -> list[str]:
+        names: list[str] = []
+
+        for name in self.expanded_port_names():
+            rule = self.deprecated_port_rule_for_name(name)
+            if rule is None:
+                continue
+            if self.deprecated_connector_default_visible(rule):
+                continue
+            if self.show_deprecated_connectors or self.show_advanced_ports:
+                continue
+            if any(port.name == name and port.is_connected() for port in self.ports):
+                continue
+            names.append(f"port {name}")
+
+        for connector in self.subcomp_connectors:
+            rule = self.deprecated_slot_rule_for_connector(connector)
+            if rule is None:
+                continue
+            if self.deprecated_connector_default_visible(rule):
+                continue
+            if self.show_deprecated_connectors:
+                continue
+            if self.subcomp_connector_is_attached(connector):
+                continue
+            names.append(f"slot {connector.name}")
+
+        return names
+
+    def has_deprecated_connectors(self) -> bool:
+        if any(
+            self.deprecated_port_rule_for_name(name) is not None
+            for name in self.expanded_port_names()
+        ):
+            return True
+
+        return any(
+            self.deprecated_slot_rule_for_connector(connector) is not None
+            for connector in self.subcomp_connectors
+        )
+
+    def deprecated_connectors_menu_label(self) -> str:
+        if self.show_deprecated_connectors:
+            return "Hide deprecated/legacy connectors"
+        hidden_count = len(self.deprecated_connector_hidden_names())
+        suffix = f" ({hidden_count})" if hidden_count else ""
+        return f"Show deprecated/legacy connectors{suffix}"
+
+    def deprecated_connectors_tooltip(self) -> str:
+        hidden = self.deprecated_connector_hidden_names()
+        if self.show_deprecated_connectors:
+            return "Hide deprecated SST ports and SubComponent slots that are not currently used."
+
+        if hidden:
+            return (
+                "Show deprecated SST ports and SubComponent slots hidden by the guided view:\n  "
+                + "\n  ".join(hidden)
+            )
+
+        return (
+            "Deprecated SST connectors are visible in this target but marked with "
+            "warning styling. New models should use their replacements."
+        )
+
+    def port_is_advanced_or_hidden(self, port_name: str) -> bool:
+        deprecated_rule = self.deprecated_port_rule_for_name(port_name)
+        if (
+            deprecated_rule is not None
+            and self.deprecated_connector_default_visible(deprecated_rule)
+        ):
+            return False
+
+        rule = self.port_visibility_rule_for_name(port_name)
+        return bool(rule is not None and not bool(getattr(rule, "default_visible", True)))
+
+    def has_advanced_or_hidden_ports(self) -> bool:
+        return any(
+            self.port_is_advanced_or_hidden(name)
+            for name in self.expanded_port_names()
+        )
+
+    def hidden_advanced_port_names(self) -> list[str]:
+        return [
+            name
+            for name in self.expanded_port_names()
+            if self.port_is_advanced_or_hidden(name)
+            and not self.show_advanced_ports
+            and not self.show_deprecated_connectors
+            and not any(port.name == name and port.is_connected() for port in self.ports)
+        ]
+
+    def advanced_ports_menu_label(self) -> str:
+        if self.show_advanced_ports:
+            return "Hide advanced/raw ports"
+        hidden_count = len(self.hidden_advanced_port_names())
+        suffix = f" ({hidden_count})" if hidden_count else ""
+        return f"Show advanced/raw ports{suffix}"
+
+    def advanced_ports_tooltip(self) -> str:
+        hidden = self.hidden_advanced_port_names()
+        if self.show_advanced_ports:
+            return (
+                "Hide raw SST catalog ports that are shadowed by runtime "
+                "SubComponent slots or marked as advanced."
+            )
+
+        if hidden:
+            return (
+                "Show raw SST catalog ports hidden by the guided view:\\n  "
+                + "\\n  ".join(hidden)
+            )
+
+        return "Show raw SST catalog ports hidden by the guided view."
+
+    def port_should_be_visible(self, port: PortItem) -> bool:
+        deprecated_rule = self.deprecated_port_rule_for_name(port.name)
+        if deprecated_rule is not None:
+            if self.deprecated_connector_default_visible(deprecated_rule):
+                return True
+
+            # Never hide a deprecated connector that is already used; this keeps
+            # legacy/imported models visible and editable.
+            if port.is_connected():
+                return True
+
+            if self.show_deprecated_connectors or self.show_advanced_ports:
+                return True
+
+            return False
+
+        rule = self.port_visibility_rule_for_name(port.name)
+        if rule is None:
+            return True
+
+        if bool(getattr(rule, "default_visible", True)):
+            return True
+
+        # Never hide a port that already owns a link; this keeps legacy/imported
+        # models visible and editable while still hiding unused misleading ports.
+        if port.is_connected():
+            return True
+
+        return bool(self.show_advanced_ports)
+
+    def advanced_port_tooltip(self, port: PortItem) -> str:
+        rule = self.port_visibility_rule_for_name(port.name)
+        if rule is None:
+            return ""
+
+        try:
+            from fuse.plugins.community.sst.port_visibility import port_rule_tooltip
+
+            return port_rule_tooltip(rule)
+        except Exception:
+            return "Advanced/raw SST port. Use the component '+' menu to show or hide it."
+
+    def apply_port_visibility(self):
+        """Apply guided/advanced/deprecated port visibility and relayout ports."""
+        visible_names: list[str] = []
+
+        for port in self.ports:
+            visible = self.port_should_be_visible(port)
+            port.setVisible(visible)
+            port.label.setVisible(visible)
+
+            if visible:
+                visible_names.append(port.name)
+
+            base_tooltip = f"Port: {port.name}"
+            if port.interface:
+                base_tooltip += f"\nInterface: {port.interface}"
+            if port.is_connected():
+                base_tooltip = f"⚠ Port Occupied\n{port.name}"
+
+            tooltip_parts = [base_tooltip]
+            advanced_tooltip = self.advanced_port_tooltip(port)
+            if advanced_tooltip:
+                tooltip_parts.append(advanced_tooltip)
+
+            deprecated_tooltip = self.deprecated_port_tooltip(port.name)
+            if deprecated_tooltip:
+                tooltip_parts.append(deprecated_tooltip)
+
+            if hasattr(port, "set_deprecated_visual_state"):
+                port.set_deprecated_visual_state(bool(deprecated_tooltip))
+            else:
+                port.label.setDefaultTextColor(
+                    QColor("#9a3412") if deprecated_tooltip else QColor("#333333")
+                )
+                if not port.is_connected():
+                    if deprecated_tooltip:
+                        port.setBrush(QBrush(QColor("#f97316")))
+                        port.setPen(QPen(QColor("#9a3412"), 2.2))
+                    else:
+                        port.setBrush(QBrush(QColor("#2f80ed")))
+                        port.setPen(QPen(QColor("#1f4e79"), 1.0))
+
+            port.setToolTip("\n\n".join(tooltip_parts))
+
+        self.layout_ports(visible_names)
+        self.update_add_ports_button_visibility()
+
+
+    def subcomp_connector_should_be_visible(self, connector: SubcompConnectorItem) -> bool:
+        rule = self.deprecated_slot_rule_for_connector(connector)
+        if rule is None:
+            return True
+
+        if self.deprecated_connector_default_visible(rule):
+            return True
+
+        if self.subcomp_connector_is_attached(connector):
+            return True
+
+        return bool(self.show_deprecated_connectors)
+
+    def apply_subcomp_connector_visibility(self):
+        """Apply deprecated SubComponent-slot visibility and relayout connectors."""
+        for connector in self.subcomp_connectors:
+            visible = self.subcomp_connector_should_be_visible(connector)
+            connector.setVisible(visible)
+            connector.label.setVisible(visible)
+
+            deprecated_tooltip = self.deprecated_slot_tooltip(connector)
+            if deprecated_tooltip:
+                base_tooltip = (
+                    f"SubComponent slot: {connector.name}"
+                    if connector.role == "slot"
+                    else f"SubComponent connector: {connector.name}"
+                )
+                if connector.interface:
+                    base_tooltip += f"\nInterface: {connector.interface}"
+                connector.setToolTip(f"{base_tooltip}\n\n{deprecated_tooltip}")
+                if hasattr(connector, "set_deprecated_visual_state"):
+                    connector.set_deprecated_visual_state(True)
+            else:
+                base_tooltip = (
+                    f"SubComponent slot: {connector.name}"
+                    if connector.role == "slot"
+                    else f"SubComponent connector: {connector.name}"
+                )
+                if connector.interface:
+                    base_tooltip += f"\nInterface: {connector.interface}"
+                connector.setToolTip(base_tooltip)
+                if hasattr(connector, "set_deprecated_visual_state"):
+                    connector.set_deprecated_visual_state(False)
+
+        self.layout_subcomp_connectors()
+
+    def set_show_advanced_ports(self, enabled: bool):
+        self.show_advanced_ports = bool(enabled)
+        self.apply_port_visibility()
+
+        scene = self.scene()
+        if scene is not None:
+            if hasattr(scene, "reroute_links_for_node"):
+                scene.reroute_links_for_node(self, force_full=True)
+            if hasattr(scene, "properties_panel") and scene.properties_panel is not None:
+                scene.properties_panel.show_component(self)
+
+    def toggle_advanced_ports(self):
+        self.set_show_advanced_ports(not self.show_advanced_ports)
+
+    def set_show_deprecated_connectors(self, enabled: bool):
+        self.show_deprecated_connectors = bool(enabled)
+        self.apply_port_visibility()
+        self.apply_subcomp_connector_visibility()
+
+        scene = self.scene()
+        if scene is not None:
+            if hasattr(scene, "reroute_links_for_node"):
+                scene.reroute_links_for_node(self, force_full=True)
+            if hasattr(scene, "properties_panel") and scene.properties_panel is not None:
+                scene.properties_panel.show_component(self)
+
+    def toggle_deprecated_connectors(self):
+        self.set_show_deprecated_connectors(not self.show_deprecated_connectors)
 
     def expanded_names_for_port_template(self, template: dict) -> list[str]:
         """Return the concrete port names represented by a catalog template."""
@@ -1682,7 +2239,7 @@ class ComponentNodeItem(QGraphicsRectItem):
                     )
                 )
 
-        self.layout_ports(desired_names)
+        self.apply_port_visibility()
         return True, ""
 
     def remove_port_item(self, port: PortItem):
@@ -2192,9 +2749,11 @@ class ComponentNodeItem(QGraphicsRectItem):
         self.set_variable_port_count(base_name, current + 1)
 
     def update_add_ports_button_visibility(self):
-        if self.variable_port_templates and self.add_ports_button is None:
+        should_show_button = bool(self.variable_port_templates) or self.has_advanced_or_hidden_ports()
+
+        if should_show_button and self.add_ports_button is None:
             self.add_ports_button = AddPortsButtonItem(self)
-        elif not self.variable_port_templates and self.add_ports_button is not None:
+        elif not should_show_button and self.add_ports_button is not None:
             self.add_ports_button.setParentItem(None)
             self.add_ports_button = None
 
@@ -2329,6 +2888,15 @@ class ComponentNodeItem(QGraphicsRectItem):
             if port_name in self.expanded_names_for_port_template(template):
                 metadata = dict(template)
                 metadata["expanded_name"] = port_name
+                rule = self.port_visibility_rule_for_name(port_name)
+                if rule is not None:
+                    metadata["sst_port_visibility"] = {
+                        "mode": getattr(rule, "mode", ""),
+                        "use_slot": getattr(rule, "use_slot", ""),
+                        "child_type": getattr(rule, "child_type", ""),
+                        "child_port": getattr(rule, "child_port", ""),
+                        "default_visible": bool(getattr(rule, "default_visible", True)),
+                    }
                 return metadata
 
         return {}
