@@ -24,12 +24,13 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 import os
 
-from PySide6.QtCore import QObject, QPointF, QRectF, QRunnable, Signal, Slot
+from PySide6.QtCore import QObject, QRunnable, Signal, Slot
 
+from fuse.core.diagnostics import breadcrumb
 from fuse.core.routing.routing import (
     RoutingConfig,
-    route_orthogonal_path,
-    simplify_points,
+    route_orthogonal_path_tuples,
+    simplify_point_tuples,
 )
 
 
@@ -65,20 +66,6 @@ class LinkRoutingWorkerSignals(QObject):
     failed = Signal(int, str)
 
 
-def _point(point: PointTuple) -> QPointF:
-    return QPointF(float(point[0]), float(point[1]))
-
-
-def _rect(rect: RectTuple) -> QRectF:
-    left, top, right, bottom = rect
-    return QRectF(
-        float(left),
-        float(top),
-        float(right) - float(left),
-        float(bottom) - float(top),
-    )
-
-
 def _route_one(
     request: LinkRouteRequest,
     obstacle_rects: list[RectTuple],
@@ -86,37 +73,35 @@ def _route_one(
     """Compute one link path using only copied numeric geometry."""
 
     config = RoutingConfig(**request.config)
-    obstacles = [_rect(rect) for rect in obstacle_rects]
-
-    route = route_orthogonal_path(
-        start=_point(request.source_exit),
-        end=_point(request.target_exit),
-        obstacle_rects=obstacles,
+    route = route_orthogonal_path_tuples(
+        start=request.source_exit,
+        end=request.target_exit,
+        obstacle_rects=obstacle_rects,
         config=config,
         lane_distance=float(request.lane_distance),
     )
 
-    full_route = simplify_points(
+    full_route = simplify_point_tuples(
         [
-            _point(request.source_center),
+            request.source_center,
             *route,
-            _point(request.target_center),
+            request.target_center,
         ]
     )
 
     return LinkRouteResult(
         link_id=int(request.link_id),
-        points=[(float(point.x()), float(point.y())) for point in full_route],
+        points=[(float(point[0]), float(point[1])) for point in full_route],
     )
 
 
 class LinkRoutingWorker(QRunnable):
     """Compute a batch of link routes on a worker thread.
 
-    The worker parallelizes per-link route computations within the batch. This
-    primarily keeps the GUI thread responsive; because the router is Python
-    code, CPU scaling is bounded by CPython's GIL until the routing backend is
-    moved to a process pool or native extension.
+    The worker receives immutable primitive snapshots from the GUI thread. The
+    optional per-batch worker count is intentionally capped by ``ModelScene`` so
+    dense diagrams do not spawn unbounded nested routing threads while the scene
+    is being mutated.
     """
 
     def __init__(
@@ -125,9 +110,11 @@ class LinkRoutingWorker(QRunnable):
         requests: list[LinkRouteRequest],
         obstacle_rects: list[RectTuple],
         max_workers: int | None = None,
+        batch_id: int | None = None,
     ):
         super().__init__()
         self.generation = int(generation)
+        self.batch_id = int(batch_id or generation)
         self.requests = list(requests)
         self.obstacle_rects = list(obstacle_rects)
         self.max_workers = max_workers
@@ -137,13 +124,35 @@ class LinkRoutingWorker(QRunnable):
     def run(self) -> None:
         try:
             if not self.requests:
+                breadcrumb(
+                    "async_router.worker.start",
+                    generation=self.generation,
+                    batch_id=self.batch_id,
+                    link_count=0,
+                    obstacle_count=len(self.obstacle_rects),
+                    worker_count=0,
+                )
                 self.signals.finished.emit(self.generation, [])
                 return
 
             max_workers = self.max_workers
             if max_workers is None:
-                cpu_count = os.cpu_count() or 1
-                max_workers = max(1, min(len(self.requests), cpu_count, 8))
+                value = os.environ.get("FUSE_ASYNC_ROUTE_WORKERS", "1")
+                try:
+                    max_workers = int(value)
+                except ValueError:
+                    max_workers = 1
+
+            max_workers = max(1, min(int(max_workers), len(self.requests)))
+
+            breadcrumb(
+                "async_router.worker.start",
+                generation=self.generation,
+                batch_id=self.batch_id,
+                link_count=len(self.requests),
+                obstacle_count=len(self.obstacle_rects),
+                worker_count=max_workers,
+            )
 
             if max_workers <= 1 or len(self.requests) <= 1:
                 results = [
@@ -166,6 +175,23 @@ class LinkRoutingWorker(QRunnable):
                         results.append(future.result())
 
             results.sort(key=lambda item: item.link_id)
+            breadcrumb(
+                "async_router.worker.end",
+                generation=self.generation,
+                batch_id=self.batch_id,
+                link_count=len(self.requests),
+                obstacle_count=len(self.obstacle_rects),
+                result_count=len(results),
+                worker_count=max_workers,
+            )
             self.signals.finished.emit(self.generation, results)
         except Exception as exc:  # pragma: no cover - defensive GUI fallback
+            breadcrumb(
+                "async_router.worker.failed",
+                generation=self.generation,
+                batch_id=self.batch_id,
+                link_count=len(self.requests),
+                obstacle_count=len(self.obstacle_rects),
+                error=f"{type(exc).__name__}: {exc}",
+            )
             self.signals.failed.emit(self.generation, str(exc))

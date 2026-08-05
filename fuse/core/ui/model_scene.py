@@ -26,6 +26,7 @@ items provide interaction and rendering.
 """
 from __future__ import annotations
 
+import os
 import re
 from typing import Optional
 from copy import deepcopy
@@ -155,9 +156,14 @@ class ModelScene(QGraphicsScene):
         # in a thread-pool worker from a GUI-thread geometry snapshot.
         self._route_thread_pool = QThreadPool.globalInstance()
         self._route_generation = 0
+        self._route_batch_id = 0
         self._active_route_workers: set[LinkRoutingWorker] = set()
         self._pending_route_batches: dict[int, dict] = {}
-        self._async_routing_enabled = True
+        self._routing_dirty = False
+        self._routing_dirty_update_all_attachments = False
+        self._routing_dirty_attachment_node_ids: set[int] = set()
+        self._async_routing_enabled = not self._env_flag("FUSE_DISABLE_ASYNC_ROUTING")
+        self._async_route_workers = self._read_async_route_workers()
 
         # During project load, build the scene first and avoid item-change
         # callbacks, incremental routing, and model-change snapshots until the
@@ -187,7 +193,25 @@ class ModelScene(QGraphicsScene):
         self._highlighted_attachment_items: set[SubcompAttachmentItem] = set()
         self._suppress_link_hit_tests = False
         self._drag_model_change_pending = False
-        breadcrumb("model_scene.initialized", scene_id=id(self))
+        breadcrumb(
+            "model_scene.initialized",
+            scene_id=id(self),
+            async_routing_enabled=self._async_routing_enabled,
+            async_route_workers=self._async_route_workers,
+        )
+
+    @staticmethod
+    def _env_flag(name: str) -> bool:
+        value = os.environ.get(name, "")
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+
+    @staticmethod
+    def _read_async_route_workers() -> int:
+        value = os.environ.get("FUSE_ASYNC_ROUTE_WORKERS", "1")
+        try:
+            return max(1, int(value))
+        except ValueError:
+            return 1
 
     def connection_items(self) -> list[ConnectionItem]:
         items = [item for item in self.items() if isinstance(item, ConnectionItem)]
@@ -292,7 +316,8 @@ class ModelScene(QGraphicsScene):
         breadcrumb("model_scene.clear_model.start", snapshot=self.diagnostic_snapshot())
         self.cancel_pending_connection()
         self.cancel_pending_subcomp_attachment()
-        self.invalidate_pending_link_routes()
+        self.invalidate_pending_link_routes(reason="clear_model")
+        self.clear_deferred_link_routing()
         self.restore_bulk_drag_fast_path()
         self._reroute_timer.stop()
         self._drag_preview_timer.stop()
@@ -331,7 +356,8 @@ class ModelScene(QGraphicsScene):
                 self.setItemIndexMethod(QGraphicsScene.ItemIndexMethod.NoIndex)
             except Exception:
                 self._model_load_previous_index_method = None
-        self.invalidate_pending_link_routes()
+        self.invalidate_pending_link_routes(reason="begin_model_load")
+        self.clear_deferred_link_routing()
         self._reroute_timer.stop()
         self._drag_preview_timer.stop()
 
@@ -368,6 +394,11 @@ class ModelScene(QGraphicsScene):
                 except Exception:
                     pass
 
+            self.mark_link_routing_dirty(
+                update_all_attachments=True,
+                reason="end_model_load",
+            )
+
         self.end_model_change_batch(emit_changed=emit_model_changed)
         breadcrumb("model_scene.end_model_load.end", depth=self._model_loading_depth, snapshot=self.diagnostic_snapshot())
 
@@ -379,16 +410,95 @@ class ModelScene(QGraphicsScene):
             if hasattr(node, "apply_subcomp_connector_visibility"):
                 node.apply_subcomp_connector_visibility()
 
-    def invalidate_pending_link_routes(self) -> None:
+    def clear_deferred_link_routing(self) -> None:
+        """Clear coalesced routing requests that have not started yet."""
+        self._routing_dirty = False
+        self._routing_dirty_update_all_attachments = False
+        self._routing_dirty_attachment_node_ids.clear()
+
+    def invalidate_pending_link_routes(self, *, reason: str = "scene_mutation") -> None:
         """Drop stale asynchronous route batches.
 
         Worker threads cannot be forcibly stopped, but bumping the generation
         makes their eventual results no-ops. Clearing the bookkeeping prevents
         old workers from keeping scene state alive after a model clear/load.
         """
+        pending_count = len(self._pending_route_batches)
+        active_count = len(self._active_route_workers)
         self._route_generation += 1
         self._pending_route_batches.clear()
         self._active_route_workers.clear()
+        breadcrumb(
+            "async_router.batch.cancel",
+            generation=self._route_generation,
+            pending_count=pending_count,
+            active_count=active_count,
+            reason=reason,
+        )
+
+    def routing_is_suppressed(self) -> bool:
+        """Return whether route batches should be coalesced for later."""
+        return self._model_loading_depth > 0 or self._model_change_batch_depth > 0
+
+    def mark_link_routing_dirty(
+        self,
+        *,
+        connections: list[ConnectionItem] | None = None,
+        update_all_attachments: bool = False,
+        attachment_nodes: list["ComponentNodeItem"] | None = None,
+        reason: str = "suppressed",
+    ) -> None:
+        """Coalesce suppressed route requests into one later full refresh."""
+        self._routing_dirty = True
+        self._routing_dirty_update_all_attachments = (
+            self._routing_dirty_update_all_attachments
+            or bool(update_all_attachments)
+        )
+        for node in attachment_nodes or []:
+            node_id = int(getattr(node, "node_id", 0) or 0)
+            if node_id > 0:
+                self._routing_dirty_attachment_node_ids.add(node_id)
+
+        breadcrumb(
+            "model_scene.routing_suppressed",
+            generation=self._route_generation,
+            link_count=len(connections or []),
+            update_all_attachments=bool(update_all_attachments),
+            attachment_node_count=len(attachment_nodes or []),
+            model_loading_depth=self._model_loading_depth,
+            model_change_batch_depth=self._model_change_batch_depth,
+            reason=reason,
+        )
+        breadcrumb(
+            "model_scene.routing_dirty",
+            generation=self._route_generation,
+            dirty=self._routing_dirty,
+            update_all_attachments=self._routing_dirty_update_all_attachments,
+            attachment_node_count=len(self._routing_dirty_attachment_node_ids),
+            reason=reason,
+        )
+
+    def flush_deferred_link_routing(self, *, reason: str = "batch_end") -> None:
+        """Start one consolidated route batch after a load/change batch ends."""
+        if not self._routing_dirty or self.routing_is_suppressed():
+            return
+
+        self._routing_dirty = False
+        self._routing_dirty_update_all_attachments = False
+        self._routing_dirty_attachment_node_ids.clear()
+
+        connections = self.connection_items()
+        breadcrumb(
+            "model_scene.routing_flush",
+            generation=self._route_generation,
+            link_count=len(connections),
+            attachment_count=len(self.subcomp_attachment_items()),
+            reason=reason,
+        )
+        self.schedule_async_link_routing(
+            connections,
+            update_all_attachments=True,
+        )
 
     def next_component_node_id(self) -> int:
         """Return the next component id for this scene.
@@ -473,6 +583,9 @@ class ModelScene(QGraphicsScene):
             self._batched_model_change_pending = False
             if emit_changed:
                 self.notify_model_changed()
+
+        if self._model_change_batch_depth == 0:
+            self.flush_deferred_link_routing(reason="model_change_batch_end")
 
     def notify_component_added(self, node: ComponentNodeItem):
         if self._model_change_batch_depth > 0:
@@ -1488,7 +1601,15 @@ class ModelScene(QGraphicsScene):
         Do not full-reroute while a node is actively being dragged. That is what
         caused multi-second UI freezes in dense models.
         """
-        if self._dragging_node or self._model_loading_depth > 0:
+        if self._dragging_node:
+            return
+
+        if self.routing_is_suppressed():
+            self.mark_link_routing_dirty(
+                connections=self.connection_items(),
+                update_all_attachments=True,
+                reason="request_reroute_all_links",
+            )
             return
 
         self._reroute_timer.start()
@@ -1602,7 +1723,13 @@ class ModelScene(QGraphicsScene):
         points are applied to ``ConnectionItem`` graphics objects on the GUI
         thread via Qt signals.
         """
-        if self._model_loading_depth > 0:
+        if self.routing_is_suppressed():
+            self.mark_link_routing_dirty(
+                connections=list(connections),
+                update_all_attachments=update_all_attachments,
+                attachment_nodes=attachment_nodes,
+                reason="schedule_async_link_routing",
+            )
             return
 
         connections = [
@@ -1621,14 +1748,22 @@ class ModelScene(QGraphicsScene):
             return
 
         if not self._async_routing_enabled:
+            breadcrumb(
+                "async_router.batch.disabled",
+                link_count=len(connections),
+                reason="FUSE_DISABLE_ASYNC_ROUTING",
+            )
             self.reroute_connections_sync(
                 connections,
                 update_all_attachments=update_all_attachments,
                 attachment_nodes=attachment_nodes,
+                fast=True,
             )
             return
 
         generation = self.route_generation()
+        self._route_batch_id += 1
+        batch_id = self._route_batch_id
         obstacle_rects = self.route_obstacle_rect_tuples()
         requests = [
             self.route_request_for_connection(connection)
@@ -1642,11 +1777,15 @@ class ModelScene(QGraphicsScene):
             generation=generation,
             requests=requests,
             obstacle_rects=obstacle_rects,
+            max_workers=self._async_route_workers,
+            batch_id=batch_id,
         )
         self._active_route_workers.add(worker)
         self._pending_route_batches[generation] = {
             "worker": worker,
+            "batch_id": batch_id,
             "connection_ids": [int(connection.link.link_id) for connection in connections],
+            "obstacle_count": len(obstacle_rects),
             "update_all_attachments": bool(update_all_attachments),
             "attachment_node_ids": [
                 int(node.node_id)
@@ -1654,6 +1793,15 @@ class ModelScene(QGraphicsScene):
                 if node is not None
             ],
         }
+
+        breadcrumb(
+            "async_router.batch.start",
+            generation=generation,
+            batch_id=batch_id,
+            link_count=len(requests),
+            obstacle_count=len(obstacle_rects),
+            worker_count=self._async_route_workers,
+        )
 
         worker.signals.finished.connect(self.apply_async_link_routes)
         worker.signals.failed.connect(self.handle_async_link_routing_failed)
@@ -1666,12 +1814,16 @@ class ModelScene(QGraphicsScene):
         *,
         update_all_attachments: bool = False,
         attachment_nodes: list["ComponentNodeItem"] | None = None,
+        fast: bool = False,
     ) -> None:
         """Synchronous fallback used if the background router fails."""
         for connection in sorted(connections, key=lambda item: item.link.link_id):
             if connection.scene() is self:
                 connection.clear_route_points()
-                connection.update_position()
+                if fast:
+                    connection.update_position_fast()
+                else:
+                    connection.update_position()
 
         if update_all_attachments:
             for attachment in self.subcomp_attachment_items():
@@ -1693,6 +1845,14 @@ class ModelScene(QGraphicsScene):
             self._active_route_workers.discard(worker)
 
         if generation != int(self._route_generation):
+            breadcrumb(
+                "async_router.batch.result.discard_stale",
+                generation=generation,
+                current_generation=self._route_generation,
+                batch_id=batch.get("batch_id"),
+                result_count=len(results),
+                reason="generation_mismatch",
+            )
             return
 
         connections_by_id = {
@@ -1700,13 +1860,36 @@ class ModelScene(QGraphicsScene):
             for connection in self.connection_items()
         }
 
+        applied_count = 0
+        discarded_count = 0
         for result in results:
             connection = connections_by_id.get(int(result.link_id))
-            if connection is None or connection.scene() is not self:
+            source_node = getattr(getattr(connection, "source_port", None), "node", None)
+            target_node = getattr(getattr(connection, "target_port", None), "node", None)
+            if (
+                connection is None
+                or connection.scene() is not self
+                or source_node is None
+                or target_node is None
+                or source_node.scene() is not self
+                or target_node.scene() is not self
+            ):
+                discarded_count += 1
                 continue
 
             connection.set_route_points_from_tuples(result.points)
+            applied_count += 1
 
+        breadcrumb(
+            "async_router.batch.result.apply",
+            generation=generation,
+            batch_id=batch.get("batch_id"),
+            result_count=len(results),
+            applied_count=applied_count,
+            discarded_count=discarded_count,
+            link_count=len(batch.get("connection_ids", [])),
+            obstacle_count=batch.get("obstacle_count"),
+        )
         self.update_attachments_for_route_batch(batch)
 
     def handle_async_link_routing_failed(
@@ -1714,7 +1897,7 @@ class ModelScene(QGraphicsScene):
         generation: int,
         message: str,
     ) -> None:
-        """Fallback to synchronous routing for the latest failed route batch."""
+        """Fallback to cheap synchronous routing for the latest failed batch."""
         generation = int(generation)
         batch = self._pending_route_batches.pop(generation, {})
         worker = batch.get("worker")
@@ -1722,6 +1905,14 @@ class ModelScene(QGraphicsScene):
             self._active_route_workers.discard(worker)
 
         if generation != int(self._route_generation):
+            breadcrumb(
+                "async_router.batch.result.discard_stale",
+                generation=generation,
+                current_generation=self._route_generation,
+                batch_id=batch.get("batch_id"),
+                reason="failed_generation_mismatch",
+                error=message,
+            )
             return
 
         connection_ids = {
@@ -1735,10 +1926,19 @@ class ModelScene(QGraphicsScene):
         ]
         attachment_nodes = self.nodes_for_route_batch(batch)
 
+        breadcrumb(
+            "async_router.batch.failed",
+            generation=generation,
+            batch_id=batch.get("batch_id"),
+            link_count=len(connections),
+            obstacle_count=batch.get("obstacle_count"),
+            error=message,
+        )
         self.reroute_connections_sync(
             connections,
             update_all_attachments=bool(batch.get("update_all_attachments")),
             attachment_nodes=attachment_nodes,
+            fast=True,
         )
 
     def nodes_for_route_batch(self, batch: dict) -> list["ComponentNodeItem"]:
@@ -2056,6 +2256,7 @@ class ModelScene(QGraphicsScene):
         if connection is None:
             return
 
+        self.invalidate_pending_link_routes(reason="delete_link")
         try:
             breadcrumb("model_scene.delete_link", link=self._diagnostic_link_snapshot(connection))
         except Exception:
@@ -2111,6 +2312,7 @@ class ModelScene(QGraphicsScene):
         if node is None or node.scene() is not self:
             return
 
+        self.invalidate_pending_link_routes(reason="delete_component_node")
         try:
             breadcrumb("model_scene.delete_component_node.start", node=self._diagnostic_node_snapshot(node), snapshot=self.diagnostic_snapshot())
         except Exception:
@@ -2184,7 +2386,7 @@ class ModelScene(QGraphicsScene):
         breadcrumb("model_scene.delete_component_nodes.request", node_ids=node_ids, snapshot=self.diagnostic_snapshot())
         self.begin_model_change_batch()
         try:
-            self.invalidate_pending_link_routes()
+            self.invalidate_pending_link_routes(reason="delete_component_nodes")
             self.clear_all_selection_highlights()
             self.clearSelection()
 
@@ -2229,6 +2431,7 @@ class ModelScene(QGraphicsScene):
         if unique_connections:
             self.begin_model_change_batch()
             try:
+                self.invalidate_pending_link_routes(reason="delete_selection_links")
                 for connection in list(unique_connections):
                     if connection.scene() is self:
                         self.delete_link(connection)
@@ -2260,6 +2463,7 @@ class ModelScene(QGraphicsScene):
         if unique_attachments:
             self.begin_model_change_batch()
             try:
+                self.invalidate_pending_link_routes(reason="delete_selection_attachments")
                 for attachment_item in list(unique_attachments):
                     if attachment_item.scene() is self:
                         self.delete_subcomp_attachment(attachment_item)
@@ -4057,6 +4261,7 @@ class ModelScene(QGraphicsScene):
         if item is None:
             return
 
+        self.invalidate_pending_link_routes(reason="delete_subcomp_attachment")
         try:
             breadcrumb("model_scene.delete_subcomp_attachment", attachment=self._diagnostic_attachment_snapshot(item))
         except Exception:

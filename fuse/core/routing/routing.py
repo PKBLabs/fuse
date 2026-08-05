@@ -13,10 +13,25 @@
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 """Orthogonal routing helpers for canvas link graphics.
 
-The routing functions build simple Manhattan-style paths that avoid component bounding boxes while keeping links readable during editing."""
+The routing functions build simple Manhattan-style paths that avoid component
+bounding boxes while keeping links readable during editing.
+
+The worker-safe API uses plain ``(x, y)`` points and
+``(left, top, right, bottom)`` rectangles. GUI callers can still use the
+``QPointF``/``QRectF`` wrappers exposed by the original public functions.
+"""
+
+from __future__ import annotations
 
 from dataclasses import dataclass
+import os
+from typing import Sequence
+
 from PySide6.QtCore import QPointF, QRectF
+
+
+PointTuple = tuple[float, float]
+RectTuple = tuple[float, float, float, float]
 
 
 @dataclass(frozen=True)
@@ -29,93 +44,214 @@ class RoutingConfig:
     fallback_margin: float = 240.0
 
 
-def same_x(a: QPointF, b: QPointF, tolerance: float = 0.001) -> bool:
+def _point_tuple(point: QPointF | PointTuple | Sequence[float]) -> PointTuple:
+    """Return a plain numeric tuple for a point-like value."""
+    if hasattr(point, "x") and hasattr(point, "y"):
+        return (float(point.x()), float(point.y()))
+
+    return (float(point[0]), float(point[1]))
+
+
+def _rect_tuple(rect: QRectF | RectTuple | Sequence[float]) -> RectTuple:
+    """Return a plain numeric tuple for a rectangle-like value."""
+    if hasattr(rect, "left") and hasattr(rect, "top"):
+        return (
+            float(rect.left()),
+            float(rect.top()),
+            float(rect.right()),
+            float(rect.bottom()),
+        )
+
+    left, top, right, bottom = rect
+    return (float(left), float(top), float(right), float(bottom))
+
+
+def _qpoint(point: PointTuple) -> QPointF:
+    """Convert a plain point tuple back to a Qt point on the GUI thread."""
+    return QPointF(float(point[0]), float(point[1]))
+
+
+def _normalise_points(points: Sequence[QPointF | PointTuple | Sequence[float]]) -> list[PointTuple]:
+    return [_point_tuple(point) for point in points]
+
+
+def _normalise_rects(rects: Sequence[QRectF | RectTuple | Sequence[float]]) -> list[RectTuple]:
+    return [_rect_tuple(rect) for rect in rects]
+
+
+def _parse_int_env(name: str, default: int) -> int:
+    value = os.environ.get(name)
+    if value is None or value == "":
+        return default
+
+    try:
+        return int(value)
+    except ValueError:
+        return default
+
+
+def routing_obstacle_limit() -> int:
+    """Return the obstacle cap used before falling back to perimeter routing.
+
+    ``FUSE_ROUTING_GRID_OBSTACLE_LIMIT=0`` disables the cap for debugging.
+    """
+
+    return _parse_int_env("FUSE_ROUTING_GRID_OBSTACLE_LIMIT", 48)
+
+
+def same_x_tuple(a: PointTuple, b: PointTuple, tolerance: float = 0.001) -> bool:
+    """Return whether two tuple points share the same x coordinate."""
+    return abs(float(a[0]) - float(b[0])) < tolerance
+
+
+def same_y_tuple(a: PointTuple, b: PointTuple, tolerance: float = 0.001) -> bool:
+    """Return whether two tuple points share the same y coordinate."""
+    return abs(float(a[1]) - float(b[1])) < tolerance
+
+
+def same_x(a: QPointF | PointTuple, b: QPointF | PointTuple, tolerance: float = 0.001) -> bool:
     """Return whether two points share the same x coordinate within tolerance."""
-    return abs(a.x() - b.x()) < tolerance
+    return same_x_tuple(_point_tuple(a), _point_tuple(b), tolerance)
 
 
-def same_y(a: QPointF, b: QPointF, tolerance: float = 0.001) -> bool:
+def same_y(a: QPointF | PointTuple, b: QPointF | PointTuple, tolerance: float = 0.001) -> bool:
     """Return whether two points share the same y coordinate within tolerance."""
-    return abs(a.y() - b.y()) < tolerance
+    return same_y_tuple(_point_tuple(a), _point_tuple(b), tolerance)
 
 
-def is_orthogonal_segment(a: QPointF, b: QPointF) -> bool:
+def is_orthogonal_segment_tuple(a: PointTuple, b: PointTuple) -> bool:
+    """Return whether a tuple segment is horizontal or vertical."""
+    return same_x_tuple(a, b) or same_y_tuple(a, b)
+
+
+def is_orthogonal_segment(a: QPointF | PointTuple, b: QPointF | PointTuple) -> bool:
     """Return whether a segment is horizontal or vertical."""
-    return same_x(a, b) or same_y(a, b)
+    return is_orthogonal_segment_tuple(_point_tuple(a), _point_tuple(b))
 
 
-def segment_intersects_rect(a: QPointF, b: QPointF, rect: QRectF) -> bool:
+def rect_contains_point_tuple(rect: RectTuple, point: PointTuple) -> bool:
+    """Return whether a point is inside or on the edge of a tuple rectangle."""
+    left, top, right, bottom = rect
+    x, y = point
+    return left <= x <= right and top <= y <= bottom
+
+
+def segment_intersects_rect_tuple(a: PointTuple, b: PointTuple, rect: RectTuple) -> bool:
+    """
+    Return True if an orthogonal tuple segment crosses the interior of rect.
+
+    Touching the boundary is allowed. Crossing through the interior is not.
+    Non-orthogonal segments are treated as invalid/intersecting.
+    """
+    left, top, right, bottom = rect
+
+    if same_x_tuple(a, b):
+        x = a[0]
+        y1 = min(a[1], b[1])
+        y2 = max(a[1], b[1])
+
+        return left < x < right and not (y2 <= top or y1 >= bottom)
+
+    if same_y_tuple(a, b):
+        y = a[1]
+        x1 = min(a[0], b[0])
+        x2 = max(a[0], b[0])
+
+        return top < y < bottom and not (x2 <= left or x1 >= right)
+
+    return True
+
+
+def segment_intersects_rect(
+    a: QPointF | PointTuple,
+    b: QPointF | PointTuple,
+    rect: QRectF | RectTuple,
+) -> bool:
     """
     Return True if an orthogonal segment crosses the interior of rect.
 
     Touching the boundary is allowed. Crossing through the interior is not.
     Non-orthogonal segments are treated as invalid/intersecting.
     """
-    if same_x(a, b):
-        x = a.x()
-        y1 = min(a.y(), b.y())
-        y2 = max(a.y(), b.y())
-
-        return (
-            rect.left() < x < rect.right()
-            and not (y2 <= rect.top() or y1 >= rect.bottom())
-        )
-
-    if same_y(a, b):
-        y = a.y()
-        x1 = min(a.x(), b.x())
-        x2 = max(a.x(), b.x())
-
-        return (
-            rect.top() < y < rect.bottom()
-            and not (x2 <= rect.left() or x1 >= rect.right())
-        )
-
-    return True
+    return segment_intersects_rect_tuple(
+        _point_tuple(a),
+        _point_tuple(b),
+        _rect_tuple(rect),
+    )
 
 
-def segment_is_clear(a: QPointF, b: QPointF, rects: list[QRectF]) -> bool:
-    """Return whether one orthogonal segment avoids all obstacle rectangles."""
-    if not is_orthogonal_segment(a, b):
+def segment_is_clear_tuple(a: PointTuple, b: PointTuple, rects: Sequence[RectTuple]) -> bool:
+    """Return whether one orthogonal tuple segment avoids all rectangles."""
+    if not is_orthogonal_segment_tuple(a, b):
         return False
 
-    return not any(segment_intersects_rect(a, b, rect) for rect in rects)
+    return not any(segment_intersects_rect_tuple(a, b, rect) for rect in rects)
 
 
-def route_is_clear(points: list[QPointF], rects: list[QRectF]) -> bool:
-    """Return whether all segments in a route avoid all obstacle rectangles."""
+def segment_is_clear(
+    a: QPointF | PointTuple,
+    b: QPointF | PointTuple,
+    rects: Sequence[QRectF | RectTuple],
+) -> bool:
+    """Return whether one orthogonal segment avoids all obstacle rectangles."""
+    point_a = _point_tuple(a)
+    point_b = _point_tuple(b)
+
+    if not is_orthogonal_segment_tuple(point_a, point_b):
+        return False
+
+    rect_tuples = _normalise_rects(rects)
+    return segment_is_clear_tuple(point_a, point_b, rect_tuples)
+
+
+def route_is_clear_tuple(points: Sequence[PointTuple], rects: Sequence[RectTuple]) -> bool:
+    """Return whether all tuple route segments avoid all rectangles."""
     for a, b in zip(points, points[1:]):
-        if not segment_is_clear(a, b, rects):
+        if not segment_is_clear_tuple(a, b, rects):
             return False
 
     return True
 
 
-def route_length(points: list[QPointF]) -> float:
-    """Return Manhattan length for a polyline route."""
+def route_is_clear(
+    points: Sequence[QPointF | PointTuple],
+    rects: Sequence[QRectF | RectTuple],
+) -> bool:
+    """Return whether all segments in a route avoid all obstacle rectangles."""
+    return route_is_clear_tuple(_normalise_points(points), _normalise_rects(rects))
+
+
+def route_length_tuples(points: Sequence[PointTuple]) -> float:
+    """Return Manhattan length for a tuple polyline route."""
     return sum(
-        abs(a.x() - b.x()) + abs(a.y() - b.y())
+        abs(a[0] - b[0]) + abs(a[1] - b[1])
         for a, b in zip(points, points[1:])
     )
 
 
-def simplify_points(points: list[QPointF]) -> list[QPointF]:
+def route_length(points: Sequence[QPointF | PointTuple]) -> float:
+    """Return Manhattan length for a polyline route."""
+    return route_length_tuples(_normalise_points(points))
+
+
+def simplify_point_tuples(points: Sequence[PointTuple]) -> list[PointTuple]:
     """
     Remove duplicate points, collinear middle points, and A-B-A spikes.
     """
     if not points:
         return []
 
-    simplified: list[QPointF] = []
+    simplified: list[PointTuple] = []
 
-    for point in points:
+    for raw_point in points:
+        point = (float(raw_point[0]), float(raw_point[1]))
         if not simplified:
             simplified.append(point)
             continue
 
         previous = simplified[-1]
 
-        if same_x(previous, point) and same_y(previous, point):
+        if same_x_tuple(previous, point) and same_y_tuple(previous, point):
             continue
 
         simplified.append(point)
@@ -126,17 +262,17 @@ def simplify_points(points: list[QPointF]) -> list[QPointF]:
             c = simplified[-1]
 
             # A -> B -> A spike.
-            if same_x(a, c) and same_y(a, c):
+            if same_x_tuple(a, c) and same_y_tuple(a, c):
                 simplified.pop(-2)
                 simplified.pop(-1)
                 continue
 
             # Collinear middle point.
-            if same_x(a, b) and same_x(b, c):
+            if same_x_tuple(a, b) and same_x_tuple(b, c):
                 simplified.pop(-2)
                 continue
 
-            if same_y(a, b) and same_y(b, c):
+            if same_y_tuple(a, b) and same_y_tuple(b, c):
                 simplified.pop(-2)
                 continue
 
@@ -145,14 +281,21 @@ def simplify_points(points: list[QPointF]) -> list[QPointF]:
     return simplified
 
 
-def build_route_grid(
-    start: QPointF,
-    end: QPointF,
-    obstacle_rects: list[QRectF],
+def simplify_points(points: Sequence[QPointF | PointTuple]) -> list[QPointF]:
+    """
+    Remove duplicate points, collinear middle points, and A-B-A spikes.
+    """
+    return [_qpoint(point) for point in simplify_point_tuples(_normalise_points(points))]
+
+
+def build_route_grid_tuples(
+    start: PointTuple,
+    end: PointTuple,
+    obstacle_rects: Sequence[RectTuple],
     config: RoutingConfig,
     lane_distance: float = 0.0,
 ) -> tuple[
-    dict[tuple[float, float], QPointF],
+    dict[tuple[float, float], PointTuple],
     dict[tuple[float, float], list[tuple[float, float]]],
 ]:
     """
@@ -169,32 +312,33 @@ def build_route_grid(
         config.route_clearance + lane_distance + config.lane_spacing * 3,
     ]
 
-    xs = {start.x(), end.x()}
-    ys = {start.y(), end.y()}
+    xs = {start[0], end[0]}
+    ys = {start[1], end[1]}
 
     for rect in obstacle_rects:
+        left, top, right, bottom = rect
         for offset in offsets:
-            xs.add(rect.left() - offset)
-            xs.add(rect.right() + offset)
-            ys.add(rect.top() - offset)
-            ys.add(rect.bottom() + offset)
+            xs.add(left - offset)
+            xs.add(right + offset)
+            ys.add(top - offset)
+            ys.add(bottom + offset)
 
     # Add local channels around the endpoints too.
-    xs.update([start.x() - config.lane_spacing, start.x() + config.lane_spacing])
-    xs.update([end.x() - config.lane_spacing, end.x() + config.lane_spacing])
-    ys.update([start.y() - config.lane_spacing, start.y() + config.lane_spacing])
-    ys.update([end.y() - config.lane_spacing, end.y() + config.lane_spacing])
+    xs.update([start[0] - config.lane_spacing, start[0] + config.lane_spacing])
+    xs.update([end[0] - config.lane_spacing, end[0] + config.lane_spacing])
+    ys.update([start[1] - config.lane_spacing, start[1] + config.lane_spacing])
+    ys.update([end[1] - config.lane_spacing, end[1] + config.lane_spacing])
 
-    def key(point: QPointF) -> tuple[float, float]:
-        return (round(point.x(), 3), round(point.y(), 3))
+    def key(point: PointTuple) -> tuple[float, float]:
+        return (round(point[0], 3), round(point[1], 3))
 
-    point_by_key: dict[tuple[float, float], QPointF] = {}
+    point_by_key: dict[tuple[float, float], PointTuple] = {}
 
     for x in sorted(xs):
         for y in sorted(ys):
-            point = QPointF(x, y)
+            point = (float(x), float(y))
 
-            if not any(rect.contains(point) for rect in obstacle_rects):
+            if not any(rect_contains_point_tuple(rect, point) for rect in obstacle_rects):
                 point_by_key[key(point)] = point
 
     point_by_key[key(start)] = start
@@ -204,50 +348,73 @@ def build_route_grid(
         item_key: [] for item_key in point_by_key
     }
 
-    row_points: dict[float, list[QPointF]] = {}
-    col_points: dict[float, list[QPointF]] = {}
+    row_points: dict[float, list[PointTuple]] = {}
+    col_points: dict[float, list[PointTuple]] = {}
 
     for point in point_by_key.values():
-        row_points.setdefault(round(point.y(), 3), []).append(point)
-        col_points.setdefault(round(point.x(), 3), []).append(point)
+        row_points.setdefault(round(point[1], 3), []).append(point)
+        col_points.setdefault(round(point[0], 3), []).append(point)
 
     for row in row_points.values():
-        row.sort(key=lambda point: point.x())
+        row.sort(key=lambda point: point[0])
 
         for a, b in zip(row, row[1:]):
-            if segment_is_clear(a, b, obstacle_rects):
+            if segment_is_clear_tuple(a, b, obstacle_rects):
                 neighbors[key(a)].append(key(b))
                 neighbors[key(b)].append(key(a))
 
     for col in col_points.values():
-        col.sort(key=lambda point: point.y())
+        col.sort(key=lambda point: point[1])
 
         for a, b in zip(col, col[1:]):
-            if segment_is_clear(a, b, obstacle_rects):
+            if segment_is_clear_tuple(a, b, obstacle_rects):
                 neighbors[key(a)].append(key(b))
                 neighbors[key(b)].append(key(a))
 
     return point_by_key, neighbors
 
 
-def find_grid_route(
-    start: QPointF,
-    end: QPointF,
-    obstacle_rects: list[QRectF],
+def build_route_grid(
+    start: QPointF | PointTuple,
+    end: QPointF | PointTuple,
+    obstacle_rects: Sequence[QRectF | RectTuple],
     config: RoutingConfig,
     lane_distance: float = 0.0,
-) -> list[QPointF] | None:
-    """Find a clear grid-based route between two points when possible."""
+) -> tuple[
+    dict[tuple[float, float], QPointF],
+    dict[tuple[float, float], list[tuple[float, float]]],
+]:
+    """
+    Build a Manhattan visibility grid from obstacle edges plus start/end points.
+    """
+    point_by_key, neighbors = build_route_grid_tuples(
+        start=_point_tuple(start),
+        end=_point_tuple(end),
+        obstacle_rects=_normalise_rects(obstacle_rects),
+        config=config,
+        lane_distance=lane_distance,
+    )
+    return {key: _qpoint(point) for key, point in point_by_key.items()}, neighbors
+
+
+def find_grid_route_tuples(
+    start: PointTuple,
+    end: PointTuple,
+    obstacle_rects: Sequence[RectTuple],
+    config: RoutingConfig,
+    lane_distance: float = 0.0,
+) -> list[PointTuple] | None:
+    """Find a clear grid-based tuple route between two points when possible."""
     import heapq
     from itertools import count
 
-    def key(point: QPointF) -> tuple[float, float]:
-        return (round(point.x(), 3), round(point.y(), 3))
+    def key(point: PointTuple) -> tuple[float, float]:
+        return (round(point[0], 3), round(point[1], 3))
 
-    def manhattan(a: QPointF, b: QPointF) -> float:
-        return abs(a.x() - b.x()) + abs(a.y() - b.y())
+    def manhattan(a: PointTuple, b: PointTuple) -> float:
+        return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
-    point_by_key, neighbors = build_route_grid(
+    point_by_key, neighbors = build_route_grid_tuples(
         start=start,
         end=end,
         obstacle_rects=obstacle_rects,
@@ -275,7 +442,7 @@ def find_grid_route(
 
         for next_key in neighbors.get(current_key, []):
             next_point = point_by_key[next_key]
-            direction = "h" if same_y(current_point, next_point) else "v"
+            direction = "h" if same_y_tuple(current_point, next_point) else "v"
 
             bend_penalty = 0.0
             if previous_direction is not None and direction != previous_direction:
@@ -306,20 +473,42 @@ def find_grid_route(
 
     route_keys.reverse()
 
-    return simplify_points([point_by_key[item] for item in route_keys])
+    return simplify_point_tuples([point_by_key[item] for item in route_keys])
 
 
-def fallback_route(
-    start: QPointF,
-    end: QPointF,
-    obstacle_rects: list[QRectF],
+def find_grid_route(
+    start: QPointF | PointTuple,
+    end: QPointF | PointTuple,
+    obstacle_rects: Sequence[QRectF | RectTuple],
     config: RoutingConfig,
     lane_distance: float = 0.0,
-) -> list[QPointF]:
+) -> list[QPointF] | None:
+    """Find a clear grid-based route between two points when possible."""
+    route = find_grid_route_tuples(
+        start=_point_tuple(start),
+        end=_point_tuple(end),
+        obstacle_rects=_normalise_rects(obstacle_rects),
+        config=config,
+        lane_distance=lane_distance,
+    )
+    if route is None:
+        return None
+
+    return [_qpoint(point) for point in route]
+
+
+def fallback_route_tuples(
+    start: PointTuple,
+    end: PointTuple,
+    obstacle_rects: Sequence[RectTuple],
+    config: RoutingConfig,
+    lane_distance: float = 0.0,
+) -> list[PointTuple]:
     """
     Large outside perimeter fallback.
 
-    This should be rare, but it avoids hanging the UI if grid routing fails.
+    This avoids expensive visibility-grid construction in dense diagrams and
+    also handles rare cases where grid routing cannot find a clear path.
     """
     margin = (
         config.route_clearance
@@ -329,89 +518,150 @@ def fallback_route(
     )
 
     if obstacle_rects:
-        left = min(rect.left() for rect in obstacle_rects) - margin
-        right = max(rect.right() for rect in obstacle_rects) + margin
-        top = min(rect.top() for rect in obstacle_rects) - margin
-        bottom = max(rect.bottom() for rect in obstacle_rects) + margin
+        left = min(rect[0] for rect in obstacle_rects) - margin
+        right = max(rect[2] for rect in obstacle_rects) + margin
+        top = min(rect[1] for rect in obstacle_rects) - margin
+        bottom = max(rect[3] for rect in obstacle_rects) + margin
     else:
-        left = min(start.x(), end.x()) - margin
-        right = max(start.x(), end.x()) + margin
-        top = min(start.y(), end.y()) - margin
-        bottom = max(start.y(), end.y()) + margin
+        left = min(start[0], end[0]) - margin
+        right = max(start[0], end[0]) + margin
+        top = min(start[1], end[1]) - margin
+        bottom = max(start[1], end[1]) + margin
 
     candidates = [
         [
             start,
-            QPointF(left, start.y()),
-            QPointF(left, top),
-            QPointF(end.x(), top),
+            (left, start[1]),
+            (left, top),
+            (end[0], top),
             end,
         ],
         [
             start,
-            QPointF(right, start.y()),
-            QPointF(right, top),
-            QPointF(end.x(), top),
+            (right, start[1]),
+            (right, top),
+            (end[0], top),
             end,
         ],
         [
             start,
-            QPointF(left, start.y()),
-            QPointF(left, bottom),
-            QPointF(end.x(), bottom),
+            (left, start[1]),
+            (left, bottom),
+            (end[0], bottom),
             end,
         ],
         [
             start,
-            QPointF(right, start.y()),
-            QPointF(right, bottom),
-            QPointF(end.x(), bottom),
+            (right, start[1]),
+            (right, bottom),
+            (end[0], bottom),
             end,
         ],
     ]
 
     valid = [
-        simplify_points(route)
+        simplify_point_tuples(route)
         for route in candidates
-        if route_is_clear(route, obstacle_rects)
+        if route_is_clear_tuple(route, obstacle_rects)
     ]
 
     if valid:
-        return min(valid, key=route_length)
+        return min(valid, key=route_length_tuples)
 
-    return simplify_points([start, QPointF(start.x(), end.y()), end])
+    return simplify_point_tuples([start, (start[0], end[1]), end])
+
+
+def fallback_route(
+    start: QPointF | PointTuple,
+    end: QPointF | PointTuple,
+    obstacle_rects: Sequence[QRectF | RectTuple],
+    config: RoutingConfig,
+    lane_distance: float = 0.0,
+) -> list[QPointF]:
+    """
+    Large outside perimeter fallback.
+
+    This should be rare, but it avoids hanging the UI if grid routing fails.
+    """
+    route = fallback_route_tuples(
+        start=_point_tuple(start),
+        end=_point_tuple(end),
+        obstacle_rects=_normalise_rects(obstacle_rects),
+        config=config,
+        lane_distance=lane_distance,
+    )
+    return [_qpoint(point) for point in route]
+
+
+def route_orthogonal_path_tuples(
+    start: QPointF | PointTuple,
+    end: QPointF | PointTuple,
+    obstacle_rects: Sequence[QRectF | RectTuple],
+    config: RoutingConfig | None = None,
+    lane_distance: float = 0.0,
+) -> list[PointTuple]:
+    """
+    Worker-safe routing API.
+
+    Given a start point, end point, and obstacle rectangles, return a Manhattan
+    route made only of primitive tuples. No Qt value types are created here, so
+    this function is safe to call from background routing workers.
+    """
+    config = config or RoutingConfig()
+    start_tuple = _point_tuple(start)
+    end_tuple = _point_tuple(end)
+    obstacle_tuples = _normalise_rects(obstacle_rects)
+
+    limit = routing_obstacle_limit()
+    if limit > 0 and len(obstacle_tuples) > limit:
+        return simplify_point_tuples(
+            fallback_route_tuples(
+                start=start_tuple,
+                end=end_tuple,
+                obstacle_rects=obstacle_tuples,
+                config=config,
+                lane_distance=lane_distance,
+            )
+        )
+
+    route = find_grid_route_tuples(
+        start=start_tuple,
+        end=end_tuple,
+        obstacle_rects=obstacle_tuples,
+        config=config,
+        lane_distance=lane_distance,
+    )
+
+    if route is None:
+        route = fallback_route_tuples(
+            start=start_tuple,
+            end=end_tuple,
+            obstacle_rects=obstacle_tuples,
+            config=config,
+            lane_distance=lane_distance,
+        )
+
+    return simplify_point_tuples(route)
 
 
 def route_orthogonal_path(
-    start: QPointF,
-    end: QPointF,
-    obstacle_rects: list[QRectF],
+    start: QPointF | PointTuple,
+    end: QPointF | PointTuple,
+    obstacle_rects: Sequence[QRectF | RectTuple],
     config: RoutingConfig | None = None,
     lane_distance: float = 0.0,
 ) -> list[QPointF]:
     """
-    Public routing API.
+    Public GUI routing API.
 
     Given a start point, end point, and obstacle rectangles, return a Manhattan
     route that avoids obstacle interiors when possible.
     """
-    config = config or RoutingConfig()
-
-    route = find_grid_route(
+    route = route_orthogonal_path_tuples(
         start=start,
         end=end,
         obstacle_rects=obstacle_rects,
         config=config,
         lane_distance=lane_distance,
     )
-
-    if route is None:
-        route = fallback_route(
-            start=start,
-            end=end,
-            obstacle_rects=obstacle_rects,
-            config=config,
-            lane_distance=lane_distance,
-        )
-
-    return simplify_points(route)
+    return [_qpoint(point) for point in route]
