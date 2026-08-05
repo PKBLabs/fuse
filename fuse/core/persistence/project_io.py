@@ -34,6 +34,7 @@ from fuse.core.model.models import ComponentDefinition, ModelLink, ModelSubcompA
 from fuse.core.model.project_settings import ProjectSettings
 from fuse.core.persistence.model_serializer import finalize_project_dict, validate_serialized_project
 from fuse.core.plugin_runtime.manager import list_all_targets, load_all_palette_items
+from fuse.core.diagnostics import active_operation, breadcrumb
 
 
 def now_iso() -> str:
@@ -514,10 +515,20 @@ def validate_project_dict(project: dict) -> None:
 
 def load_project_file(file_path: str | Path) -> dict:
     """Load, parse, and validate a ``.fse`` project file."""
-    with Path(file_path).open("r", encoding="utf-8") as file:
-        project = json.load(file)
+    file_path = Path(file_path)
+    breadcrumb("project_io.load_project_file.start", path=str(file_path))
+    with active_operation("project_io.load_project_file", path=str(file_path)):
+        with file_path.open("r", encoding="utf-8") as file:
+            project = json.load(file)
 
-    validate_project_dict(project)
+        validate_project_dict(project)
+    breadcrumb(
+        "project_io.load_project_file.end",
+        path=str(file_path),
+        components=len(project.get("components", []) or []),
+        links=len(project.get("links", []) or []),
+        subcomp_attachments=len(project.get("subcompAttachments", []) or []),
+    )
     return project
 
 
@@ -556,6 +567,12 @@ def save_project_file(project: dict, file_path: str | Path) -> None:
 def load_project_into_scene(project: dict, scene: ModelScene) -> None:
     """Rebuild a model scene from an already-loaded project dictionary."""
     validate_project_dict(project)
+    breadcrumb(
+        "project_io.load_project_into_scene.start",
+        components=len(project.get("components", []) or []),
+        links=len(project.get("links", []) or []),
+        subcomp_attachments=len(project.get("subcompAttachments", []) or []),
+    )
 
     # Scene loading is a bulk operation. Build all items first, then schedule one
     # final route pass. This avoids repeated history snapshots, model-outline
@@ -783,8 +800,17 @@ def load_project_into_scene(project: dict, scene: ModelScene) -> None:
     finally:
         scene.end_model_load(emit_model_changed=False)
 
+    breadcrumb(
+        "project_io.load_project_into_scene.restored",
+        scene_snapshot=scene.diagnostic_snapshot() if hasattr(scene, "diagnostic_snapshot") else {},
+    )
+
     reroute_timer = getattr(scene, "_reroute_timer", None)
     if reroute_timer is not None:
         reroute_timer.start(75)
     else:
         scene.reroute_all_links()
+    breadcrumb(
+        "project_io.load_project_into_scene.end",
+        scene_snapshot=scene.diagnostic_snapshot() if hasattr(scene, "diagnostic_snapshot") else {},
+    )

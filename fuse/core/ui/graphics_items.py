@@ -279,10 +279,15 @@ class PortItem(QGraphicsEllipseItem):
                 tooltip += "\nExposed on composite boundary"
             self.setToolTip(tooltip)
 
-        # If a hidden advanced/raw SST port becomes connected while a project is
-        # loading or a user creates a raw-port link in advanced mode, reveal and
-        # relayout it so existing models remain visible/editable.
+        # If a hidden advanced/raw SST port becomes connected while a user creates
+        # a raw-port link in advanced mode, reveal and relayout it so existing
+        # models remain visible/editable. During project load this method is
+        # called once for each restored link endpoint; defer the expensive node
+        # relayout to ModelScene.end_model_load().
         if self.is_connected() and hasattr(self.node, "apply_port_visibility"):
+            scene = self.node.scene() if self.node is not None else None
+            if scene is not None and getattr(scene, "_model_loading_depth", 0) > 0:
+                return
             try:
                 self.node.apply_port_visibility()
             except Exception:

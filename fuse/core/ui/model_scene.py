@@ -55,6 +55,7 @@ from fuse.core.model.composite_mini_model import (
     uniquify_mini_model_component_names,
 )
 from fuse.core.plugin_runtime.manager import get_plugin_by_id, load_all_palette_items
+from fuse.core.diagnostics import active_operation, breadcrumb
 from fuse.core.ui.async_link_routing import (
     LinkRouteRequest,
     LinkRouteResult,
@@ -163,6 +164,7 @@ class ModelScene(QGraphicsScene):
         # complete model has been restored.
         self._model_loading_depth = 0
         self._model_load_previous_index_method = None
+        self._deleting_node_ids: set[int] = set()
 
         # Large-selection drags need a more aggressive fast path than ordinary
         # link-preview throttling.  When many nodes are selected, the cost is no
@@ -185,6 +187,7 @@ class ModelScene(QGraphicsScene):
         self._highlighted_attachment_items: set[SubcompAttachmentItem] = set()
         self._suppress_link_hit_tests = False
         self._drag_model_change_pending = False
+        breadcrumb("model_scene.initialized", scene_id=id(self))
 
     def connection_items(self) -> list[ConnectionItem]:
         items = [item for item in self.items() if isinstance(item, ConnectionItem)]
@@ -202,7 +205,91 @@ class ModelScene(QGraphicsScene):
         items = [item for item in self.items() if isinstance(item, ComponentNodeItem)]
         return sorted(items, key=lambda item: item.node_id)
 
+    def _diagnostic_component_type(self, node: ComponentNodeItem) -> str:
+        component = getattr(node, "component", None)
+        element = getattr(component, "element", "") or ""
+        name = getattr(component, "name", "") or ""
+        return f"{element}.{name}".strip(".")
+
+    def _diagnostic_node_snapshot(self, node: ComponentNodeItem) -> dict:
+        return {
+            "node_id": int(getattr(node, "node_id", 0) or 0),
+            "instance_name": getattr(node, "instance_name", ""),
+            "component_type": self._diagnostic_component_type(node),
+            "plugin_id": getattr(getattr(node, "component", None), "plugin_id", ""),
+            "is_subcomp": bool(int(getattr(getattr(node, "component", None), "is_subcomp", 0) or 0)),
+            "position": {"x": node.pos().x(), "y": node.pos().y()},
+            "ports": [getattr(port, "name", "") for port in getattr(node, "ports", [])],
+            "connectors": [getattr(connector, "name", "") for connector in getattr(node, "subcomp_connectors", [])],
+        }
+
+    def _diagnostic_link_snapshot(self, connection: ConnectionItem) -> dict:
+        link = getattr(connection, "link", None)
+        return {
+            "link_id": int(getattr(link, "link_id", 0) or 0),
+            "name": getattr(link, "name", ""),
+            "source": f"{getattr(link, 'source_component_name', '')}.{getattr(link, 'source_port', '')}",
+            "target": f"{getattr(link, 'target_component_name', '')}.{getattr(link, 'target_port', '')}",
+            "plugin_id": getattr(link, "plugin_id", ""),
+        }
+
+    def _diagnostic_attachment_snapshot(self, attachment_item: SubcompAttachmentItem) -> dict:
+        attachment = getattr(attachment_item, "attachment", None)
+        return {
+            "attachment_id": int(getattr(attachment, "attachment_id", 0) or 0),
+            "name": getattr(attachment, "name", ""),
+            "parent": f"{getattr(attachment, 'parent_component_name', '')}.{getattr(attachment, 'slot_name', '')}",
+            "child": getattr(attachment, "child_component_name", ""),
+            "plugin_id": getattr(attachment, "plugin_id", ""),
+        }
+
+    def diagnostic_snapshot(self) -> dict:
+        """Return a crash-safe summary of the scene and current selection."""
+
+        try:
+            selected_nodes = [self._diagnostic_node_snapshot(node) for node in self.selected_component_nodes(expand_groups=False)]
+        except Exception as exc:
+            selected_nodes = [{"error": f"{type(exc).__name__}: {exc}"}]
+
+        try:
+            selected_items = [type(item).__name__ for item in self.selectedItems()]
+        except Exception as exc:
+            selected_items = [f"error: {type(exc).__name__}: {exc}"]
+
+        selected_connection = None
+        if self.selected_connection is not None:
+            try:
+                selected_connection = self._diagnostic_link_snapshot(self.selected_connection)
+            except Exception as exc:
+                selected_connection = {"error": f"{type(exc).__name__}: {exc}"}
+
+        selected_attachment = None
+        if self.selected_subcomp_attachment is not None:
+            try:
+                selected_attachment = self._diagnostic_attachment_snapshot(self.selected_subcomp_attachment)
+            except Exception as exc:
+                selected_attachment = {"error": f"{type(exc).__name__}: {exc}"}
+
+        return {
+            "scene_id": id(self),
+            "item_count": len(self.items()),
+            "component_count": len(self.component_items()),
+            "link_count": len(self.links),
+            "attachment_count": len(self.subcomp_attachments),
+            "model_loading_depth": getattr(self, "_model_loading_depth", 0),
+            "model_change_batch_depth": getattr(self, "_model_change_batch_depth", 0),
+            "selected_items": selected_items,
+            "selected_nodes": selected_nodes,
+            "selected_connection": selected_connection,
+            "selected_subcomp_attachment": selected_attachment,
+            "pending_source_port": getattr(getattr(self, "pending_source_port", None), "name", ""),
+            "pending_subcomp_connector": getattr(getattr(self, "pending_subcomp_connector", None), "name", ""),
+            "highlighted_links": len(getattr(self, "_highlighted_link_items", [])),
+            "highlighted_attachments": len(getattr(self, "_highlighted_attachment_items", [])),
+        }
+
     def clear_model(self):
+        breadcrumb("model_scene.clear_model.start", snapshot=self.diagnostic_snapshot())
         self.cancel_pending_connection()
         self.cancel_pending_subcomp_attachment()
         self.invalidate_pending_link_routes()
@@ -222,6 +309,7 @@ class ModelScene(QGraphicsScene):
         self.node_group_ids = {}
         self._next_node_id = 1
         self.notify_model_changed()
+        breadcrumb("model_scene.clear_model.end", snapshot=self.diagnostic_snapshot())
 
     def begin_model_load(self) -> None:
         """Enter a project-load batch.
@@ -234,6 +322,7 @@ class ModelScene(QGraphicsScene):
         its spatial index after every addItem()/setPos(). Restore the previous
         indexing policy once the bulk load is complete.
         """
+        breadcrumb("model_scene.begin_model_load", depth=self._model_loading_depth, snapshot=self.diagnostic_snapshot())
         self._model_loading_depth += 1
         self.begin_model_change_batch()
         if self._model_loading_depth == 1:
@@ -254,10 +343,23 @@ class ModelScene(QGraphicsScene):
         model_changed callback here would immediately walk the fresh scene to
         build an undo snapshot, then the caller would do the same work again.
         """
+        breadcrumb(
+            "model_scene.end_model_load.start",
+            depth=self._model_loading_depth,
+            emit_model_changed=emit_model_changed,
+            snapshot=self.diagnostic_snapshot(),
+        )
         if self._model_loading_depth > 0:
             self._model_loading_depth -= 1
 
         if self._model_loading_depth == 0:
+            # Port connection-state changes intentionally skip connector
+            # visibility relayouts while a project is being restored. Do one
+            # consolidated refresh now so connected hidden/deprecated SST
+            # connectors are revealed without paying a full node relayout for
+            # every restored link.
+            self.refresh_all_connector_visibility()
+
             previous_index_method = self._model_load_previous_index_method
             self._model_load_previous_index_method = None
             if previous_index_method is not None:
@@ -267,6 +369,15 @@ class ModelScene(QGraphicsScene):
                     pass
 
         self.end_model_change_batch(emit_changed=emit_model_changed)
+        breadcrumb("model_scene.end_model_load.end", depth=self._model_loading_depth, snapshot=self.diagnostic_snapshot())
+
+    def refresh_all_connector_visibility(self) -> None:
+        """Refresh guided connector visibility for all nodes in one pass."""
+        for node in self.component_items():
+            if hasattr(node, "apply_port_visibility"):
+                node.apply_port_visibility()
+            if hasattr(node, "apply_subcomp_connector_visibility"):
+                node.apply_subcomp_connector_visibility()
 
     def invalidate_pending_link_routes(self) -> None:
         """Drop stale asynchronous route batches.
@@ -969,6 +1080,10 @@ class ModelScene(QGraphicsScene):
                 self._highlighted_attachment_items.add(attachment)
 
     def select_component(self, node: "ComponentNodeItem"):
+        try:
+            breadcrumb("model_scene.select_component", node=self._diagnostic_node_snapshot(node))
+        except Exception:
+            pass
         self.selected_component = node
         self.selected_connection = None
         self.selected_subcomp_attachment = None
@@ -981,6 +1096,10 @@ class ModelScene(QGraphicsScene):
             self.selection_changed_callback(node)
 
     def select_link(self, connection: ConnectionItem):
+        try:
+            breadcrumb("model_scene.select_link", link=self._diagnostic_link_snapshot(connection))
+        except Exception:
+            pass
         self.clear_all_selection_highlights()
         self.selected_component = None
         self.selected_connection = connection
@@ -994,6 +1113,10 @@ class ModelScene(QGraphicsScene):
             self.selection_changed_callback(None)
 
     def select_subcomp_attachment(self, attachment: SubcompAttachmentItem):
+        try:
+            breadcrumb("model_scene.select_subcomp_attachment", attachment=self._diagnostic_attachment_snapshot(attachment))
+        except Exception:
+            pass
         self.clear_all_selection_highlights()
         self.selected_component = None
         self.selected_subcomp_attachment = attachment
@@ -1930,18 +2053,31 @@ class ModelScene(QGraphicsScene):
         return connection
 
     def delete_link(self, connection: ConnectionItem):
+        if connection is None:
+            return
+
+        try:
+            breadcrumb("model_scene.delete_link", link=self._diagnostic_link_snapshot(connection))
+        except Exception:
+            pass
         if connection.link in self.links:
             self.links.remove(connection.link)
+
+        self._highlighted_link_items.discard(connection)
+        if self.selected_connection is connection:
+            self.selected_connection = None
+
+        if connection.scene() is self:
+            connection.setSelected(False)
+            connection.set_highlighted(False)
 
         for port in (connection.source_port, connection.target_port):
             if connection in port.connections:
                 port.connections.remove(connection)
             port.update_connection_state()
 
-        self.removeItem(connection)
-
-        if self.selected_connection is connection:
-            self.selected_connection = None
+        if connection.scene() is self:
+            self.removeItem(connection)
 
         if self.properties_panel is not None:
             self.properties_panel.show_empty()
@@ -1972,42 +2108,59 @@ class ModelScene(QGraphicsScene):
         - subcomponent attachment edges where the node is either the parent or child
         - child subcomponents recursively attached underneath this node
         """
-        # Recursively delete attached child subcomponents first.
-        child_node_ids = [
-            attachment.child_node_id
-            for attachment in list(getattr(self, "subcomp_attachments", []))
-            if attachment.parent_node_id == node.node_id
-        ]
+        if node is None or node.scene() is not self:
+            return
 
-        for child_node_id in child_node_ids:
-            child_node = self.find_node_by_id(child_node_id)
-            if child_node is not None:
-                self.delete_component_node(child_node)
+        try:
+            breadcrumb("model_scene.delete_component_node.start", node=self._diagnostic_node_snapshot(node), snapshot=self.diagnostic_snapshot())
+        except Exception:
+            pass
 
-        # Delete normal links attached to this node.
-        for connection in list(self.connection_items()):
-            if connection.is_connected_to_node(node):
-                self.delete_link(connection)
+        node_id = int(getattr(node, "node_id", 0) or 0)
+        self._deleting_node_ids.add(node_id)
+        try:
+            node.setSelected(False)
 
-        # Delete subcomponent attachment edges involving this node.
-        for attachment_item in list(self.subcomp_attachment_items()):
-            attachment = attachment_item.attachment
-            if (
-                    attachment.parent_node_id == node.node_id
-                    or attachment.child_node_id == node.node_id
-            ):
-                self.delete_subcomp_attachment(attachment_item)
+            # Recursively delete attached child subcomponents first.
+            child_node_ids = [
+                attachment.child_node_id
+                for attachment in list(getattr(self, "subcomp_attachments", []))
+                if attachment.parent_node_id == node.node_id
+            ]
 
-        if self.selected_component is node:
-            self.selected_component = None
+            for child_node_id in child_node_ids:
+                child_node = self.find_node_by_id(child_node_id)
+                if child_node is not None:
+                    self.delete_component_node(child_node)
 
-        self.node_group_ids.pop(node.node_id, None)
+            # Delete normal links attached to this node.
+            for connection in list(self.connection_items()):
+                if connection.is_connected_to_node(node):
+                    self.delete_link(connection)
 
-        if self.properties_panel is not None:
-            self.properties_panel.show_empty()
+            # Delete subcomponent attachment edges involving this node.
+            for attachment_item in list(self.subcomp_attachment_items()):
+                attachment = attachment_item.attachment
+                if (
+                        attachment.parent_node_id == node.node_id
+                        or attachment.child_node_id == node.node_id
+                ):
+                    self.delete_subcomp_attachment(attachment_item)
 
-        self.removeItem(node)
-        self.notify_model_changed()
+            if self.selected_component is node:
+                self.selected_component = None
+
+            self.node_group_ids.pop(node.node_id, None)
+
+            if self.properties_panel is not None:
+                self.properties_panel.show_empty()
+
+            if node.scene() is self:
+                self.removeItem(node)
+            self.notify_model_changed()
+            breadcrumb("model_scene.delete_component_node.end", node_id=node_id, snapshot=self.diagnostic_snapshot())
+        finally:
+            self._deleting_node_ids.discard(node_id)
 
     def delete_component_nodes(self, nodes: list[ComponentNodeItem]) -> bool:
         """Delete several component nodes as one model change.
@@ -2028,8 +2181,13 @@ class ModelScene(QGraphicsScene):
             return False
 
         deleted_any = False
+        breadcrumb("model_scene.delete_component_nodes.request", node_ids=node_ids, snapshot=self.diagnostic_snapshot())
         self.begin_model_change_batch()
         try:
+            self.invalidate_pending_link_routes()
+            self.clear_all_selection_highlights()
+            self.clearSelection()
+
             for node_id in node_ids:
                 node = self.find_node_by_id(node_id)
                 if node is None:
@@ -2048,6 +2206,7 @@ class ModelScene(QGraphicsScene):
         deleting a multi-component selection removes the selected components, and
         selecting one member of a group removes every component in that group.
         """
+        breadcrumb("model_scene.delete_selection.request", snapshot=self.diagnostic_snapshot())
         nodes = self.selected_component_nodes(expand_groups=True)
         if nodes:
             return self.delete_component_nodes(nodes)
@@ -3895,27 +4054,46 @@ class ModelScene(QGraphicsScene):
             hook(self, attachment)
 
     def delete_subcomp_attachment(self, item: SubcompAttachmentItem):
+        if item is None:
+            return
+
+        try:
+            breadcrumb("model_scene.delete_subcomp_attachment", attachment=self._diagnostic_attachment_snapshot(item))
+        except Exception:
+            pass
         attachment = item.attachment
+        connectors = (
+            getattr(item, "source_connector", None),
+            getattr(item, "target_connector", None),
+        )
 
         if attachment in self.subcomp_attachments:
             self.subcomp_attachments.remove(attachment)
 
-        self.removeItem(item)
-
+        self._highlighted_attachment_items.discard(item)
         if self.selected_subcomp_attachment is item:
             self.selected_subcomp_attachment = None
+
+        if item.scene() is self:
+            item.setSelected(False)
+            item.set_highlighted(False)
+            self.removeItem(item)
 
         if self.properties_panel is not None:
             self.properties_panel.show_empty()
 
         self.notify_plugin_subcomp_attachment_deleted(attachment)
 
-        for connector in (
-            getattr(item, "source_connector", None),
-            getattr(item, "target_connector", None),
-        ):
+        for connector in connectors:
             node = getattr(connector, "node", None)
-            if node is not None and hasattr(node, "apply_subcomp_connector_visibility"):
+            node_id = int(getattr(node, "node_id", 0) or 0) if node is not None else 0
+            if node_id in self._deleting_node_ids:
+                continue
+            if (
+                node is not None
+                and node.scene() is self
+                and hasattr(node, "apply_subcomp_connector_visibility")
+            ):
                 node.apply_subcomp_connector_visibility()
 
         self.notify_model_changed()
@@ -4048,7 +4226,10 @@ class ModelScene(QGraphicsScene):
                 return
 
         if event.key() in (Qt.Key_Delete, Qt.Key_Backspace):
-            if self.delete_selection():
+            breadcrumb("model_scene.delete_key_pressed", key=int(event.key()), snapshot=self.diagnostic_snapshot())
+            with active_operation("model_scene.delete_selection", snapshot=self.diagnostic_snapshot()):
+                deleted = self.delete_selection()
+            if deleted:
                 event.accept()
                 return
 

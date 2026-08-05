@@ -64,6 +64,13 @@ from fuse.app.composite_component_manager_dialog import CompositeComponentManage
 from fuse.app.project_settings_dialog import ProjectSettingsDialog
 from fuse.app.splash import create_splash_screen
 from fuse.core.app_info import APP_NAME, ORG_NAME
+from fuse.core.diagnostics import (
+    active_operation,
+    breadcrumb,
+    install_crash_diagnostics,
+    register_context_provider,
+    write_diagnostics_report,
+)
 from fuse.core.model.project_settings import ProjectSettings
 from fuse.plugins.community.sst.component_catalog import (
     sst_target_requires_runtime_verification,
@@ -445,6 +452,32 @@ class MainWindow(QMainWindow):
         ensure_database_ready()
         self.load_framework_targets()
         self.reset_undo_history(mark_clean=True)
+        register_context_provider(self.diagnostic_snapshot)
+        breadcrumb("main_window.initialized", snapshot=self.diagnostic_snapshot())
+
+    def diagnostic_snapshot(self) -> dict:
+        """Return a compact snapshot for crash reports."""
+
+        scene_snapshot = {}
+        try:
+            if hasattr(self.scene, "diagnostic_snapshot"):
+                scene_snapshot = self.scene.diagnostic_snapshot()
+        except Exception as exc:
+            scene_snapshot = {"error": f"{type(exc).__name__}: {exc}"}
+
+        return {
+            "window": "MainWindow",
+            "project_path": str(self.current_project_path) if self.current_project_path else "",
+            "project_name": self.project_name,
+            "active_plugin_id": self.active_plugin_id,
+            "active_target_id": self.active_target_id,
+            "dirty": self.is_dirty,
+            "save_in_progress": self._save_in_progress,
+            "undo_depth": len(self._undo_stack),
+            "redo_depth": len(self._redo_stack),
+            "validation_issue_count": len(self._last_validation_issues),
+            "scene": scene_snapshot,
+        }
 
     def on_component_favorite_requested(self, component):
         self.palette.add_to_frequently_used(component)
@@ -2152,6 +2185,8 @@ class MainWindow(QMainWindow):
         if not file_path:
             return
 
+        breadcrumb("main_window.open_model.selected", path=file_path, snapshot=self.diagnostic_snapshot())
+
         try:
             project = load_project_file(file_path)
             self.project_settings = ProjectSettings.from_project_dict(project)
@@ -2178,6 +2213,19 @@ class MainWindow(QMainWindow):
             self.setUpdatesEnabled(True)
             self.model_view.setUpdatesEnabled(True)
             self.model_outline.setUpdatesEnabled(True)
+            breadcrumb(
+                "main_window.open_model.error",
+                path=file_path,
+                error_type=type(exc).__name__,
+                error_message=str(exc),
+                snapshot=self.diagnostic_snapshot(),
+            )
+            write_diagnostics_report(
+                "open_model_error",
+                exc_type=type(exc),
+                exc_value=exc,
+                exc_traceback=exc.__traceback__,
+            )
             QMessageBox.critical(self, "Open Failed", str(exc))
             return
 
@@ -2189,6 +2237,7 @@ class MainWindow(QMainWindow):
         self.update_model_outline()
         self.reset_undo_history_from_snapshot(project, mark_clean=True)
 
+        breadcrumb("main_window.open_model.end", path=file_path, snapshot=self.diagnostic_snapshot())
         self.statusBar().showMessage(f"Opened {file_path}", 3000)
 
     def show_about(self):
@@ -2894,35 +2943,64 @@ def main():
     then enters the Qt event loop. It is the console/script entry point used by
     development launches and packaged desktop artifacts.
     """
-    prefer_xcb_platform_for_window_manager_shadows()
-    app = QApplication(sys.argv)
-    app.setApplicationName(APP_NAME)
-    app.setOrganizationName(ORG_NAME)
+    log_dir = install_crash_diagnostics(APP_NAME, ORG_NAME)
+    breadcrumb("app.main.enter", argv=list(sys.argv), cwd=os.getcwd(), log_dir=str(log_dir))
 
-    splash_timer = QElapsedTimer()
-    splash_timer.start()
+    try:
+        with active_operation("app.startup", argv=list(sys.argv)):
+            prefer_xcb_platform_for_window_manager_shadows()
+            app = QApplication(sys.argv)
+            app.setApplicationName(APP_NAME)
+            app.setOrganizationName(ORG_NAME)
+            breadcrumb(
+                "qt.application.created",
+                platform=os.environ.get("QT_QPA_PLATFORM", ""),
+                arguments=list(sys.argv),
+            )
 
-    splash = create_splash_screen()
-    splash.set_message("Initializing FUSE...")
-    splash.show_centered()
-    app.processEvents()
+            splash_timer = QElapsedTimer()
+            splash_timer.start()
 
-    window = MainWindow()
+            splash = create_splash_screen()
+            splash.set_message("Initializing FUSE...")
+            splash.show_centered()
+            app.processEvents()
 
-    splash.set_message("Loading plugins and editor...")
-    app.processEvents()
+            window = MainWindow()
 
-    minimum_splash_ms = int(os.environ.get("FUSE_SPLASH_MS", "8000"))
-    remaining_ms = max(0, minimum_splash_ms - splash_timer.elapsed())
+            splash.set_message("Loading plugins and editor...")
+            app.processEvents()
 
-    def show_main_window():
-        window.showMaximized()
-        splash.finish(window)
+            minimum_splash_ms = int(os.environ.get("FUSE_SPLASH_MS", "8000"))
+            remaining_ms = max(0, minimum_splash_ms - splash_timer.elapsed())
 
-        auto_close_ms = os.environ.get("FUSE_TEST_AUTOCLOSE_MS")
-        if auto_close_ms:
-            QTimer.singleShot(int(auto_close_ms), app.quit)
+            def show_main_window():
+                breadcrumb("main_window.show", snapshot=window.diagnostic_snapshot())
+                window.showMaximized()
+                splash.finish(window)
 
-    QTimer.singleShot(remaining_ms, show_main_window)
+                auto_close_ms = os.environ.get("FUSE_TEST_AUTOCLOSE_MS")
+                if auto_close_ms:
+                    breadcrumb("test.auto_close_scheduled", milliseconds=auto_close_ms)
+                    QTimer.singleShot(int(auto_close_ms), app.quit)
 
-    sys.exit(app.exec())
+            QTimer.singleShot(remaining_ms, show_main_window)
+
+        exit_code = app.exec()
+        breadcrumb("app.exec.finished", exit_code=exit_code)
+        sys.exit(exit_code)
+    except SystemExit:
+        raise
+    except BaseException as exc:
+        breadcrumb(
+            "app.main.exception",
+            error_type=type(exc).__name__,
+            error_message=str(exc),
+        )
+        write_diagnostics_report(
+            "app_main_exception",
+            exc_type=type(exc),
+            exc_value=exc,
+            exc_traceback=exc.__traceback__,
+        )
+        raise
