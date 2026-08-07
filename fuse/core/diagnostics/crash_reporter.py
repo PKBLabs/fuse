@@ -63,11 +63,21 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds")
 
 
-def _state_log_dir(app_name: str = "fuse") -> Path:
-    explicit = os.environ.get("FUSE_CRASH_LOG_DIR") or os.environ.get("FUSE_LOG_DIR")
-    if explicit:
-        return Path(explicit).expanduser()
+def _env_truthy(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
 
+
+def _repo_log_dir() -> Path:
+    """Return the repo-local diagnostics log directory used for dev runs."""
+
+    # crash_reporter.py lives under fuse/core/diagnostics/.  The repo-local log
+    # location intentionally sits under fuse/app/run/logs so it is easy to find
+    # next to the application entry point when launching from a checkout.
+    package_root = Path(__file__).resolve().parents[2]
+    return package_root / "app" / "run" / "logs"
+
+
+def _platform_state_log_dir(app_name: str = "fuse") -> Path:
     xdg_state_home = os.environ.get("XDG_STATE_HOME")
     if xdg_state_home:
         return Path(xdg_state_home).expanduser() / "fuse" / "logs"
@@ -83,11 +93,32 @@ def _state_log_dir(app_name: str = "fuse") -> Path:
     return Path.home() / ".local" / "state" / "fuse" / "logs"
 
 
+def _state_log_dir(app_name: str = "fuse") -> Path:
+    explicit = os.environ.get("FUSE_CRASH_LOG_DIR") or os.environ.get("FUSE_LOG_DIR")
+    if explicit:
+        return Path(explicit).expanduser()
+
+    if _env_truthy("FUSE_USE_PLATFORM_LOG_DIR"):
+        return _platform_state_log_dir(app_name)
+
+    return _repo_log_dir()
+
+
 def diagnostics_log_dir() -> Path:
     global _log_dir
     if _log_dir is None:
         _log_dir = _state_log_dir()
-    _log_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        _log_dir.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        # A packaged installation may put fuse/app under a read-only location.
+        # Keep diagnostics available by falling back to the OS-appropriate state
+        # directory, while still defaulting repo checkouts to fuse/app/run/logs.
+        fallback = _platform_state_log_dir()
+        fallback.mkdir(parents=True, exist_ok=True)
+        _log_dir = fallback
+
     return _log_dir
 
 
@@ -197,6 +228,43 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
         json.dump(_safe_json_value(payload), file, indent=2, sort_keys=True)
         file.write("\n")
     os.replace(temporary, path)
+
+
+def _live_context_enabled() -> bool:
+    return os.environ.get("FUSE_DIAGNOSTIC_LIVE_CONTEXT", "1").strip().lower() not in {
+        "0",
+        "false",
+        "no",
+        "off",
+    }
+
+
+def write_live_diagnostics_context(reason: str = "breadcrumb") -> Path | None:
+    """Persist lightweight live crash context after each breadcrumb.
+
+    Fatal native crashes cannot run Python cleanup hooks, so the normal
+    diagnostics JSON may never be written. Keeping this lightweight rolling file
+    current gives the next run a structured view of the active operation and
+    recent breadcrumbs without querying Qt widgets or context providers from the
+    crash path.
+    """
+
+    if not _live_context_enabled():
+        return None
+
+    try:
+        payload = {
+            "reason": reason,
+            "process": _process_metadata(),
+            "active_operations": list(_operation_stack),
+            "breadcrumbs": list(_breadcrumbs),
+            "qt_messages": list(_qt_messages),
+        }
+        live_path = diagnostics_log_dir() / "fuse_diagnostics_live.json"
+        _write_json(live_path, payload)
+        return live_path
+    except Exception:
+        return None
 
 
 def write_diagnostics_report(
@@ -507,6 +575,7 @@ def breadcrumb(event: str, **fields: Any) -> None:
         logger = get_logger()
         details = json.dumps(payload, sort_keys=True, default=str)
         logger.info("breadcrumb %s", details)
+        write_live_diagnostics_context(str(event))
         _flush_handlers(logger)
     except Exception:
         pass

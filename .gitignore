@@ -44,6 +44,7 @@ fuse/app_data/*.sqlite3
 # Logs / temp
 *.log
 *.tmp
+fuse/app/run/
 
 # OS junk
 .DS_Store

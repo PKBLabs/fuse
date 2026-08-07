@@ -1405,59 +1405,87 @@ class MainWindow(QMainWindow):
         self.mark_dirty()
 
     def update_model_outline(self):
-        self.model_outline.clear()
         scene = self.active_model_scene()
+        try:
+            scene_snapshot = scene.diagnostic_snapshot() if hasattr(scene, "diagnostic_snapshot") else {}
+        except Exception as exc:
+            scene_snapshot = {"error": f"{type(exc).__name__}: {exc}"}
 
-        attachments_by_parent, attached_child_ids = self.subcomponent_attachment_maps(scene)
-        nodes_by_id = self.node_by_id(scene)
+        breadcrumb(
+            "main_window.update_model_outline.start",
+            snapshot=scene_snapshot,
+        )
+        previous_updates_enabled = self.model_outline.updatesEnabled()
+        previous_signals_blocked = self.model_outline.blockSignals(True)
+        self.model_outline.setUpdatesEnabled(False)
+        try:
+            self.model_outline.clear()
 
-        component_groups: dict[str, list] = {}
+            attachments_by_parent, attached_child_ids = self.subcomponent_attachment_maps(scene)
+            nodes_by_id = self.node_by_id(scene)
 
-        for node in scene.component_items():
-            # Attached subcomponents are shown underneath their parent component
-            # through subcomp_attachments, not as independent top-level outline rows.
-            if node.node_id in attached_child_ids:
-                continue
+            component_groups: dict[str, list] = {}
 
-            group_name = self.model_outline_group_for_node(node)
-            component_groups.setdefault(group_name, []).append(node)
+            for node in scene.component_items():
+                # Attached subcomponents are shown underneath their parent component
+                # through subcomp_attachments, not as independent top-level outline rows.
+                if node.node_id in attached_child_ids:
+                    continue
 
-        for group_name in sorted(component_groups, key=str.lower):
-            group_item = QTreeWidgetItem([group_name])
-            group_item.setData(0, OUTLINE_ROLE_KIND, "group")
-            group_item.setFlags(group_item.flags() & ~Qt.ItemIsSelectable)
-            self.model_outline.addTopLevelItem(group_item)
+                group_name = self.model_outline_group_for_node(node)
+                component_groups.setdefault(group_name, []).append(node)
 
-            for node in sorted(
-                    component_groups[group_name],
-                    key=lambda item: item.instance_name.lower(),
-            ):
-                self.add_outline_node_item(
-                    group_item,
-                    node,
-                    attachments_by_parent,
-                    nodes_by_id,
+            for group_name in sorted(component_groups, key=str.lower):
+                group_item = QTreeWidgetItem([group_name])
+                group_item.setData(0, OUTLINE_ROLE_KIND, "group")
+                group_item.setFlags(group_item.flags() & ~Qt.ItemIsSelectable)
+                self.model_outline.addTopLevelItem(group_item)
+
+                for node in sorted(
+                        component_groups[group_name],
+                        key=lambda item: item.instance_name.lower(),
+                ):
+                    self.add_outline_node_item(
+                        group_item,
+                        node,
+                        attachments_by_parent,
+                        nodes_by_id,
+                    )
+
+            links_item = QTreeWidgetItem(["Links"])
+            links_item.setData(0, OUTLINE_ROLE_KIND, "group")
+            links_item.setFlags(links_item.flags() & ~Qt.ItemIsSelectable)
+            self.model_outline.addTopLevelItem(links_item)
+
+            for link in sorted(scene.links, key=lambda item: item.name.lower()):
+                link_item = QTreeWidgetItem([link.name])
+                link_item.setData(0, OUTLINE_ROLE_KIND, "link")
+                link_item.setData(0, OUTLINE_ROLE_LINK_ID, link.link_id)
+                link_item.setToolTip(
+                    0,
+                    (
+                        f"{link.source_component_name}.{link.source_port} -> "
+                        f"{link.target_component_name}.{link.target_port}"
+                    ),
                 )
+                links_item.addChild(link_item)
 
-        links_item = QTreeWidgetItem(["Links"])
-        links_item.setData(0, OUTLINE_ROLE_KIND, "group")
-        links_item.setFlags(links_item.flags() & ~Qt.ItemIsSelectable)
-        self.model_outline.addTopLevelItem(links_item)
-
-        for link in sorted(scene.links, key=lambda item: item.name.lower()):
-            link_item = QTreeWidgetItem([link.name])
-            link_item.setData(0, OUTLINE_ROLE_KIND, "link")
-            link_item.setData(0, OUTLINE_ROLE_LINK_ID, link.link_id)
-            link_item.setToolTip(
-                0,
-                (
-                    f"{link.source_component_name}.{link.source_port} -> "
-                    f"{link.target_component_name}.{link.target_port}"
-                ),
+            self.model_outline.expandAll()
+            breadcrumb(
+                "main_window.update_model_outline.end",
+                group_count=len(component_groups),
+                link_count=len(scene.links),
             )
-            links_item.addChild(link_item)
-
-        self.model_outline.expandAll()
+        except BaseException as exc:
+            breadcrumb(
+                "main_window.update_model_outline.error",
+                error_type=type(exc).__name__,
+                error_message=str(exc),
+            )
+            raise
+        finally:
+            self.model_outline.setUpdatesEnabled(previous_updates_enabled)
+            self.model_outline.blockSignals(previous_signals_blocked)
 
     def subcomponent_attachment_maps(self, scene=None):
         current_scene = scene or self.active_model_scene()
@@ -1582,8 +1610,15 @@ class MainWindow(QMainWindow):
 
     def history_snapshot(self) -> dict:
         """Return a stable project snapshot suitable for undo/redo history."""
+        breadcrumb("main_window.history_snapshot.start")
         snapshot = copy.deepcopy(self.project_dict())
         snapshot.setdefault("project", {})["updatedAt"] = ""
+        breadcrumb(
+            "main_window.history_snapshot.end",
+            components=len(snapshot.get("components", []) or []),
+            links=len(snapshot.get("links", []) or []),
+            subcomp_attachments=len(snapshot.get("subcompAttachments", []) or []),
+        )
         return snapshot
 
     def history_signature(self, snapshot: dict | None = None) -> str:
@@ -1629,13 +1664,22 @@ class MainWindow(QMainWindow):
 
     def record_history_snapshot(self):
         if self._restoring_history:
+            breadcrumb("main_window.record_history_snapshot.skipped", reason="restoring_history")
             return
 
+        breadcrumb("main_window.record_history_snapshot.start")
         snapshot = self.history_snapshot()
+        breadcrumb("main_window.record_history_snapshot.signature.start")
         signature = self.history_signature(snapshot)
+        breadcrumb("main_window.record_history_snapshot.signature.end")
 
         if signature == self._last_history_signature:
             self.update_undo_redo_actions()
+            breadcrumb(
+                "main_window.record_history_snapshot.unchanged",
+                undo_depth=len(self._undo_stack),
+                redo_depth=len(self._redo_stack),
+            )
             return
 
         self._undo_stack.append(snapshot)
@@ -1645,6 +1689,11 @@ class MainWindow(QMainWindow):
         self._redo_stack.clear()
         self._last_history_signature = signature
         self.update_undo_redo_actions()
+        breadcrumb(
+            "main_window.record_history_snapshot.end",
+            undo_depth=len(self._undo_stack),
+            redo_depth=len(self._redo_stack),
+        )
 
     def restore_history_snapshot(self, snapshot: dict):
         self._restoring_history = True
@@ -1686,12 +1735,40 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("Redo", 1500)
 
     def on_model_changed(self):
+        with active_operation("main_window.on_model_changed"):
+            return self._on_model_changed_impl()
+
+    def _on_model_changed_impl(self):
         if self._restoring_history:
+            breadcrumb("main_window.on_model_changed.skipped", reason="restoring_history")
             return
 
-        self.update_model_outline()
-        self.record_history_snapshot()
-        self.set_dirty(self._last_history_signature != self._saved_history_signature)
+        breadcrumb("main_window.on_model_changed.start", snapshot=self.diagnostic_snapshot())
+        try:
+            breadcrumb("main_window.on_model_changed.update_outline.start")
+            self.update_model_outline()
+            breadcrumb("main_window.on_model_changed.update_outline.end")
+
+            breadcrumb("main_window.on_model_changed.record_history.start")
+            self.record_history_snapshot()
+            breadcrumb(
+                "main_window.on_model_changed.record_history.end",
+                undo_depth=len(self._undo_stack),
+                redo_depth=len(self._redo_stack),
+            )
+
+            dirty = self._last_history_signature != self._saved_history_signature
+            breadcrumb("main_window.on_model_changed.set_dirty.start", dirty=dirty)
+            self.set_dirty(dirty)
+            breadcrumb("main_window.on_model_changed.end", dirty=dirty)
+        except BaseException as exc:
+            breadcrumb(
+                "main_window.on_model_changed.error",
+                error_type=type(exc).__name__,
+                error_message=str(exc),
+                snapshot=self.diagnostic_snapshot(),
+            )
+            raise
 
     def set_dirty(self, dirty: bool):
         self.is_dirty = dirty
@@ -1802,7 +1879,8 @@ class MainWindow(QMainWindow):
 
     def project_dict(self) -> dict:
         self.project_settings.project_name = self.project_name
-        return build_project_dict(
+        breadcrumb("main_window.project_dict.start", snapshot=self.diagnostic_snapshot())
+        project = build_project_dict(
             self.scene,
             self.model_view,
             self.project_name,
@@ -1810,6 +1888,13 @@ class MainWindow(QMainWindow):
             active_target_id=self.active_target_id,
             project_settings=self.project_settings,
         )
+        breadcrumb(
+            "main_window.project_dict.end",
+            components=len(project.get("components", []) or []),
+            links=len(project.get("links", []) or []),
+            subcomp_attachments=len(project.get("subcompAttachments", []) or []),
+        )
+        return project
 
     def set_current_project_path(self, path: Optional[str | Path]) -> None:
         self.current_project_path = Path(path) if path else None
@@ -2838,7 +2923,7 @@ class MainWindow(QMainWindow):
 
             if action == remove_action:
                 scene.delete_link_by_id(int(link_id))
-                self.update_model_outline()
+                breadcrumb("main_window.outline.delete_link_requested", link_id=int(link_id))
 
             return
 
@@ -2850,7 +2935,7 @@ class MainWindow(QMainWindow):
 
             if action == remove_action:
                 scene.delete_subcomp_attachment_by_id(int(attachment_id))
-                self.update_model_outline()
+                breadcrumb("main_window.outline.delete_subcomp_attachment_requested", attachment_id=int(attachment_id))
 
             return
 
@@ -2878,7 +2963,7 @@ class MainWindow(QMainWindow):
 
             elif action == remove_action:
                 scene.delete_component_by_id(int(node_id))
-                self.update_model_outline()
+                breadcrumb("main_window.outline.delete_component_requested", node_id=int(node_id))
 
             return
 
@@ -2915,7 +3000,10 @@ class MainWindow(QMainWindow):
             # the selected model item.
             scene.keyPressEvent(event)
             if event.isAccepted():
-                self.update_model_outline()
+                breadcrumb(
+                    "main_window.keyPressEvent.delete_delegated",
+                    note="scene accepted delete; model_changed callback will refresh outline",
+                )
                 return
 
         super().keyPressEvent(event)

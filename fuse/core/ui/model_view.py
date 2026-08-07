@@ -35,6 +35,7 @@ from PySide6.QtWidgets import (
     QToolButton,
 )
 
+from fuse.core.diagnostics import active_operation, breadcrumb
 from fuse.core.model.models import ComponentDefinition, MIME_COMPONENT
 from fuse.core.ui.graphics_items import ComponentNodeItem
 from fuse.core.ui.model_scene import ModelScene
@@ -356,6 +357,13 @@ class ModelView(QGraphicsView):
 
     def update_selection_highlights(self) -> None:
         scene = self.scene()
+        if scene is None:
+            return
+
+        suppressed = getattr(scene, "selection_refresh_is_suppressed", None)
+        if callable(suppressed) and suppressed():
+            return
+
         update_selection_dependent_highlights(
             scene,
             getattr(scene, "selection_changed_callback", None),
@@ -662,13 +670,18 @@ class ModelView(QGraphicsView):
     def delete_selection(self) -> None:
         scene = self.scene()
         if scene is not None and hasattr(scene, "delete_selection"):
-            scene.delete_selection()
+            breadcrumb("model_view.delete_selection.request")
+            with active_operation("model_view.delete_selection"):
+                scene.delete_selection()
 
     def keyPressEvent(self, event):
         if event.key() in (Qt.Key_Delete, Qt.Key_Backspace):
             scene = self.scene()
             if scene is not None and hasattr(scene, "delete_selection"):
-                if scene.delete_selection():
+                breadcrumb("model_view.delete_key_pressed", key=int(event.key()))
+                with active_operation("model_view.delete_selection_key"):
+                    deleted = scene.delete_selection()
+                if deleted:
                     event.accept()
                     return
 

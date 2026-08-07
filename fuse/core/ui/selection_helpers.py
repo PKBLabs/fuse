@@ -28,11 +28,22 @@ def ensure_scene_selection_state(scene) -> None:
 
 def selected_component_items(scene) -> list[ComponentNodeItem]:
     """Return selected component graphics items in stable node-id order."""
-    selected = [
-        item
-        for item in scene.selectedItems()
-        if isinstance(item, ComponentNodeItem)
-    ]
+    selected: list[ComponentNodeItem] = []
+    try:
+        candidates = list(scene.selectedItems())
+    except RuntimeError:
+        candidates = []
+
+    for item in candidates:
+        if not isinstance(item, ComponentNodeItem):
+            continue
+        try:
+            if item.scene() is not scene:
+                continue
+        except RuntimeError:
+            continue
+        selected.append(item)
+
     return sorted(selected, key=lambda item: item.node_id)
 
 

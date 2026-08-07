@@ -171,6 +171,17 @@ class ModelScene(QGraphicsScene):
         self._model_loading_depth = 0
         self._model_load_previous_index_method = None
         self._deleting_node_ids: set[int] = set()
+        self._selection_refresh_suppressed = False
+        self._deferred_batch_post_work_pending = False
+        self._deferred_model_changed_pending = False
+        # Removed QGraphicsItems are intentionally retained for the lifetime of
+        # the scene. PySide owns many graphics-item C++ objects from their Python
+        # wrappers; dropping the final wrapper reference shortly after
+        # QGraphicsScene.removeItem() can destroy the C++ item while Qt still has
+        # pending paint, selection, or input-event references to it. Retaining
+        # tombstones is a small leak, but it keeps destructive edits stable.
+        self._removed_graphics_item_tombstones: list[QGraphicsItem] = []
+        self._removed_graphics_item_event_flush_pending = False
 
         # Large-selection drags need a more aggressive fast path than ordinary
         # link-preview throttling.  When many nodes are selected, the cost is no
@@ -310,6 +321,20 @@ class ModelScene(QGraphicsScene):
             "pending_subcomp_connector": getattr(getattr(self, "pending_subcomp_connector", None), "name", ""),
             "highlighted_links": len(getattr(self, "_highlighted_link_items", [])),
             "highlighted_attachments": len(getattr(self, "_highlighted_attachment_items", [])),
+            # Keep the historic key name for log comparability, but retained
+            # items are now long-lived tombstones rather than a timed quarantine.
+            "quarantine_count": len(getattr(self, "_removed_graphics_item_tombstones", [])),
+            "removed_graphics_item_tombstone_count": len(getattr(self, "_removed_graphics_item_tombstones", [])),
+            "removed_graphics_item_event_flush_pending": bool(
+                getattr(self, "_removed_graphics_item_event_flush_pending", False)
+            ),
+            "deferred_batch_post_work_pending": bool(getattr(self, "_deferred_batch_post_work_pending", False)),
+            "deferred_model_changed_pending": bool(getattr(self, "_deferred_model_changed_pending", False)),
+            "routing_dirty": bool(getattr(self, "_routing_dirty", False)),
+            "route_generation": int(getattr(self, "_route_generation", 0) or 0),
+            "active_route_workers": len(getattr(self, "_active_route_workers", [])),
+            "pending_route_batches": len(getattr(self, "_pending_route_batches", {})),
+            "deleting_node_ids": sorted(getattr(self, "_deleting_node_ids", set())),
         }
 
     def clear_model(self):
@@ -436,6 +461,74 @@ class ModelScene(QGraphicsScene):
             reason=reason,
         )
 
+    def selection_refresh_is_suppressed(self) -> bool:
+        """Return whether selectionChanged handlers should ignore this scene."""
+        return bool(
+            getattr(self, "_selection_refresh_suppressed", False)
+            or getattr(self, "_removed_graphics_item_event_flush_pending", False)
+        )
+
+    def release_quarantined_graphics_item(self, item: QGraphicsItem) -> None:
+        """Compatibility no-op for old timers from previous builds.
+
+        Removed graphics items are now retained as scene-lifetime tombstones.
+        Releasing them after a short timeout was still able to crash in native
+        Qt/PySide code after delete; see the tombstone comment in ``__init__``.
+        """
+        breadcrumb(
+            "model_scene.graphics_item.quarantine.release_ignored",
+            item_type=type(item).__name__,
+            tombstone_count=len(getattr(self, "_removed_graphics_item_tombstones", [])),
+        )
+
+    def remove_graphics_item_safely(self, item: QGraphicsItem | None, *, reason: str) -> None:
+        """Remove an item while keeping its Python/C++ wrapper alive.
+
+        A selected QGraphicsItem can still be referenced by Qt's current input,
+        focus, paint, or selection machinery after the event that removed it.
+        Letting PySide destroy the wrapper after ``removeItem`` can leave Qt with
+        a dangling pointer and produce a native segfault. Hide and disable the
+        item, remove it from the scene, then retain it as a tombstone.
+        """
+        if item is None:
+            return
+
+        try:
+            item.setSelected(False)
+        except Exception:
+            pass
+        try:
+            item.setEnabled(False)
+        except Exception:
+            pass
+        try:
+            item.setVisible(False)
+        except Exception:
+            pass
+        try:
+            item.setAcceptedMouseButtons(Qt.NoButton)
+        except Exception:
+            pass
+        try:
+            item.setFlag(QGraphicsItem.ItemIsSelectable, False)
+        except Exception:
+            pass
+
+        try:
+            if item.scene() is self:
+                self.removeItem(item)
+        except Exception:
+            return
+
+        self._removed_graphics_item_tombstones.append(item)
+        self._removed_graphics_item_event_flush_pending = True
+        breadcrumb(
+            "model_scene.graphics_item.tombstone",
+            item_type=type(item).__name__,
+            tombstone_count=len(self._removed_graphics_item_tombstones),
+            reason=reason,
+        )
+
     def routing_is_suppressed(self) -> bool:
         """Return whether route batches should be coalesced for later."""
         return self._model_loading_depth > 0 or self._model_change_batch_depth > 0
@@ -549,7 +642,8 @@ class ModelScene(QGraphicsScene):
             return
 
         if self.model_changed_callback is not None:
-            self.model_changed_callback()
+            with active_operation("model_scene.notify_model_changed"):
+                self.model_changed_callback()
 
     def request_deferred_model_changed(self) -> None:
         """Emit the model-changed callback after the current UI event returns.
@@ -574,18 +668,97 @@ class ModelScene(QGraphicsScene):
     def begin_model_change_batch(self) -> None:
         self._model_change_batch_depth += 1
 
-    def end_model_change_batch(self, *, emit_changed: bool = True) -> None:
+    def end_model_change_batch(
+        self,
+        *,
+        emit_changed: bool = True,
+        defer_post_work: bool = False,
+    ) -> None:
         if self._model_change_batch_depth <= 0:
             return
 
         self._model_change_batch_depth -= 1
-        if self._model_change_batch_depth == 0 and self._batched_model_change_pending:
-            self._batched_model_change_pending = False
-            if emit_changed:
-                self.notify_model_changed()
+        if self._model_change_batch_depth != 0:
+            return
 
-        if self._model_change_batch_depth == 0:
-            self.flush_deferred_link_routing(reason="model_change_batch_end")
+        emit_pending_model_change = bool(self._batched_model_change_pending and emit_changed)
+        self._batched_model_change_pending = False
+
+        if defer_post_work:
+            if emit_pending_model_change:
+                self._deferred_model_changed_pending = True
+            if emit_pending_model_change or self._routing_dirty:
+                self.schedule_deferred_model_change_batch_post_work(
+                    reason="model_change_batch_end",
+                )
+            return
+
+        if emit_pending_model_change:
+            breadcrumb("model_scene.model_changed.emit", reason="model_change_batch_end")
+            self.notify_model_changed()
+
+        self.flush_deferred_link_routing(reason="model_change_batch_end")
+
+    def schedule_deferred_model_change_batch_post_work(
+        self,
+        *,
+        reason: str,
+        delay_ms: int = 0,
+    ) -> None:
+        """Run post-batch callbacks after the current Qt input event returns."""
+        if self._deferred_batch_post_work_pending:
+            return
+
+        delay_ms = max(0, int(delay_ms or 0))
+        self._deferred_batch_post_work_pending = True
+        breadcrumb(
+            "model_scene.model_change_batch.defer_post_work",
+            deferred_model_changed=self._deferred_model_changed_pending,
+            routing_dirty=self._routing_dirty,
+            reason=reason,
+            delay_ms=delay_ms,
+        )
+        QTimer.singleShot(delay_ms, self.run_deferred_model_change_batch_post_work)
+
+    def run_deferred_model_change_batch_post_work(self) -> None:
+        """Emit coalesced model-changed/routing work outside destructive edits."""
+        self._deferred_batch_post_work_pending = False
+
+        if self.routing_is_suppressed():
+            self.schedule_deferred_model_change_batch_post_work(
+                reason="still_suppressed",
+            )
+            return
+
+        if self._removed_graphics_item_event_flush_pending:
+            # Let Qt process at least one more event-loop turn after removeItem()
+            # before sidebar/history work walks the scene. Do not wait for the
+            # retained tombstone list to empty: it intentionally never does.
+            self._removed_graphics_item_event_flush_pending = False
+            breadcrumb(
+                "model_scene.model_change_batch.wait_removed_item_event_flush",
+                tombstone_count=len(getattr(self, "_removed_graphics_item_tombstones", [])),
+                deferred_model_changed=self._deferred_model_changed_pending,
+                routing_dirty=self._routing_dirty,
+            )
+            self.schedule_deferred_model_change_batch_post_work(
+                reason="removed_graphics_item_event_flush",
+                delay_ms=0,
+            )
+            return
+
+        if self._deferred_model_changed_pending:
+            self._deferred_model_changed_pending = False
+            breadcrumb("model_scene.model_changed.emit", reason="deferred_model_change_batch_end")
+            self.notify_model_changed()
+            breadcrumb("model_scene.model_changed.emit.return", reason="deferred_model_change_batch_end")
+
+        self.flush_deferred_link_routing(reason="deferred_model_change_batch_end")
+        breadcrumb(
+            "model_scene.model_change_batch.post_work.end",
+            routing_dirty=self._routing_dirty,
+            tombstone_count=len(getattr(self, "_removed_graphics_item_tombstones", [])),
+        )
 
     def notify_component_added(self, node: ComponentNodeItem):
         if self._model_change_batch_depth > 0:
@@ -727,8 +900,16 @@ class ModelScene(QGraphicsScene):
             if isinstance(item, ComponentNodeItem)
         ]
 
-        if self.selected_component is not None and self.selected_component not in selected:
-            selected.append(self.selected_component)
+        selected_component = self.selected_component
+        if selected_component is not None:
+            try:
+                selected_component_in_scene = selected_component.scene() is self
+            except RuntimeError:
+                selected_component_in_scene = False
+                self.selected_component = None
+
+            if selected_component_in_scene and selected_component not in selected:
+                selected.append(selected_component)
 
         if not expand_groups:
             return sorted(set(selected), key=lambda node: node.node_id)
@@ -2256,34 +2437,43 @@ class ModelScene(QGraphicsScene):
         if connection is None:
             return
 
-        self.invalidate_pending_link_routes(reason="delete_link")
+        own_batch = self._model_change_batch_depth <= 0
+        if own_batch:
+            self.begin_model_change_batch()
+
         try:
-            breadcrumb("model_scene.delete_link", link=self._diagnostic_link_snapshot(connection))
-        except Exception:
-            pass
-        if connection.link in self.links:
-            self.links.remove(connection.link)
+            self.invalidate_pending_link_routes(reason="delete_link")
+            try:
+                breadcrumb("model_scene.delete_link", link=self._diagnostic_link_snapshot(connection))
+            except Exception:
+                pass
+            if connection.link in self.links:
+                self.links.remove(connection.link)
 
-        self._highlighted_link_items.discard(connection)
-        if self.selected_connection is connection:
-            self.selected_connection = None
+            self._highlighted_link_items.discard(connection)
+            if self.selected_connection is connection:
+                self.selected_connection = None
 
-        if connection.scene() is self:
-            connection.setSelected(False)
-            connection.set_highlighted(False)
+            if connection.scene() is self:
+                connection.setSelected(False)
+                connection.set_highlighted(False)
 
-        for port in (connection.source_port, connection.target_port):
-            if connection in port.connections:
-                port.connections.remove(connection)
-            port.update_connection_state()
+            for port in (connection.source_port, connection.target_port):
+                if connection in port.connections:
+                    port.connections.remove(connection)
+                port.update_connection_state()
 
-        if connection.scene() is self:
-            self.removeItem(connection)
+            if connection.scene() is self:
+                self.remove_graphics_item_safely(connection, reason="delete_link")
 
-        if self.properties_panel is not None:
-            self.properties_panel.show_empty()
+            if self.properties_panel is not None:
+                self.properties_panel.show_empty()
 
-        self.notify_model_changed()
+            self.notify_model_changed()
+        finally:
+            if own_batch:
+                self.end_model_change_batch(defer_post_work=True)
+
 
     def find_connection_by_link_id(self, link_id: int) -> ConnectionItem | None:
         for connection in self.connection_items():
@@ -2311,6 +2501,10 @@ class ModelScene(QGraphicsScene):
         """
         if node is None or node.scene() is not self:
             return
+
+        own_batch = self._model_change_batch_depth <= 0
+        if own_batch:
+            self.begin_model_change_batch()
 
         self.invalidate_pending_link_routes(reason="delete_component_node")
         try:
@@ -2358,11 +2552,13 @@ class ModelScene(QGraphicsScene):
                 self.properties_panel.show_empty()
 
             if node.scene() is self:
-                self.removeItem(node)
+                self.remove_graphics_item_safely(node, reason="delete_component_node")
             self.notify_model_changed()
             breadcrumb("model_scene.delete_component_node.end", node_id=node_id, snapshot=self.diagnostic_snapshot())
         finally:
             self._deleting_node_ids.discard(node_id)
+            if own_batch:
+                self.end_model_change_batch(defer_post_work=True)
 
     def delete_component_nodes(self, nodes: list[ComponentNodeItem]) -> bool:
         """Delete several component nodes as one model change.
@@ -2384,6 +2580,8 @@ class ModelScene(QGraphicsScene):
 
         deleted_any = False
         breadcrumb("model_scene.delete_component_nodes.request", node_ids=node_ids, snapshot=self.diagnostic_snapshot())
+        previous_selection_suppressed = self._selection_refresh_suppressed
+        self._selection_refresh_suppressed = True
         self.begin_model_change_batch()
         try:
             self.invalidate_pending_link_routes(reason="delete_component_nodes")
@@ -2397,7 +2595,10 @@ class ModelScene(QGraphicsScene):
                 self.delete_component_node(node)
                 deleted_any = True
         finally:
-            self.end_model_change_batch()
+            self._selection_refresh_suppressed = previous_selection_suppressed
+            if self.selection_changed_callback is not None:
+                self.selection_changed_callback(None)
+            self.end_model_change_batch(defer_post_work=True)
 
         return deleted_any
 
@@ -2436,7 +2637,7 @@ class ModelScene(QGraphicsScene):
                     if connection.scene() is self:
                         self.delete_link(connection)
             finally:
-                self.end_model_change_batch()
+                self.end_model_change_batch(defer_post_work=True)
             return True
 
         selected_attachments = [
@@ -2468,7 +2669,7 @@ class ModelScene(QGraphicsScene):
                     if attachment_item.scene() is self:
                         self.delete_subcomp_attachment(attachment_item)
             finally:
-                self.end_model_change_batch()
+                self.end_model_change_batch(defer_post_work=True)
             return True
 
         return False
@@ -4261,47 +4462,56 @@ class ModelScene(QGraphicsScene):
         if item is None:
             return
 
-        self.invalidate_pending_link_routes(reason="delete_subcomp_attachment")
+        own_batch = self._model_change_batch_depth <= 0
+        if own_batch:
+            self.begin_model_change_batch()
+
         try:
-            breadcrumb("model_scene.delete_subcomp_attachment", attachment=self._diagnostic_attachment_snapshot(item))
-        except Exception:
-            pass
-        attachment = item.attachment
-        connectors = (
-            getattr(item, "source_connector", None),
-            getattr(item, "target_connector", None),
-        )
+            self.invalidate_pending_link_routes(reason="delete_subcomp_attachment")
+            try:
+                breadcrumb("model_scene.delete_subcomp_attachment", attachment=self._diagnostic_attachment_snapshot(item))
+            except Exception:
+                pass
+            attachment = item.attachment
+            connectors = (
+                getattr(item, "source_connector", None),
+                getattr(item, "target_connector", None),
+            )
 
-        if attachment in self.subcomp_attachments:
-            self.subcomp_attachments.remove(attachment)
+            if attachment in self.subcomp_attachments:
+                self.subcomp_attachments.remove(attachment)
 
-        self._highlighted_attachment_items.discard(item)
-        if self.selected_subcomp_attachment is item:
-            self.selected_subcomp_attachment = None
+            self._highlighted_attachment_items.discard(item)
+            if self.selected_subcomp_attachment is item:
+                self.selected_subcomp_attachment = None
 
-        if item.scene() is self:
-            item.setSelected(False)
-            item.set_highlighted(False)
-            self.removeItem(item)
+            if item.scene() is self:
+                item.setSelected(False)
+                item.set_highlighted(False)
+                self.remove_graphics_item_safely(item, reason="delete_subcomp_attachment")
 
-        if self.properties_panel is not None:
-            self.properties_panel.show_empty()
+            if self.properties_panel is not None:
+                self.properties_panel.show_empty()
 
-        self.notify_plugin_subcomp_attachment_deleted(attachment)
+            self.notify_plugin_subcomp_attachment_deleted(attachment)
 
-        for connector in connectors:
-            node = getattr(connector, "node", None)
-            node_id = int(getattr(node, "node_id", 0) or 0) if node is not None else 0
-            if node_id in self._deleting_node_ids:
-                continue
-            if (
-                node is not None
-                and node.scene() is self
-                and hasattr(node, "apply_subcomp_connector_visibility")
-            ):
-                node.apply_subcomp_connector_visibility()
+            for connector in connectors:
+                node = getattr(connector, "node", None)
+                node_id = int(getattr(node, "node_id", 0) or 0) if node is not None else 0
+                if node_id in self._deleting_node_ids:
+                    continue
+                if (
+                    node is not None
+                    and node.scene() is self
+                    and hasattr(node, "apply_subcomp_connector_visibility")
+                ):
+                    node.apply_subcomp_connector_visibility()
 
-        self.notify_model_changed()
+            self.notify_model_changed()
+        finally:
+            if own_batch:
+                self.end_model_change_batch(defer_post_work=True)
+
 
     def subcomp_connector_clicked(self, connector: SubcompConnectorItem):
         if self.pending_source_port is not None:
